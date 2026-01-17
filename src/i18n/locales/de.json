@@ -27,7 +27,8 @@
     "loginButton": "Anmelden",
     "invalidCredentials": "Ungültiger Benutzername oder Passwort",
     "loginError": "Anmeldung fehlgeschlagen. Bitte versuchen Sie es erneut.",
-    "loggingIn": "Wird angemeldet..."
+    "loggingIn": "Wird angemeldet...",
+    "rememberLogin": "Benutzername und Passwort speichern"
   },
   "navigation": {
     "production": "Produktion",
@@ -45,6 +46,7 @@
     "markAsRead": "Als gelesen markieren",
     "unread": "Ungelesen",
     "lowStockMessage": "Niedriger Bestand",
+    "productionAuthorized": "Produktionsauftrag autorisiert",
     "clearAll": "Alle Löschen",
     "clearAllConfirm": "Sind Sie sicher, dass Sie alle Benachrichtigungen löschen möchten?"
   },
@@ -68,7 +70,25 @@
     "uploadError": "Dokument konnte nicht hochgeladen werden",
     "downloadError": "Dokument konnte nicht heruntergeladen werden",
     "allowedTypes": "Nur Bilder und PDFs sind erlaubt",
-    "selectFile": "Datei auswählen"
+    "selectFile": "Datei auswählen",
+    "categories": {
+      "legalRequirements": {
+        "title": "Rechtliche Anforderungen",
+        "subtitle": "Gesetzliche Anforderungen, Versicherungen und Standards"
+      },
+      "equipmentTools": {
+        "title": "Ausrüstung & Werkzeuge",
+        "subtitle": "Maschinen, PSA, Fahrzeuge"
+      },
+      "proceduresManuals": {
+        "title": "Verfahren & Handbücher",
+        "subtitle": "Interne Anweisungen, Prozesse"
+      },
+      "professionalTraining": {
+        "title": "Berufliche Ausbildung",
+        "subtitle": "Kontinuierliche Schulung"
+      }
+    }
   },
   "inventory": {
     "title": "Inventar",

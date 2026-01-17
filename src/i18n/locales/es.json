@@ -30,7 +30,8 @@
     "loginButton": "Iniciar sesión",
     "invalidCredentials": "Nombre de usuario o contraseña inválidos",
     "loginError": "Error al iniciar sesión. Inténtelo de nuevo.",
-    "loggingIn": "Iniciando sesión..."
+    "loggingIn": "Iniciando sesión...",
+    "rememberLogin": "Recordar nombre de usuario y contraseña"
   },
   "navigation": {
     "production": "Producción",
@@ -48,6 +49,7 @@
     "markAsRead": "Marcar como leído",
     "unread": "No leído",
     "lowStockMessage": "Stock bajo",
+    "productionAuthorized": "Orden de producción autorizada",
     "clearAll": "Limpiar Todo",
     "clearAllConfirm": "¿Está seguro de que desea limpiar todas las notificaciones?"
   },
@@ -71,7 +73,25 @@
     "uploadError": "Error al subir documento",
     "downloadError": "Error al descargar documento",
     "allowedTypes": "Solo se permiten imágenes y PDFs",
-    "selectFile": "Seleccionar Archivo"
+    "selectFile": "Seleccionar Archivo",
+    "categories": {
+      "legalRequirements": {
+        "title": "Requisitos Legales",
+        "subtitle": "Requisitos legales, seguros y estándares"
+      },
+      "equipmentTools": {
+        "title": "Equipos y Herramientas",
+        "subtitle": "Máquinas, EPI, vehículos"
+      },
+      "proceduresManuals": {
+        "title": "Procedimientos y Manuales",
+        "subtitle": "Instrucciones internas, procesos"
+      },
+      "professionalTraining": {
+        "title": "Capacitación Profesional",
+        "subtitle": "Capacitación continua"
+      }
+    }
   },
   "inventory": {
     "title": "Inventario",

@@ -9,6 +9,7 @@ import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { useNotificationsQuery } from '../src/services/queries';
 import { Notification } from '../src/types';
+import { triggerNotificationAlert } from '../src/utils/notification-alert';
 
 export default function NotificationsScreen() {
   const { t } = useI18n();
@@ -155,23 +156,25 @@ export default function NotificationsScreen() {
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.content}>
-        {notifications.length > 0 && (
-          <View style={[styles.header, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>
-              {t('notifications.title')}
-            </Text>
-            <TouchableOpacity
-              onPress={handleClearAll}
-              style={styles.clearButton}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="trash-outline" size={18} color={colors.error} />
-              <Text style={[styles.clearButtonText, { color: colors.error }]}>
-                {t('notifications.clearAll')}
-              </Text>
-            </TouchableOpacity>
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            {t('notifications.title')}
+          </Text>
+          <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+            {notifications.length > 0 && (
+              <TouchableOpacity
+                onPress={handleClearAll}
+                style={styles.clearButton}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="trash-outline" size={18} color={colors.error} />
+                <Text style={[styles.clearButtonText, { color: colors.error }]}>
+                  {t('notifications.clearAll')}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
-        )}
+        </View>
         {notifications.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{t('notifications.noNotifications')}</Text>
@@ -192,6 +195,8 @@ export default function NotificationsScreen() {
                 <Text style={[styles.notificationType, { color: colors.text }]}>
                   {notification.type === 'inventory.lowStock' 
                     ? `${notification.payloadJson?.itemName || ''} - ${t('notifications.lowStockMessage')}`
+                    : notification.type === 'production.authorized'
+                    ? `${notification.payloadJson?.clientName || ''} | ${notification.payloadJson?.orderType || ''} | ${notification.payloadJson?.orderNumber || ''} - ${t('production.status.authorized')}`
                     : notification.type}
                 </Text>
                 <Text style={[styles.notificationDate, { color: colors.textSecondary }]}>

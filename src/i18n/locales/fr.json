@@ -27,7 +27,8 @@
     "loginButton": "Se connecter",
     "invalidCredentials": "Nom d'utilisateur ou mot de passe invalide",
     "loginError": "Échec de la connexion. Veuillez réessayer.",
-    "loggingIn": "Connexion en cours..."
+    "loggingIn": "Connexion en cours...",
+    "rememberLogin": "Mémoriser le nom d'utilisateur et le mot de passe"
   },
   "navigation": {
     "production": "Production",
@@ -45,6 +46,7 @@
     "markAsRead": "Marquer comme lu",
     "unread": "Non lu",
     "lowStockMessage": "Stock faible",
+    "productionAuthorized": "Commande de production autorisée",
     "clearAll": "Tout Effacer",
     "clearAllConfirm": "Êtes-vous sûr de vouloir effacer toutes les notifications?"
   },
@@ -68,7 +70,25 @@
     "uploadError": "Échec du téléchargement du document",
     "downloadError": "Échec du téléchargement du document",
     "allowedTypes": "Seuls les images et les PDF sont autorisés",
-    "selectFile": "Sélectionner un fichier"
+    "selectFile": "Sélectionner un fichier",
+    "categories": {
+      "legalRequirements": {
+        "title": "Exigences Légales",
+        "subtitle": "Exigences légales, assurances et normes"
+      },
+      "equipmentTools": {
+        "title": "Équipement et Outils",
+        "subtitle": "Machines, EPI, véhicules"
+      },
+      "proceduresManuals": {
+        "title": "Procédures et Manuels",
+        "subtitle": "Instructions internes, processus"
+      },
+      "professionalTraining": {
+        "title": "Formation Professionnelle",
+        "subtitle": "Formation continue"
+      }
+    }
   },
   "inventory": {
     "title": "Inventaire",

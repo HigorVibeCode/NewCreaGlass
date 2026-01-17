@@ -154,9 +154,15 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
     }
 
     // Trigger vibration and sound alert with message (não aguardamos o som terminar)
-    const alertMessage = notification.type === 'inventory.lowStock' && notification.payloadJson
-      ? `Estoque baixo: ${notification.payloadJson.itemName || 'Item'} (${notification.payloadJson.stock || 0} unidades)`
-      : undefined;
+    let alertMessage: string | undefined;
+    if (notification.type === 'inventory.lowStock' && notification.payloadJson) {
+      alertMessage = `Estoque baixo: ${notification.payloadJson.itemName || 'Item'} (${notification.payloadJson.stock || 0} unidades)`;
+    } else if (notification.type === 'production.authorized' && notification.payloadJson) {
+      const clientName = notification.payloadJson.clientName || '';
+      const orderType = notification.payloadJson.orderType || '';
+      const orderNumber = notification.payloadJson.orderNumber || '';
+      alertMessage = `${clientName} | ${orderType} | ${orderNumber} - Autorizado`;
+    }
     triggerNotificationAlert(notification.type, alertMessage).catch(err => {
       console.warn('Failed to trigger notification alert:', err);
     });

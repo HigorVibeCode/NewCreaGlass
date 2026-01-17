@@ -27,7 +27,8 @@
     "loginButton": "Entrar",
     "invalidCredentials": "Nome de usuário ou senha inválidos",
     "loginError": "Falha no login. Tente novamente.",
-    "loggingIn": "Entrando..."
+    "loggingIn": "Entrando...",
+    "rememberLogin": "Salvar usuário e senha"
   },
   "navigation": {
     "production": "Produção",
@@ -45,6 +46,7 @@
     "markAsRead": "Marcar como lido",
     "unread": "Não lido",
     "lowStockMessage": "Estoque baixo",
+    "productionAuthorized": "Pedido de produção autorizado",
     "clearAll": "Limpar Tudo",
     "clearAllConfirm": "Tem certeza que deseja limpar todas as notificações?"
   },
@@ -68,7 +70,25 @@
     "uploadError": "Falha ao enviar documento",
     "downloadError": "Falha ao baixar documento",
     "allowedTypes": "Apenas imagens e PDFs são permitidos",
-    "selectFile": "Selecionar Arquivo"
+    "selectFile": "Selecionar Arquivo",
+    "categories": {
+      "legalRequirements": {
+        "title": "Requisitos Legais",
+        "subtitle": "Requisitos legais, seguros e normas"
+      },
+      "equipmentTools": {
+        "title": "Equipamentos e Ferramentas",
+        "subtitle": "Máquinas, EPIs, veículos"
+      },
+      "proceduresManuals": {
+        "title": "Procedimentos e Manuais",
+        "subtitle": "Instruções internas, processos"
+      },
+      "professionalTraining": {
+        "title": "Treinamento Profissional",
+        "subtitle": "Treinamento contínuo"
+      }
+    }
   },
   "inventory": {
     "title": "Inventário",

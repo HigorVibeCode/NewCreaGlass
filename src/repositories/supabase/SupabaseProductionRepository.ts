@@ -168,6 +168,26 @@ export class SupabaseProductionRepository implements ProductionRepository {
           new_status: updates.status,
           changed_by: changedBy,
         });
+
+      // Create notification when status changes from "not_authorized" to "authorized"
+      if (previousStatus === 'not_authorized' && updates.status === 'authorized') {
+        try {
+          const { repos } = await import('../../services/container');
+          await repos.notificationsRepo.createNotification({
+            type: 'production.authorized',
+            payloadJson: {
+              productionId: productionId,
+              orderNumber: currentProduction.orderNumber,
+              clientName: currentProduction.clientName,
+              orderType: currentProduction.orderType,
+            },
+            createdBySystem: true,
+          });
+        } catch (notificationError) {
+          // Log error but don't fail the status update
+          console.warn('Failed to create notification for production status change:', notificationError);
+        }
+      }
     }
 
     // Update items if provided

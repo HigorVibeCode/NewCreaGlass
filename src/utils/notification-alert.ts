@@ -1,71 +1,95 @@
 import { Platform, Vibration, Alert } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Audio } from 'expo-av';
-
-// Cache para o som carregado
-let notificationSound: Audio.Sound | null = null;
-
-/**
- * Carrega o som de notificação uma vez e mantém em cache
- */
-const loadNotificationSound = async (): Promise<Audio.Sound | null> => {
-  if (notificationSound) {
-    return notificationSound;
-  }
-
-  try {
-    // Carregar arquivo de som customizado
-    const { sound } = await Audio.Sound.createAsync(
-      require('../../assets/sounds/notification.wav'),
-      {
-        shouldPlay: false, // Apenas carregar, não reproduzir ainda
-        volume: 1.0, // Volume máximo
-        isLooping: false, // Não repetir
-      }
-    );
-    notificationSound = sound;
-    return sound;
-  } catch (error) {
-    console.warn('Failed to load notification sound file:', error);
-    // Fallback: retorna null para usar sons do sistema
-    return null;
-  }
-};
+import { getNotificationPlayer } from './audio-player-singleton';
 
 /**
  * Reproduz um som de notificação
  */
 const playNotificationSound = async () => {
+  console.log('🔊 playNotificationSound - Called');
+  
   try {
-    // Configurar modo de áudio para reproduzir mesmo no modo silencioso
-    await Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-    });
-
-    const sound = await loadNotificationSound();
+    // Tentar usar o player se estiver disponível
+    const player = getNotificationPlayer();
+    console.log('🔊 playNotificationSound - Player available:', !!player);
     
-    if (sound) {
-      // Reproduzir som customizado
-      // Resetar a posição para o início antes de reproduzir
-      await sound.setPositionAsync(0);
-      await sound.playAsync();
-      
-      // Adicionar vibração junto com o som customizado para melhor feedback
-      if (Platform.OS === 'ios') {
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else if (Platform.OS === 'android') {
-        Vibration.vibrate(400);
+    if (player) {
+      try {
+        // Verificar se o player tem os métodos necessários
+        const playerMethods = {
+          hasSeekTo: typeof player.seekTo === 'function',
+          hasPlay: typeof player.play === 'function',
+          hasReplay: typeof player.replay === 'function',
+          hasCurrentTime: 'currentTime' in player,
+          playerKeys: Object.keys(player || {}),
+        };
+        console.log('🔊 playNotificationSound - Player methods:', playerMethods);
+        
+        // Tentar diferentes métodos da API do expo-audio
+        // IMPORTANTE: Sempre resetar para o início antes de tocar
+        let played = false;
+        
+        if (typeof player.replay === 'function') {
+          // API mais recente do expo-audio - replay() reinicia e toca
+          console.log('🔊 playNotificationSound - Attempting replay()');
+          player.replay();
+          played = true;
+          console.log('✅ playNotificationSound - replay() called successfully');
+        } else if (typeof player.seekTo === 'function' && typeof player.play === 'function') {
+          // API com seekTo - sempre resetar para o início
+          console.log('🔊 playNotificationSound - Attempting seekTo(0) + play()');
+          await player.seekTo(0);
+          await player.play();
+          played = true;
+          console.log('✅ playNotificationSound - seekTo(0) + play() called successfully');
+        } else if ('currentTime' in player && typeof player.play === 'function') {
+          // Se tem currentTime como propriedade, definir para 0 e tocar
+          console.log('🔊 playNotificationSound - Attempting currentTime = 0 + play()');
+          (player as any).currentTime = 0;
+          await player.play();
+          played = true;
+          console.log('✅ playNotificationSound - currentTime = 0 + play() called successfully');
+        } else if (typeof player.play === 'function') {
+          // Apenas play - tentar resetar primeiro se possível
+          console.log('🔊 playNotificationSound - Attempting play()');
+          // Tentar resetar se possível
+          if ('currentTime' in player) {
+            (player as any).currentTime = 0;
+          }
+          await player.play();
+          played = true;
+          console.log('✅ playNotificationSound - play() called successfully');
+        }
+        
+        if (!played) {
+          console.error('❌ playNotificationSound - Player does not have expected methods');
+          console.error('❌ playNotificationSound - Available methods:', Object.keys(player));
+          throw new Error('Player methods not available');
+        }
+        
+        // Adicionar vibração junto com o som customizado
+        if (Platform.OS === 'ios') {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } else if (Platform.OS === 'android') {
+          Vibration.vibrate(400);
+        }
+        console.log('✅ playNotificationSound - Sound and vibration triggered');
+        return;
+      } catch (playerError) {
+        console.error('❌ playNotificationSound - Failed to play with audio player:', playerError);
+        console.error('❌ playNotificationSound - Error details:', JSON.stringify(playerError, null, 2));
       }
     } else {
-      // Usar som do sistema através de Haptics (iOS) ou vibração (Android)
-      // O sistema operacional já reproduz um som padrão junto com a vibração
-      if (Platform.OS === 'ios') {
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else if (Platform.OS === 'android') {
-        // No Android, a vibração geralmente vem com som do sistema
-        Vibration.vibrate(400);
-      }
+      console.warn('⚠️ playNotificationSound - Player not available, using vibration only');
+    }
+
+    // Fallback: Usar feedback tátil através de Haptics (iOS) ou vibração (Android)
+    // O sistema operacional já reproduz um som padrão junto com a vibração
+    if (Platform.OS === 'ios') {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else if (Platform.OS === 'android') {
+      // No Android, a vibração geralmente vem com som do sistema
+      Vibration.vibrate(400);
     }
   } catch (error) {
     console.warn('Failed to play notification sound:', error);
@@ -84,10 +108,10 @@ const playNotificationSound = async () => {
  * Limpa os recursos de áudio quando não forem mais necessários
  */
 export const cleanupNotificationSound = async () => {
-  if (notificationSound) {
+  const player = getNotificationPlayer();
+  if (player) {
     try {
-      await notificationSound.unloadAsync();
-      notificationSound = null;
+      player.remove();
     } catch (error) {
       console.warn('Failed to cleanup notification sound:', error);
     }

@@ -1,23 +1,40 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
-import { useI18n } from '../src/hooks/use-i18n';
-import { useAuth } from '../src/store/auth-store';
-import { repos } from '../src/services/container';
+import React, { useEffect, useState } from 'react';
+import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { Button } from '../src/components/shared/Button';
 import { Input } from '../src/components/shared/Input';
-import { theme } from '../src/theme';
+import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { repos } from '../src/services/container';
+import { useAuth } from '../src/store/auth-store';
+import { theme } from '../src/theme';
+import { clearSavedLogin, getSavedLogin, saveLogin } from '../src/utils/saved-login';
 
 export default function LoginScreen() {
   const { t } = useI18n();
-  const router = useRouter();
   const { setSession, setLoading, isLoading } = useAuth();
   const colors = useThemeColors();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [rememberLogin, setRememberLogin] = useState(false);
+
+  // Load saved credentials on mount
+  useEffect(() => {
+    const loadSavedCredentials = async () => {
+      try {
+        const saved = await getSavedLogin();
+        if (saved.username && saved.password) {
+          setUsername(saved.username);
+          setPassword(saved.password);
+          setRememberLogin(true);
+        }
+      } catch (error) {
+        console.warn('Error loading saved credentials:', error);
+      }
+    };
+    loadSavedCredentials();
+  }, []);
 
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) {
@@ -30,6 +47,14 @@ export default function LoginScreen() {
 
     try {
       const session = await repos.authRepo.login(username.trim(), password);
+      
+      // Save or clear credentials based on rememberLogin checkbox
+      if (rememberLogin) {
+        await saveLogin(username.trim(), password);
+      } else {
+        await clearSavedLogin();
+      }
+      
       // Set session - AuthGuard will handle redirect
       setSession(session);
       // Don't redirect here, let AuthGuard handle it to avoid loops
@@ -78,6 +103,24 @@ export default function LoginScreen() {
             autoCapitalize="none"
             autoCorrect={false}
           />
+          
+          {/* Remember Login Checkbox */}
+          <TouchableOpacity
+            style={styles.rememberContainer}
+            onPress={() => setRememberLogin(!rememberLogin)}
+            activeOpacity={0.7}
+          >
+            <Switch
+              value={rememberLogin}
+              onValueChange={setRememberLogin}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={Platform.OS === 'android' ? colors.background : undefined}
+            />
+            <Text style={[styles.rememberText, { color: colors.text }]}>
+              {t('auth.rememberLogin')}
+            </Text>
+          </TouchableOpacity>
+          
           {error ? <View style={styles.errorContainer} /> : null}
           <Button
             title={t('auth.loginButton')}
@@ -118,5 +161,15 @@ const styles = StyleSheet.create({
   },
   errorContainer: {
     marginBottom: theme.spacing.sm,
+  },
+  rememberContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: theme.spacing.md,
+    marginTop: theme.spacing.sm,
+  },
+  rememberText: {
+    marginLeft: theme.spacing.sm,
+    fontSize: 14,
   },
 });

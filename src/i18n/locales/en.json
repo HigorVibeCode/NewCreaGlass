@@ -30,7 +30,8 @@
     "loginButton": "Sign In",
     "invalidCredentials": "Invalid username or password",
     "loginError": "Login failed. Please try again.",
-    "loggingIn": "Signing in..."
+    "loggingIn": "Signing in...",
+    "rememberLogin": "Remember username and password"
   },
   "navigation": {
     "production": "Production",
@@ -48,6 +49,7 @@
     "markAsRead": "Mark as read",
     "unread": "Unread",
     "lowStockMessage": "Low stock",
+    "productionAuthorized": "Production order authorized",
     "clearAll": "Clear All",
     "clearAllConfirm": "Are you sure you want to clear all notifications?"
   },
@@ -71,7 +73,25 @@
     "uploadError": "Failed to upload document",
     "downloadError": "Failed to download document",
     "allowedTypes": "Only images and PDFs are allowed",
-    "selectFile": "Select File"
+    "selectFile": "Select File",
+    "categories": {
+      "legalRequirements": {
+        "title": "Legal Requirements",
+        "subtitle": "Law requirements, insurance and standards"
+      },
+      "equipmentTools": {
+        "title": "Equipment & Tools",
+        "subtitle": "Machines, PPE, vehicles"
+      },
+      "proceduresManuals": {
+        "title": "Procedures & Manuals",
+        "subtitle": "Internal instructions, processes"
+      },
+      "professionalTraining": {
+        "title": "Professional Training",
+        "subtitle": "Continuous training"
+      }
+    }
   },
   "inventory": {
     "title": "Inventory",

@@ -6,6 +6,7 @@ import { QueryProvider } from '@/src/providers/QueryProvider';
 import { I18nProvider } from '@/src/providers/I18nProvider';
 import { ThemeProvider } from '@/src/providers/ThemeProvider';
 import { AuthGuard } from '@/src/components/shared/AuthGuard';
+import { NotificationAudioInitializer } from '@/src/components/shared/NotificationAudioInitializer';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -17,6 +18,7 @@ export default function RootLayout() {
       <I18nProvider>
         <QueryProvider>
           <ThemeProvider>
+            <NotificationAudioInitializer />
             <AuthGuard>
               <Stack
                 screenOptions={{
@@ -114,6 +116,15 @@ export default function RootLayout() {
                     title: 'Order Details',
                     animation: 'slide_from_right',
                     headerShown: true,
+                  }} 
+                />
+                <Stack.Screen 
+                  name="documents-category" 
+                  options={{ 
+                    presentation: 'card',
+                    title: 'Documents',
+                    animation: 'slide_from_right',
+                    headerShown: false,
                   }} 
                 />
                 <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
