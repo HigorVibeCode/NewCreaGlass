@@ -258,14 +258,18 @@ export default function ProductionCreateScreen() {
 
       if (isEditing && productionId) {
         // Update existing production
-        await repos.productionRepo.updateProduction(productionId, {
-          orderNumber: orderNumber.trim(),
-          clientName: clientName.trim(),
-          orderType: orderType.trim(),
-          dueDate,
-          items: [item],
-          attachments,
-        });
+        await repos.productionRepo.updateProduction(
+          productionId,
+          {
+            orderNumber: orderNumber.trim(),
+            clientName: clientName.trim(),
+            orderType: orderType.trim(),
+            dueDate,
+            items: [item],
+            attachments,
+          },
+          user.id
+        );
         Alert.alert(t('common.success'), 'Order updated successfully', [
           { text: t('common.confirm'), onPress: () => router.back() },
         ]);

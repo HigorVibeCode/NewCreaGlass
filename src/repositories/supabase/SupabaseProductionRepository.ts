@@ -131,6 +131,12 @@ export class SupabaseProductionRepository implements ProductionRepository {
     updates: Partial<Production>,
     changedBy?: string
   ): Promise<Production> {
+    // Get current authenticated user from Supabase session
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) {
+      throw new Error('User not authenticated');
+    }
+
     const currentProduction = await this.getProductionById(productionId);
     if (!currentProduction) {
       throw new Error('Production not found');
@@ -159,15 +165,21 @@ export class SupabaseProductionRepository implements ProductionRepository {
     }
 
     // Update status history if status changed
-    if (updates.status && updates.status !== previousStatus && changedBy) {
-      await supabase
+    // Use auth.uid() instead of changedBy parameter to ensure RLS policy passes
+    if (updates.status && updates.status !== previousStatus) {
+      const { error: historyError } = await supabase
         .from('production_status_history')
         .insert({
           production_id: productionId,
           previous_status: previousStatus,
           new_status: updates.status,
-          changed_by: changedBy,
+          changed_by: authUser.id, // Use auth.uid() from Supabase session for RLS
         });
+
+      if (historyError) {
+        console.error('Error creating production status history:', historyError);
+        // Don't fail the update if history creation fails
+      }
 
       // Create notification when status changes from "not_authorized" to "authorized"
       if (previousStatus === 'not_authorized' && updates.status === 'authorized') {
@@ -193,10 +205,15 @@ export class SupabaseProductionRepository implements ProductionRepository {
     // Update items if provided
     if (updates.items !== undefined) {
       // Delete existing items
-      await supabase
+      const { error: deleteItemsError } = await supabase
         .from('production_items')
         .delete()
         .eq('production_id', productionId);
+
+      if (deleteItemsError) {
+        console.error('Error deleting production items:', deleteItemsError);
+        throw new Error('Failed to update production items');
+      }
 
       // Insert new items
       if (updates.items.length > 0) {
@@ -210,19 +227,29 @@ export class SupabaseProductionRepository implements ProductionRepository {
           paint_type: item.paintType,
         }));
 
-        await supabase
+        const { error: insertItemsError } = await supabase
           .from('production_items')
           .insert(itemsToInsert);
+
+        if (insertItemsError) {
+          console.error('Error inserting production items:', insertItemsError);
+          throw new Error('Failed to update production items');
+        }
       }
     }
 
     // Update attachments if provided
     if (updates.attachments !== undefined) {
       // Delete existing attachments
-      await supabase
+      const { error: deleteAttachmentsError } = await supabase
         .from('production_attachments')
         .delete()
         .eq('production_id', productionId);
+
+      if (deleteAttachmentsError) {
+        console.error('Error deleting production attachments:', deleteAttachmentsError);
+        throw new Error('Failed to update production attachments');
+      }
 
       // Insert new attachments
       if (updates.attachments.length > 0) {
@@ -233,9 +260,14 @@ export class SupabaseProductionRepository implements ProductionRepository {
           storage_path: att.storagePath,
         }));
 
-        await supabase
+        const { error: insertAttachmentsError } = await supabase
           .from('production_attachments')
           .insert(attachmentsToInsert);
+
+        if (insertAttachmentsError) {
+          console.error('Error inserting production attachments:', insertAttachmentsError);
+          throw new Error('Failed to update production attachments');
+        }
       }
     }
 
@@ -243,12 +275,35 @@ export class SupabaseProductionRepository implements ProductionRepository {
   }
 
   async deleteProduction(productionId: string): Promise<void> {
-    // Delete related records first (cascade should handle this, but being explicit)
-    await supabase.from('production_items').delete().eq('production_id', productionId);
-    await supabase.from('production_attachments').delete().eq('production_id', productionId);
-    await supabase.from('production_status_history').delete().eq('production_id', productionId);
+    // Delete related records manually (to avoid RLS issues with cascade)
+    // Delete in order to avoid foreign key issues
+    
+    // Delete items first
+    const { error: itemsError } = await supabase
+      .from('production_items')
+      .delete()
+      .eq('production_id', productionId);
 
-    // Delete production
+    if (itemsError) {
+      console.error('Error deleting production items:', itemsError);
+      throw new Error('Failed to delete production items');
+    }
+
+    // Delete attachments
+    const { error: attachmentsError } = await supabase
+      .from('production_attachments')
+      .delete()
+      .eq('production_id', productionId);
+
+    if (attachmentsError) {
+      console.error('Error deleting production attachments:', attachmentsError);
+      throw new Error('Failed to delete production attachments');
+    }
+
+    // Note: production_status_history deletion is handled by CASCADE
+    // Manual deletion causes RLS ambiguity errors with user_id references
+    
+    // Delete production (main record) - this will cascade delete status_history
     const { error } = await supabase
       .from('productions')
       .delete()

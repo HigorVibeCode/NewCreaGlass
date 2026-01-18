@@ -8,10 +8,6 @@ import { ThemeProvider } from '@/src/providers/ThemeProvider';
 import { AuthGuard } from '@/src/components/shared/AuthGuard';
 import { NotificationAudioInitializer } from '@/src/components/shared/NotificationAudioInitializer';
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
-
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
