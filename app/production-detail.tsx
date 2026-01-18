@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -17,6 +17,7 @@ import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useAuth } from '../src/store/auth-store';
@@ -31,6 +32,7 @@ export default function ProductionDetailScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
   const { productionId } = useLocalSearchParams<{ productionId: string }>();
 
   const [production, setProduction] = useState<Production | null>(null);
@@ -472,21 +474,40 @@ export default function ProductionDetailScreen() {
     }
   };
 
+  const topPadding = insets.top + theme.spacing.md;
+  const wrapperStyle = useMemo(() => ({ backgroundColor: colors.background }), [colors.background]);
+
   if (isLoading || !production) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.loadingContainer}>
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-            {t('common.loading')}
-          </Text>
+      <View style={[styles.wrapper, wrapperStyle]}>
+        <View style={[styles.container, { paddingTop: topPadding }]}>
+          <View style={styles.loadingContainer}>
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+              {t('common.loading')}
+            </Text>
+          </View>
         </View>
       </View>
     );
   }
 
   return (
-    <>
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.wrapper, wrapperStyle]}>
+      <View style={[styles.header, { paddingTop: topPadding, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
+        <TouchableOpacity
+          style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>
+          {t('production.orderDetails')}
+        </Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
+      <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.content}>
         <View style={[styles.headerCard, { backgroundColor: colors.cardBackground }]}>
           <View style={styles.headerRow}>
@@ -810,13 +831,42 @@ export default function ProductionDetailScreen() {
         </TouchableWithoutFeedback>
       </Modal>
     )}
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrapper: {
+    flex: 1,
+  },
   container: {
     flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.md,
+    paddingBottom: theme.spacing.md,
+    borderBottomWidth: 1,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: theme.borderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...theme.shadows.sm,
+  },
+  headerTitle: {
+    fontSize: theme.typography.fontSize.xl,
+    fontWeight: theme.typography.fontWeight.bold,
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: theme.spacing.md,
+  },
+  headerSpacer: {
+    width: 40,
   },
   content: {
     padding: theme.spacing.lg,

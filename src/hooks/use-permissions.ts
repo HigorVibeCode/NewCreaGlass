@@ -52,9 +52,12 @@ export const usePermissions = () => {
         'production.create',
         'production.update',
         'production.delete',
+        'events.view',
         'events.create',
         'events.update',
         'events.delete',
+        'events.history',
+        'events.report.create',
       ] as PermissionKey[];
     }
     return permissions.map(p => p.key as PermissionKey);

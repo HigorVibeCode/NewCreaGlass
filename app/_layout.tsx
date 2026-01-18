@@ -99,10 +99,37 @@ export default function RootLayout() {
                 <Stack.Screen 
                   name="production-create" 
                   options={{ 
-                    presentation: 'modal',
+                    presentation: 'card',
                     title: 'Create Order',
                     animation: 'slide_from_bottom',
-                    headerShown: true,
+                    animationDuration: 200,
+                    headerShown: false,
+                    gestureEnabled: true,
+                    animationTypeForReplace: 'push',
+                  }} 
+                />
+                <Stack.Screen 
+                  name="event-create" 
+                  options={{ 
+                    presentation: 'card',
+                    title: 'Create Event',
+                    animation: 'slide_from_bottom',
+                    animationDuration: 200,
+                    headerShown: false,
+                    gestureEnabled: true,
+                    animationTypeForReplace: 'push',
+                  }} 
+                />
+                <Stack.Screen 
+                  name="event-report-create" 
+                  options={{ 
+                    presentation: 'card',
+                    title: 'Create Report',
+                    animation: 'slide_from_bottom',
+                    animationDuration: 200,
+                    headerShown: false,
+                    gestureEnabled: true,
+                    animationTypeForReplace: 'push',
                   }} 
                 />
                 <Stack.Screen 
@@ -111,7 +138,34 @@ export default function RootLayout() {
                     presentation: 'card',
                     title: 'Order Details',
                     animation: 'slide_from_right',
-                    headerShown: true,
+                    animationDuration: 200,
+                    headerShown: false,
+                    gestureEnabled: true,
+                    animationTypeForReplace: 'push',
+                  }} 
+                />
+                <Stack.Screen 
+                  name="event-detail" 
+                  options={{ 
+                    presentation: 'card',
+                    title: 'Event Details',
+                    animation: 'slide_from_right',
+                    animationDuration: 200,
+                    headerShown: false,
+                    gestureEnabled: true,
+                    animationTypeForReplace: 'push',
+                  }} 
+                />
+                <Stack.Screen 
+                  name="work-order-detail" 
+                  options={{ 
+                    presentation: 'card',
+                    title: 'Work Order Details',
+                    animation: 'slide_from_right',
+                    animationDuration: 200,
+                    headerShown: false,
+                    gestureEnabled: true,
+                    animationTypeForReplace: 'push',
                   }} 
                 />
                 <Stack.Screen 

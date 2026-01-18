@@ -8,6 +8,7 @@ import {
   BloodPriorityRepository,
   EventsRepository,
   ProductionRepository,
+  WorkOrdersRepository,
 } from './repositories/interfaces';
 
 // Import Supabase repositories
@@ -20,6 +21,7 @@ import { SupabaseNotificationsRepository } from '../repositories/supabase/Supaba
 import { SupabaseBloodPriorityRepository } from '../repositories/supabase/SupabaseBloodPriorityRepository';
 import { SupabaseEventsRepository } from '../repositories/supabase/SupabaseEventsRepository';
 import { SupabaseProductionRepository } from '../repositories/supabase/SupabaseProductionRepository';
+import { SupabaseWorkOrdersRepository } from '../repositories/supabase/SupabaseWorkOrdersRepository';
 
 // Import Mock repositories (for fallback or development)
 import { MockAuthRepository } from '../repositories/mock/MockAuthRepository';
@@ -31,6 +33,7 @@ import { MockNotificationsRepository } from '../repositories/mock/MockNotificati
 import { MockBloodPriorityRepository } from '../repositories/mock/MockBloodPriorityRepository';
 import { MockEventsRepository } from '../repositories/mock/MockEventsRepository';
 import { MockProductionRepository } from '../repositories/mock/MockProductionRepository';
+// TODO: Create MockWorkOrdersRepository if needed
 
 // Dependency Injection Container
 // Now using Supabase repositories for real-time sync across all devices
@@ -48,4 +51,5 @@ export const repos = {
   bloodPriorityRepo: (USE_MOCK_REPOSITORIES ? new MockBloodPriorityRepository() : new SupabaseBloodPriorityRepository()) as BloodPriorityRepository,
   eventsRepo: (USE_MOCK_REPOSITORIES ? new MockEventsRepository() : new SupabaseEventsRepository()) as EventsRepository,
   productionRepo: (USE_MOCK_REPOSITORIES ? new MockProductionRepository() : new SupabaseProductionRepository()) as ProductionRepository,
+  workOrdersRepo: new SupabaseWorkOrdersRepository() as WorkOrdersRepository, // Always use Supabase for work orders
 };

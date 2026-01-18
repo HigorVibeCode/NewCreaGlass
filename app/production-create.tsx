@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -10,6 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { useI18n } from '../src/hooks/use-i18n';
@@ -49,6 +50,7 @@ export default function ProductionCreateScreen() {
   const { t } = useI18n();
   const { user } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const { productionId } = useLocalSearchParams<{ productionId: string }>();
 
@@ -314,13 +316,31 @@ export default function ProductionCreateScreen() {
       ]
     : [{ label: t('common.select'), value: '' }];
 
+  const topPadding = insets.top + theme.spacing.md;
+  const wrapperStyle = useMemo(() => ({ backgroundColor: colors.background }), [colors.background]);
+
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-    >
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+    <View style={[styles.wrapper, wrapperStyle]}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        <View style={[styles.header, { paddingTop: topPadding, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
+          <TouchableOpacity
+            style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
+            onPress={() => router.back()}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            {t('production.createOrder')}
+          </Text>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         <Input
           label="Client Name"
           value={clientName}
@@ -447,13 +467,43 @@ export default function ProductionCreateScreen() {
           />
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrapper: {
+    flex: 1,
+  },
   container: {
     flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.md,
+    paddingBottom: theme.spacing.md,
+    borderBottomWidth: 1,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: theme.borderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...theme.shadows.sm,
+  },
+  headerTitle: {
+    fontSize: theme.typography.fontSize.xl,
+    fontWeight: theme.typography.fontWeight.bold,
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: theme.spacing.md,
+  },
+  headerSpacer: {
+    width: 40,
   },
   scrollView: {
     flex: 1,

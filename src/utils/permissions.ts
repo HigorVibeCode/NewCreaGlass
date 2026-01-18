@@ -28,9 +28,12 @@ export type PermissionKey =
   | 'production.create'
   | 'production.update'
   | 'production.delete'
+  | 'events.view'
   | 'events.create'
   | 'events.update'
-  | 'events.delete';
+  | 'events.delete'
+  | 'events.history'
+  | 'events.report.create';
 
 export interface PermissionService {
   getUserPermissions(userId: string): Promise<PermissionKey[]>;

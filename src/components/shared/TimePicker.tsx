@@ -6,57 +6,67 @@ import { theme } from '../../theme';
 import { useThemeColors } from '../../hooks/use-theme-colors';
 import { useI18n } from '../../hooks/use-i18n';
 
-interface DatePickerProps {
+interface TimePickerProps {
   label: string;
   value: string;
-  onSelect: (date: string) => void;
+  onSelect: (time: string) => void;
   placeholder?: string;
 }
 
-export const DatePicker: React.FC<DatePickerProps> = ({ label, value, onSelect, placeholder }) => {
+export const TimePicker: React.FC<TimePickerProps> = ({ label, value, onSelect, placeholder }) => {
   const { t } = useI18n();
   const colors = useThemeColors();
   const [showPicker, setShowPicker] = useState(false);
 
-  const parseDate = (dateString: string): Date => {
-    if (!dateString) return new Date();
-    const date = new Date(dateString);
-    return isNaN(date.getTime()) ? new Date() : date;
+  const parseTime = (timeString: string): Date => {
+    const now = new Date();
+    if (!timeString) return now;
+    
+    const parts = timeString.split(':');
+    if (parts.length === 2) {
+      const hours = parseInt(parts[0] || '0', 10);
+      const minutes = parseInt(parts[1] || '0', 10);
+      const date = new Date();
+      date.setHours(hours, minutes, 0, 0);
+      return date;
+    }
+    
+    return now;
   };
 
-  const formatDate = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+  const formatTime = (date: Date): string => {
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
   };
 
-  const formatDisplayDate = (dateString: string): string => {
-    if (!dateString) return placeholder || t('common.select');
-    return formatDate(parseDate(dateString));
+  const formatDisplayTime = (timeString: string): string => {
+    if (!timeString) return placeholder || t('common.select');
+    return timeString;
   };
 
-  const currentDate = parseDate(value);
+  const currentTime = parseTime(value);
 
-  const handleDateChange = (event: any, selectedDate?: Date) => {
+  const handleTimeChange = (event: any, selectedTime?: Date) => {
     if (Platform.OS === 'android') {
-      DateTimePickerAndroid.dismiss('date');
+      DateTimePickerAndroid.dismiss('time');
     } else {
       setShowPicker(false);
     }
 
-    if (event.type === 'set' && selectedDate) {
-      onSelect(formatDate(selectedDate));
+    if (event.type === 'set' && selectedTime) {
+      onSelect(formatTime(selectedTime));
     }
   };
 
-  const showDatePicker = () => {
+  const showTimePicker = () => {
     if (Platform.OS === 'android') {
       DateTimePickerAndroid.open({
-        value: currentDate,
-        mode: 'date',
-        onChange: handleDateChange,
-        display: 'default', // Opens calendar dialog
+        value: currentTime,
+        mode: 'time',
+        is24Hour: true,
+        onChange: handleTimeChange,
+        display: 'default', // Opens spinner/wheel picker
       });
     } else {
       // iOS - show inline picker
@@ -68,22 +78,22 @@ export const DatePicker: React.FC<DatePickerProps> = ({ label, value, onSelect, 
     <View style={styles.container}>
       <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text>
       <TouchableOpacity
-        style={[styles.datePicker, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
-        onPress={showDatePicker}
+        style={[styles.timePicker, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
+        onPress={showTimePicker}
         activeOpacity={0.7}
       >
         <Text style={[styles.selectedText, { color: value ? colors.text : colors.textTertiary }]}>
-          {formatDisplayDate(value)}
+          {formatDisplayTime(value)}
         </Text>
-        <Ionicons name="calendar" size={20} color={colors.textSecondary} />
+        <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
       </TouchableOpacity>
 
       {Platform.OS === 'ios' && showPicker && (
         <DateTimePicker
-          value={currentDate}
-          mode="date"
-          display="default" // iOS 14+ shows calendar by default
-          onChange={handleDateChange}
+          value={currentTime}
+          mode="time"
+          display="spinner" // iOS shows wheel/spinner picker
+          onChange={handleTimeChange}
           style={styles.iosPicker}
         />
       )}
@@ -100,7 +110,7 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.fontWeight.medium,
     marginBottom: theme.spacing.xs,
   },
-  datePicker: {
+  timePicker: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

@@ -13,6 +13,14 @@ import {
   Production,
   ProductionStatus,
   ProductionStatusHistory,
+  WorkOrder,
+  WorkOrderStatus,
+  CheckIn,
+  TimeStatus,
+  ServiceLog,
+  Evidence,
+  ChecklistItem,
+  Signature,
 } from '../../types';
 
 // Auth Repository
@@ -89,11 +97,12 @@ export interface BloodPriorityRepository {
   confirmRead(messageId: string, userId: string): Promise<void>;
 }
 
-// Events Repository (placeholder)
+// Events Repository
 export interface EventsRepository {
   getAllEvents(): Promise<Event[]>;
   getEventById(eventId: string): Promise<Event | null>;
   createEvent(event: Omit<Event, 'id' | 'createdAt'>): Promise<Event>;
+  deleteEvent(eventId: string): Promise<void>;
 }
 
 // Production Repository
@@ -104,4 +113,43 @@ export interface ProductionRepository {
   updateProduction(productionId: string, updates: Partial<Production>, changedBy?: string): Promise<Production>;
   deleteProduction(productionId: string): Promise<void>;
   getStatusHistory(productionId: string): Promise<ProductionStatusHistory[]>;
+}
+
+// Work Orders Repository
+export interface WorkOrdersRepository {
+  getAllWorkOrders(status?: WorkOrderStatus): Promise<WorkOrder[]>;
+  getWorkOrderById(workOrderId: string): Promise<WorkOrder | null>;
+  createWorkOrder(workOrder: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'>): Promise<WorkOrder>;
+  updateWorkOrder(workOrderId: string, updates: Partial<WorkOrder>): Promise<WorkOrder>;
+  deleteWorkOrder(workOrderId: string): Promise<void>;
+  
+  // Check-in
+  createCheckIn(workOrderId: string, checkIn: Omit<CheckIn, 'id' | 'workOrderId' | 'createdAt'>): Promise<CheckIn>;
+  getCheckIn(workOrderId: string): Promise<CheckIn | null>;
+  
+  // Time Status
+  createTimeStatus(workOrderId: string, timeStatus: Omit<TimeStatus, 'id' | 'workOrderId' | 'createdAt'>): Promise<TimeStatus>;
+  updateTimeStatus(timeStatusId: string, updates: Partial<TimeStatus>): Promise<TimeStatus>;
+  getTimeStatuses(workOrderId: string): Promise<TimeStatus[]>;
+  getCurrentTimeStatus(workOrderId: string): Promise<TimeStatus | null>;
+  
+  // Service Logs
+  createServiceLog(workOrderId: string, log: Omit<ServiceLog, 'id' | 'workOrderId' | 'createdAt'>): Promise<ServiceLog>;
+  getServiceLogs(workOrderId: string): Promise<ServiceLog[]>;
+  
+  // Evidences
+  createEvidence(workOrderId: string, evidence: Omit<Evidence, 'id' | 'workOrderId' | 'createdAt'>): Promise<Evidence>;
+  getEvidences(workOrderId: string): Promise<Evidence[]>;
+  
+  // Checklist Items
+  createChecklistItem(workOrderId: string, item: Omit<ChecklistItem, 'id' | 'workOrderId' | 'createdAt'>): Promise<ChecklistItem>;
+  updateChecklistItem(itemId: string, updates: Partial<ChecklistItem>): Promise<ChecklistItem>;
+  getChecklistItems(workOrderId: string): Promise<ChecklistItem[]>;
+  
+  // Signature
+  createSignature(workOrderId: string, signature: Omit<Signature, 'id' | 'workOrderId' | 'createdAt'>): Promise<Signature>;
+  getSignature(workOrderId: string): Promise<Signature | null>;
+  
+  // Finalization
+  finalizeWorkOrder(workOrderId: string): Promise<WorkOrder>;
 }

@@ -130,29 +130,34 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
           return;
         }
         
-        // Only proceed if segments are available (router is ready)
-        if (!segments || segments.length === 0) {
-          setIsChecking(false);
-          isProcessingRef.current = false;
-          return;
-        }
-        
-        const currentRoute = segments[0] || '';
-        const inAuthGroup = currentRoute === 'login';
-        
+        // Critical: Always require session - if no session, redirect to login
+        // Don't wait for segments if we don't have a session
         if (!session) {
-          // No session - require login
+          console.log('AuthGuard: No session found, redirecting to login');
+          // Wait a bit more for router to be ready, then redirect
+          await new Promise(resolve => setTimeout(resolve, Platform.OS === 'web' ? 300 : 200));
+          
+          if (!isMounted) {
+            isProcessingRef.current = false;
+            return;
+          }
+          
+          // Only proceed if segments are available (router is ready)
+          const currentRoute = segments && segments.length > 0 ? segments[0] : '';
+          const inAuthGroup = currentRoute === 'login';
+          
+          // If already on login, just stop checking
           if (inAuthGroup) {
             setIsChecking(false);
             isProcessingRef.current = false;
             return;
           }
           
-          // Redirect to login with safety check
+          // Redirect to login
           navigationTimeout = setTimeout(() => {
-            if (isMounted && !isProcessingRef.current) {
-              isProcessingRef.current = true;
+            if (isMounted) {
               try {
+                console.log('AuthGuard: Redirecting to /login');
                 router.replace('/login');
               } catch (error) {
                 console.warn('Router not ready for navigation:', error);
@@ -164,9 +169,18 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
             }
           }, 100);
           setIsChecking(false);
+          return;
+        }
+        
+        // Only proceed if segments are available (router is ready)
+        if (!segments || segments.length === 0) {
+          setIsChecking(false);
           isProcessingRef.current = false;
           return;
         }
+        
+        const currentRoute = segments[0] || '';
+        const inAuthGroup = currentRoute === 'login';
         
         // Has session - validate it
         try {
