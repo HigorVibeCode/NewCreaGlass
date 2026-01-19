@@ -1,13 +1,14 @@
 import {
   AuthRepository,
-  UsersRepository,
-  PermissionsRepository,
-  DocumentsRepository,
-  InventoryRepository,
-  NotificationsRepository,
   BloodPriorityRepository,
+  DocumentsRepository,
   EventsRepository,
+  InventoryRepository,
+  MaintenanceRepository,
+  NotificationsRepository,
+  PermissionsRepository,
   ProductionRepository,
+  UsersRepository,
   WorkOrdersRepository,
 } from './repositories/interfaces';
 
@@ -22,6 +23,7 @@ import { SupabaseBloodPriorityRepository } from '../repositories/supabase/Supaba
 import { SupabaseEventsRepository } from '../repositories/supabase/SupabaseEventsRepository';
 import { SupabaseProductionRepository } from '../repositories/supabase/SupabaseProductionRepository';
 import { SupabaseWorkOrdersRepository } from '../repositories/supabase/SupabaseWorkOrdersRepository';
+import { SupabaseMaintenanceRepository } from '../repositories/supabase/SupabaseMaintenanceRepository';
 
 // Import Mock repositories (for fallback or development)
 import { MockAuthRepository } from '../repositories/mock/MockAuthRepository';
@@ -33,7 +35,7 @@ import { MockNotificationsRepository } from '../repositories/mock/MockNotificati
 import { MockBloodPriorityRepository } from '../repositories/mock/MockBloodPriorityRepository';
 import { MockEventsRepository } from '../repositories/mock/MockEventsRepository';
 import { MockProductionRepository } from '../repositories/mock/MockProductionRepository';
-// TODO: Create MockWorkOrdersRepository if needed
+import { MockMaintenanceRepository } from '../repositories/mock/MockMaintenanceRepository';
 
 // Dependency Injection Container
 // Now using Supabase repositories for real-time sync across all devices
@@ -51,5 +53,6 @@ export const repos = {
   bloodPriorityRepo: (USE_MOCK_REPOSITORIES ? new MockBloodPriorityRepository() : new SupabaseBloodPriorityRepository()) as BloodPriorityRepository,
   eventsRepo: (USE_MOCK_REPOSITORIES ? new MockEventsRepository() : new SupabaseEventsRepository()) as EventsRepository,
   productionRepo: (USE_MOCK_REPOSITORIES ? new MockProductionRepository() : new SupabaseProductionRepository()) as ProductionRepository,
+  maintenanceRepo: (USE_MOCK_REPOSITORIES ? new MockMaintenanceRepository() : new SupabaseMaintenanceRepository()) as MaintenanceRepository,
   workOrdersRepo: new SupabaseWorkOrdersRepository() as WorkOrdersRepository, // Always use Supabase for work orders
 };

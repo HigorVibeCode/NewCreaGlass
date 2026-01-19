@@ -1,12 +1,16 @@
 import { Stack } from 'expo-router';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { QueryProvider } from '@/src/providers/QueryProvider';
-import { I18nProvider } from '@/src/providers/I18nProvider';
-import { ThemeProvider } from '@/src/providers/ThemeProvider';
 import { AuthGuard } from '@/src/components/shared/AuthGuard';
-import { NotificationAudioInitializer } from '@/src/components/shared/NotificationAudioInitializer';
+import { I18nProvider } from '@/src/providers/I18nProvider';
+import { QueryProvider } from '@/src/providers/QueryProvider';
+import { ThemeProvider } from '@/src/providers/ThemeProvider';
+
+// Remove anchor to let AuthGuard control initial navigation
+// export const unstable_settings = {
+//   anchor: '(tabs)',
+// };
 
 export default function RootLayout() {
   return (
@@ -14,7 +18,6 @@ export default function RootLayout() {
       <I18nProvider>
         <QueryProvider>
           <ThemeProvider>
-            <NotificationAudioInitializer />
             <AuthGuard>
               <Stack
                 screenOptions={{
@@ -99,37 +102,10 @@ export default function RootLayout() {
                 <Stack.Screen 
                   name="production-create" 
                   options={{ 
-                    presentation: 'card',
+                    presentation: 'modal',
                     title: 'Create Order',
                     animation: 'slide_from_bottom',
-                    animationDuration: 200,
-                    headerShown: false,
-                    gestureEnabled: true,
-                    animationTypeForReplace: 'push',
-                  }} 
-                />
-                <Stack.Screen 
-                  name="event-create" 
-                  options={{ 
-                    presentation: 'card',
-                    title: 'Create Event',
-                    animation: 'slide_from_bottom',
-                    animationDuration: 200,
-                    headerShown: false,
-                    gestureEnabled: true,
-                    animationTypeForReplace: 'push',
-                  }} 
-                />
-                <Stack.Screen 
-                  name="event-report-create" 
-                  options={{ 
-                    presentation: 'card',
-                    title: 'Create Report',
-                    animation: 'slide_from_bottom',
-                    animationDuration: 200,
-                    headerShown: false,
-                    gestureEnabled: true,
-                    animationTypeForReplace: 'push',
+                    headerShown: true,
                   }} 
                 />
                 <Stack.Screen 
@@ -138,43 +114,61 @@ export default function RootLayout() {
                     presentation: 'card',
                     title: 'Order Details',
                     animation: 'slide_from_right',
-                    animationDuration: 200,
                     headerShown: false,
-                    gestureEnabled: true,
-                    animationTypeForReplace: 'push',
                   }} 
                 />
                 <Stack.Screen 
-                  name="event-detail" 
+                  name="event-create" 
                   options={{ 
-                    presentation: 'card',
-                    title: 'Event Details',
-                    animation: 'slide_from_right',
-                    animationDuration: 200,
+                    presentation: 'modal',
+                    title: 'Create Event',
+                    animation: 'slide_from_bottom',
                     headerShown: false,
-                    gestureEnabled: true,
-                    animationTypeForReplace: 'push',
                   }} 
                 />
                 <Stack.Screen 
-                  name="work-order-detail" 
+                  name="event-report-create" 
                   options={{ 
-                    presentation: 'card',
-                    title: 'Work Order Details',
-                    animation: 'slide_from_right',
-                    animationDuration: 200,
+                    presentation: 'modal',
+                    title: 'Create Report',
+                    animation: 'slide_from_bottom',
                     headerShown: false,
-                    gestureEnabled: true,
-                    animationTypeForReplace: 'push',
                   }} 
                 />
                 <Stack.Screen 
                   name="documents-category" 
                   options={{ 
                     presentation: 'card',
-                    title: 'Documents',
+                    title: 'Category',
                     animation: 'slide_from_right',
                     headerShown: false,
+                  }} 
+                />
+                <Stack.Screen 
+                  name="maintenance-list" 
+                  options={{ 
+                    presentation: 'card',
+                    title: 'Maintenance',
+                    animation: 'slide_from_right',
+                    headerShown: true,
+                  }} 
+                />
+                <Stack.Screen 
+                  name="maintenance-create" 
+                  options={{ 
+                    presentation: 'modal',
+                    title: 'Create Maintenance',
+                    animation: 'slide_from_bottom',
+                    headerShown: true,
+                  }} 
+                />
+                <Stack.Screen 
+                  name="maintenance-detail" 
+                  options={{ 
+                    presentation: 'card',
+                    title: 'Maintenance Details',
+                    animation: 'slide_from_right',
+                    headerShown: true,
                   }} 
                 />
                 <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />

@@ -28,7 +28,7 @@
     "invalidCredentials": "Nome de usuário ou senha inválidos",
     "loginError": "Falha no login. Tente novamente.",
     "loggingIn": "Entrando...",
-    "rememberLogin": "Salvar usuário e senha"
+    "rememberLogin": "Lembrar login"
   },
   "navigation": {
     "production": "Produção",
@@ -44,14 +44,10 @@
     "title": "Notificações",
     "noNotifications": "Nenhuma notificação",
     "markAsRead": "Marcar como lido",
-    "markAsReadError": "Falha ao marcar notificação como lida",
     "unread": "Não lido",
     "lowStockMessage": "Estoque baixo",
-    "productionAuthorized": "Pedido de produção autorizado",
     "clearAll": "Limpar Tudo",
-    "clearAllConfirm": "Tem certeza que deseja limpar todas as notificações?",
-    "clearError": "Falha ao limpar notificações",
-    "loadError": "Falha ao carregar notificações"
+    "clearAllConfirm": "Tem certeza que deseja limpar todas as notificações?"
   },
   "bloodPriority": {
     "title": "Blood Priority",
@@ -77,19 +73,29 @@
     "categories": {
       "legalRequirements": {
         "title": "Requisitos Legais",
-        "subtitle": "Requisitos legais, seguros e normas"
+        "subtitle": "Documentos e certificações legais"
       },
       "equipmentTools": {
         "title": "Equipamentos e Ferramentas",
-        "subtitle": "Máquinas, EPIs, veículos"
+        "subtitle": "Manuais e manutenção de equipamentos",
+        "subCategories": {
+          "manuals": {
+            "title": "Manuais",
+            "subtitle": "Manuais de equipamentos e ferramentas"
+          },
+          "maintenance": {
+            "title": "Manutenção",
+            "subtitle": "Registros de manutenção de equipamentos"
+          }
+        }
       },
       "proceduresManuals": {
         "title": "Procedimentos e Manuais",
-        "subtitle": "Instruções internas, processos"
+        "subtitle": "Documentação de procedimentos"
       },
       "professionalTraining": {
         "title": "Treinamento Profissional",
-        "subtitle": "Treinamento contínuo"
+        "subtitle": "Materiais de treinamento"
       }
     }
   },
@@ -195,13 +201,11 @@
     "title": "Produção",
     "noData": "Nenhum dado de produção",
     "createOrder": "Criar Ordem",
-    "orderDetails": "Detalhes do Pedido",
     "noOrders": "Nenhuma ordem de produção",
     "filterByStatus": "Filtrar por Status",
     "orderNumber": "Número do Pedido",
     "orderNumberPlaceholder": "Digite o número do pedido",
     "clientNamePlaceholder": "Digite o nome do cliente",
-    "orderType": "Tipo de Pedido",
     "orderTypePlaceholder": "Digite o tipo de pedido",
     "selectDueDate": "Selecione a data de vencimento",
     "dueDate": "Data de Vencimento",
@@ -253,6 +257,11 @@
       "delivered": "Entregue",
       "completed": "Concluído"
     },
+    "orderType": {
+      "standard": "Padrão",
+      "urgent": "Urgente",
+      "custom": "Personalizado"
+    },
     "glassTypes": {
       "tempered": "Temperado (ESG)",
       "strengthened": "Temperado (TVG)",
@@ -281,48 +290,51 @@
   },
   "events": {
     "title": "Eventos",
-    "noData": "Nenhum evento",
-    "eventTitle": "Título do Evento",
-    "filter": "Filtro",
-    "history": "Histórico",
-    "noHistory": "Nenhuma ordem de serviço completada",
-    "createReport": "Criar Relatório",
-    "reportTitle": "Título do Relatório",
-    "reportTitlePlaceholder": "Digite o título do relatório",
-    "reportContent": "Conteúdo do Relatório",
-    "reportContentPlaceholder": "Digite o conteúdo do relatório",
-    "createEvent": "Criar Evento",
-    "filterByType": "Filtrar por Tipo",
-    "type": "Tipo",
-    "titlePlaceholder": "Digite o título do evento",
-    "selectType": "Selecione o tipo",
-    "startDate": "Data Inicial",
-    "endDate": "Data Final",
-    "endDateOptional": "Data Final (Opcional)",
-    "startTime": "Hora Inicial",
-    "endTime": "Hora Final",
-    "endTimeOptional": "Hora Final (Opcional)",
-    "location": "Local",
-    "locationPlaceholder": "Digite o local",
-    "people": "Pessoas",
-    "selectPeople": "Selecione pessoas",
-    "attachments": "Anexos",
-    "addAttachment": "Adicionar Anexo",
-    "maxAttachments": "Máximo de 3 anexos permitidos",
-    "fillRequiredFields": "Por favor, preencha todos os campos obrigatórios",
-    "createEventError": "Falha ao criar evento",
-    "eventCreated": "Evento criado com sucesso",
-    "addAttachmentError": "Falha ao adicionar anexo",
-    "additionalInfo": "Informação Adicional",
-    "additionalInfoPlaceholder": "Digite informações adicionais (opcional)",
-    "types": {
-      "meeting": "Reunião",
-      "training": "Treinamento",
-      "maintenance": "Manutenção",
-      "installation": "Instalação",
-      "inspection": "Inspeção",
-      "other": "Outro"
-    }
+    "noData": "Nenhum evento"
+  },
+  "maintenance": {
+    "title": "Manutenção",
+    "noRecords": "Nenhum registro de manutenção",
+    "createRecord": "Criar Registro",
+    "editRecord": "Editar Registro",
+    "updateRecord": "Atualizar Registro",
+    "recordDetails": "Detalhes do Registro",
+    "recordCreated": "Registro de manutenção criado com sucesso",
+    "recordUpdated": "Registro de manutenção atualizado com sucesso",
+    "recordDeleted": "Registro de manutenção excluído com sucesso",
+    "recordNotFound": "Registro de manutenção não encontrado",
+    "loadError": "Erro ao carregar registro de manutenção",
+    "createError": "Erro ao criar registro de manutenção",
+    "updateError": "Erro ao atualizar registro de manutenção",
+    "deleteError": "Erro ao excluir registro de manutenção",
+    "deleteConfirm": "Tem certeza que deseja excluir este registro de manutenção?",
+    "fillTitle": "Por favor, preencha o título",
+    "fillEquipment": "Por favor, preencha o equipamento",
+    "fillType": "Por favor, preencha o tipo",
+    "fillDescription": "Por favor, preencha a descrição",
+    "titlePlaceholder": "Digite o título",
+    "equipmentPlaceholder": "Digite o equipamento",
+    "typePlaceholder": "Digite o tipo",
+    "basicInfo": "Informações Básicas",
+    "infos": "Caixas de Informação",
+    "info": "Info",
+    "addInfo": "Adicionar Info",
+    "addFirstInfo": "Adicionar Primeira Info",
+    "noInfos": "Nenhuma informação adicionada",
+    "description": "Descrição",
+    "descriptionPlaceholder": "Digite a descrição",
+    "images": "Imagens",
+    "addImage": "Adicionar Imagem",
+    "maxImagesReached": "Máximo de 3 imagens por info",
+    "deleteInfoConfirm": "Tem certeza que deseja excluir esta info?",
+    "deleteInfoError": "Erro ao excluir info",
+    "imagePickerError": "Erro ao selecionar imagem",
+    "saveInfo": "Salvar Info",
+    "updateInfo": "Atualizar Info",
+    "infoSaved": "Info salva com sucesso",
+    "saveInfoError": "Erro ao salvar info",
+    "createdAt": "Data de Criação",
+    "updatedAt": "Data de Atualização"
   },
   "permissions": {
     "documents.upload": "Enviar Documentos",
@@ -345,69 +357,6 @@
     "users.create": "Criar Usuários",
     "qr.scan": "Escanear Códigos QR",
     "nfc.read": "Ler Tags NFC",
-    "production.create": "Criar Ordens de Produção",
-    "events.view": "Visualizar Eventos",
-    "events.create": "Criar Eventos",
-    "events.update": "Atualizar Eventos",
-    "events.delete": "Excluir Eventos",
-    "events.history": "Visualizar Histórico de Eventos",
-    "events.report.create": "Criar Relatórios"
-  },
-  "workOrders": {
-    "pendingOrders": "Ordens Pendentes",
-    "allPending": "Todas Pendentes",
-    "noPendingOrders": "Nenhuma ordem pendente",
-    "createOrder": "Criar Ordem de Serviço",
-    "teamMembers": "membros",
-    "status": {
-      "planned": "Planejado",
-      "in_progress": "Em Atendimento",
-      "paused": "Pausado",
-      "completed": "Concluído",
-      "cancelled": "Cancelado"
-    },
-    "serviceType": "Tipo de Serviço",
-    "serviceTypeOptions": {
-      "maintenance": "Manutenção",
-      "installation": "Instalação",
-      "internal": "Interno",
-      "external": "Externo"
-    },
-    "clientName": "Nome do Cliente",
-    "clientNamePlaceholder": "Digite o nome do cliente",
-    "clientAddress": "Endereço do Cliente",
-    "clientAddressPlaceholder": "Digite o endereço completo",
-    "clientContact": "Contato do Cliente",
-    "clientContactPlaceholder": "Telefone, email, etc.",
-    "scheduledDate": "Data Agendada",
-    "scheduledTime": "Hora Agendada",
-    "internalNotes": "Observações Internas (Opcional)",
-    "internalNotesPlaceholder": "Digite observações internas (não visíveis ao cliente)",
-    "plannedMaterials": "Materiais Planejados (Opcional)",
-    "plannedMaterialsPlaceholder": "Digite os materiais planejados (até 1000 caracteres)",
-    "team": "Equipe (Opcional)",
-    "teamPlaceholder": "Digite os UUIDs dos membros da equipe separados por vírgula (ex: uuid1, uuid2)",
-    "fillRequiredFields": "Por favor, preencha todos os campos obrigatórios",
-    "orderCreated": "Ordem de serviço criada com sucesso",
-    "createOrderError": "Falha ao criar ordem de serviço",
-    "startService": "Iniciar Serviço",
-    "finishService": "Finalizar Serviço",
-    "serviceStarted": "Serviço iniciado com sucesso",
-    "startServiceError": "Falha ao iniciar serviço",
-    "serviceCompleted": "Serviço finalizado com sucesso",
-    "finishServiceError": "Falha ao finalizar serviço",
-    "signatureRequired": "Assinatura do cliente é obrigatória para finalizar o serviço",
-    "requestSignature": "Solicitar Assinatura do Cliente",
-    "clientSignature": "Assinatura do Cliente",
-    "enterClientName": "Digite o nome completo do cliente:",
-    "clientNameRequired": "Nome do cliente é obrigatório",
-    "signatureCreated": "Assinatura registrada com sucesso",
-    "signatureError": "Falha ao registrar assinatura",
-    "signatureDrawing": "Desenhe a assinatura abaixo:",
-    "signatureDrawingRequired": "Por favor, desenhe a assinatura",
-    "clearSignature": "Limpar",
-    "saveSignature": "Salvar",
-    "locationPermissionRequired": "Permissão de localização é necessária para criar o check-in",
-    "locationError": "Erro ao obter localização. Tentando continuar..."
+    "production.create": "Criar Ordens de Produção"
   }
 }

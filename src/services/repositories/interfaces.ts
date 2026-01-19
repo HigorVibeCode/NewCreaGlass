@@ -1,26 +1,22 @@
 import {
-  User,
-  Permission,
-  Session,
-  Document,
-  InventoryGroup,
-  InventoryItem,
-  InventoryHistory,
-  Notification,
-  BloodPriorityMessage,
-  BloodPriorityRead,
-  Event,
-  Production,
-  ProductionStatus,
-  ProductionStatusHistory,
-  WorkOrder,
-  WorkOrderStatus,
-  CheckIn,
-  TimeStatus,
-  ServiceLog,
-  Evidence,
-  ChecklistItem,
-  Signature,
+    BloodPriorityMessage,
+    BloodPriorityRead,
+    Document,
+    Event,
+    InventoryGroup,
+    InventoryHistory,
+    InventoryItem,
+    MaintenanceHistory,
+    MaintenanceInfo,
+    MaintenanceInfoImage,
+    MaintenanceRecord,
+    Notification,
+    Permission,
+    Production,
+    ProductionStatus,
+    ProductionStatusHistory,
+    Session,
+    User,
 } from '../../types';
 
 // Auth Repository
@@ -97,12 +93,11 @@ export interface BloodPriorityRepository {
   confirmRead(messageId: string, userId: string): Promise<void>;
 }
 
-// Events Repository
+// Events Repository (placeholder)
 export interface EventsRepository {
   getAllEvents(): Promise<Event[]>;
   getEventById(eventId: string): Promise<Event | null>;
   createEvent(event: Omit<Event, 'id' | 'createdAt'>): Promise<Event>;
-  deleteEvent(eventId: string): Promise<void>;
 }
 
 // Production Repository
@@ -115,41 +110,17 @@ export interface ProductionRepository {
   getStatusHistory(productionId: string): Promise<ProductionStatusHistory[]>;
 }
 
-// Work Orders Repository
-export interface WorkOrdersRepository {
-  getAllWorkOrders(status?: WorkOrderStatus): Promise<WorkOrder[]>;
-  getWorkOrderById(workOrderId: string): Promise<WorkOrder | null>;
-  createWorkOrder(workOrder: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'>): Promise<WorkOrder>;
-  updateWorkOrder(workOrderId: string, updates: Partial<WorkOrder>): Promise<WorkOrder>;
-  deleteWorkOrder(workOrderId: string): Promise<void>;
-  
-  // Check-in
-  createCheckIn(workOrderId: string, checkIn: Omit<CheckIn, 'id' | 'workOrderId' | 'createdAt'>): Promise<CheckIn>;
-  getCheckIn(workOrderId: string): Promise<CheckIn | null>;
-  
-  // Time Status
-  createTimeStatus(workOrderId: string, timeStatus: Omit<TimeStatus, 'id' | 'workOrderId' | 'createdAt'>): Promise<TimeStatus>;
-  updateTimeStatus(timeStatusId: string, updates: Partial<TimeStatus>): Promise<TimeStatus>;
-  getTimeStatuses(workOrderId: string): Promise<TimeStatus[]>;
-  getCurrentTimeStatus(workOrderId: string): Promise<TimeStatus | null>;
-  
-  // Service Logs
-  createServiceLog(workOrderId: string, log: Omit<ServiceLog, 'id' | 'workOrderId' | 'createdAt'>): Promise<ServiceLog>;
-  getServiceLogs(workOrderId: string): Promise<ServiceLog[]>;
-  
-  // Evidences
-  createEvidence(workOrderId: string, evidence: Omit<Evidence, 'id' | 'workOrderId' | 'createdAt'>): Promise<Evidence>;
-  getEvidences(workOrderId: string): Promise<Evidence[]>;
-  
-  // Checklist Items
-  createChecklistItem(workOrderId: string, item: Omit<ChecklistItem, 'id' | 'workOrderId' | 'createdAt'>): Promise<ChecklistItem>;
-  updateChecklistItem(itemId: string, updates: Partial<ChecklistItem>): Promise<ChecklistItem>;
-  getChecklistItems(workOrderId: string): Promise<ChecklistItem[]>;
-  
-  // Signature
-  createSignature(workOrderId: string, signature: Omit<Signature, 'id' | 'workOrderId' | 'createdAt'>): Promise<Signature>;
-  getSignature(workOrderId: string): Promise<Signature | null>;
-  
-  // Finalization
-  finalizeWorkOrder(workOrderId: string): Promise<WorkOrder>;
+// Maintenance Repository
+export interface MaintenanceRepository {
+  getAllMaintenanceRecords(): Promise<MaintenanceRecord[]>;
+  getMaintenanceRecordById(recordId: string): Promise<MaintenanceRecord | null>;
+  createMaintenanceRecord(record: Omit<MaintenanceRecord, 'id' | 'createdAt' | 'updatedAt' | 'infos' | 'history'>): Promise<MaintenanceRecord>;
+  updateMaintenanceRecord(recordId: string, updates: Partial<MaintenanceRecord>, changedBy?: string): Promise<MaintenanceRecord>;
+  deleteMaintenanceRecord(recordId: string): Promise<void>;
+  addMaintenanceInfo(recordId: string, info: Omit<MaintenanceInfo, 'id' | 'createdAt' | 'updatedAt' | 'images'>): Promise<MaintenanceInfo>;
+  updateMaintenanceInfo(infoId: string, updates: Partial<MaintenanceInfo>, changedBy?: string): Promise<MaintenanceInfo>;
+  deleteMaintenanceInfo(infoId: string, changedBy?: string): Promise<void>;
+  addMaintenanceInfoImage(infoId: string, image: Omit<MaintenanceInfoImage, 'id' | 'createdAt'>): Promise<MaintenanceInfoImage>;
+  deleteMaintenanceInfoImage(imageId: string, changedBy?: string): Promise<void>;
+  getMaintenanceHistory(recordId: string): Promise<MaintenanceHistory[]>;
 }

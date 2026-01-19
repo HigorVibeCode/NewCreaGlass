@@ -78,26 +78,6 @@ export class MockProductionRepository implements ProductionRepository {
       };
       history.push(historyEntry);
       await this.saveStatusHistory(history);
-
-      // Create notification when status changes from "not_authorized" to "authorized"
-      if (previousStatus === 'not_authorized' && updates.status === 'authorized') {
-        try {
-          const { repos } = await import('../../services/container');
-          await repos.notificationsRepo.createNotification({
-            type: 'production.authorized',
-            payloadJson: {
-              productionId: productionId,
-              orderNumber: previousProduction.orderNumber,
-              clientName: previousProduction.clientName,
-              orderType: previousProduction.orderType,
-            },
-            createdBySystem: true,
-          });
-        } catch (notificationError) {
-          // Log error but don't fail the status update
-          console.warn('Failed to create notification for production status change:', notificationError);
-        }
-      }
     }
     
     return productions[index];

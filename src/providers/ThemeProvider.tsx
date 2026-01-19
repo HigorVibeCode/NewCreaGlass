@@ -8,7 +8,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   return (
     <NavigationThemeProvider value={effectiveTheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <StatusBar style={effectiveTheme === 'dark' ? 'light' : 'dark'} />
+      <StatusBar style={effectiveTheme === 'dark' ? 'light' : 'dark'} translucent backgroundColor="transparent" />
       {children}
     </NavigationThemeProvider>
   );

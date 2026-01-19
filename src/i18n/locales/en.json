@@ -31,7 +31,7 @@
     "invalidCredentials": "Invalid username or password",
     "loginError": "Login failed. Please try again.",
     "loggingIn": "Signing in...",
-    "rememberLogin": "Remember username and password"
+    "rememberLogin": "Remember login"
   },
   "navigation": {
     "production": "Production",
@@ -47,14 +47,10 @@
     "title": "Notifications",
     "noNotifications": "No notifications",
     "markAsRead": "Mark as read",
-    "markAsReadError": "Failed to mark notification as read",
     "unread": "Unread",
     "lowStockMessage": "Low stock",
-    "productionAuthorized": "Production order authorized",
     "clearAll": "Clear All",
-    "clearAllConfirm": "Are you sure you want to clear all notifications?",
-    "clearError": "Failed to clear notifications",
-    "loadError": "Failed to load notifications"
+    "clearAllConfirm": "Are you sure you want to clear all notifications?"
   },
   "bloodPriority": {
     "title": "Blood Priority",
@@ -80,19 +76,29 @@
     "categories": {
       "legalRequirements": {
         "title": "Legal Requirements",
-        "subtitle": "Law requirements, insurance and standards"
+        "subtitle": "Legal documents and certifications"
       },
       "equipmentTools": {
         "title": "Equipment & Tools",
-        "subtitle": "Machines, PPE, vehicles"
+        "subtitle": "Equipment manuals and maintenance",
+        "subCategories": {
+          "manuals": {
+            "title": "Manuals",
+            "subtitle": "Equipment and tools manuals"
+          },
+          "maintenance": {
+            "title": "Maintenance",
+            "subtitle": "Equipment maintenance records"
+          }
+        }
       },
       "proceduresManuals": {
         "title": "Procedures & Manuals",
-        "subtitle": "Internal instructions, processes"
+        "subtitle": "Procedure documentation"
       },
       "professionalTraining": {
         "title": "Professional Training",
-        "subtitle": "Continuous training"
+        "subtitle": "Training materials"
       }
     }
   },
@@ -198,13 +204,11 @@
     "title": "Production",
     "noData": "No production data",
     "createOrder": "Create Order",
-    "orderDetails": "Order Details",
     "noOrders": "No production orders",
     "filterByStatus": "Filter by Status",
     "orderNumber": "Order Number",
     "orderNumberPlaceholder": "Enter order number",
     "clientNamePlaceholder": "Enter client name",
-    "orderType": "Order Type",
     "orderTypePlaceholder": "Enter order type",
     "selectDueDate": "Select due date",
     "dueDate": "Due Date",
@@ -256,6 +260,11 @@
       "delivered": "Delivered",
       "completed": "Completed"
     },
+    "orderType": {
+      "standard": "Standard",
+      "urgent": "Urgent",
+      "custom": "Custom"
+    },
     "glassTypes": {
       "tempered": "Tempered (ESG)",
       "strengthened": "Strengthened (TVG)",
@@ -284,47 +293,51 @@
   },
   "events": {
     "title": "Events",
-    "noData": "No events",
-    "eventTitle": "Event Title",
-    "filter": "Filter",
-    "history": "History",
-    "createReport": "Create Report",
-    "reportTitle": "Report Title",
-    "reportTitlePlaceholder": "Enter report title",
-    "reportContent": "Report Content",
-    "reportContentPlaceholder": "Enter report content",
-    "createEvent": "Create Event",
-    "filterByType": "Filter by Type",
-    "type": "Type",
-    "titlePlaceholder": "Enter event title",
-    "selectType": "Select type",
-    "startDate": "Start Date",
-    "endDate": "End Date",
-    "endDateOptional": "End Date (Optional)",
-    "startTime": "Start Time",
-    "endTime": "End Time",
-    "endTimeOptional": "End Time (Optional)",
-    "location": "Location",
-    "locationPlaceholder": "Enter location",
-    "people": "People",
-    "selectPeople": "Select people",
-    "attachments": "Attachments",
-    "addAttachment": "Add Attachment",
-    "maxAttachments": "Maximum 3 attachments allowed",
-    "fillRequiredFields": "Please fill all required fields",
-    "createEventError": "Failed to create event",
-    "eventCreated": "Event created successfully",
-    "addAttachmentError": "Failed to add attachment",
-    "additionalInfo": "Additional Information",
-    "additionalInfoPlaceholder": "Enter additional information (optional)",
-    "types": {
-      "meeting": "Meeting",
-      "training": "Training",
-      "maintenance": "Maintenance",
-      "installation": "Installation",
-      "inspection": "Inspection",
-      "other": "Other"
-    }
+    "noData": "No events"
+  },
+  "maintenance": {
+    "title": "Maintenance",
+    "noRecords": "No maintenance records",
+    "createRecord": "Create Record",
+    "editRecord": "Edit Record",
+    "updateRecord": "Update Record",
+    "recordDetails": "Record Details",
+    "recordCreated": "Maintenance record created successfully",
+    "recordUpdated": "Maintenance record updated successfully",
+    "recordDeleted": "Maintenance record deleted successfully",
+    "recordNotFound": "Maintenance record not found",
+    "loadError": "Error loading maintenance record",
+    "createError": "Error creating maintenance record",
+    "updateError": "Error updating maintenance record",
+    "deleteError": "Error deleting maintenance record",
+    "deleteConfirm": "Are you sure you want to delete this maintenance record?",
+    "fillTitle": "Please fill in the title",
+    "fillEquipment": "Please fill in the equipment",
+    "fillType": "Please fill in the type",
+    "fillDescription": "Please fill in the description",
+    "titlePlaceholder": "Enter title",
+    "equipmentPlaceholder": "Enter equipment",
+    "typePlaceholder": "Enter type",
+    "basicInfo": "Basic Information",
+    "infos": "Info Boxes",
+    "info": "Info",
+    "addInfo": "Add Info",
+    "addFirstInfo": "Add First Info",
+    "noInfos": "No information added",
+    "description": "Description",
+    "descriptionPlaceholder": "Enter description",
+    "images": "Images",
+    "addImage": "Add Image",
+    "maxImagesReached": "Maximum of 3 images per info",
+    "deleteInfoConfirm": "Are you sure you want to delete this info?",
+    "deleteInfoError": "Error deleting info",
+    "imagePickerError": "Error selecting image",
+    "saveInfo": "Save Info",
+    "updateInfo": "Update Info",
+    "infoSaved": "Info saved successfully",
+    "saveInfoError": "Error saving info",
+    "createdAt": "Created At",
+    "updatedAt": "Updated At"
   },
   "permissions": {
     "documents.upload": "Upload Documents",
@@ -347,59 +360,6 @@
     "users.create": "Create Users",
     "qr.scan": "Scan QR Codes",
     "nfc.read": "Read NFC Tags",
-    "production.create": "Create Production Orders",
-    "events.view": "View Events",
-    "events.create": "Create Events",
-    "events.update": "Update Events",
-    "events.delete": "Delete Events",
-    "events.history": "View Event History",
-    "events.report.create": "Create Reports"
-  },
-  "workOrders": {
-    "pendingOrders": "Pending Work Orders",
-    "allPending": "All Pending",
-    "noPendingOrders": "No pending work orders",
-    "createOrder": "Create Work Order",
-    "teamMembers": "members",
-    "status": {
-      "planned": "Planned",
-      "in_progress": "In Progress",
-      "paused": "Paused",
-      "completed": "Completed",
-      "cancelled": "Cancelled"
-    },
-    "serviceType": "Service Type",
-    "serviceTypeOptions": {
-      "maintenance": "Maintenance",
-      "installation": "Installation",
-      "internal": "Internal",
-      "external": "External"
-    },
-    "clientName": "Client Name",
-    "clientNamePlaceholder": "Enter client name",
-    "clientAddress": "Client Address",
-    "clientAddressPlaceholder": "Enter full address",
-    "clientContact": "Client Contact",
-    "clientContactPlaceholder": "Phone, email, etc.",
-    "scheduledDate": "Scheduled Date",
-    "scheduledTime": "Scheduled Time",
-    "internalNotes": "Internal Notes (Optional)",
-    "internalNotesPlaceholder": "Enter internal notes (not visible to client)",
-    "plannedMaterials": "Planned Materials (Optional)",
-    "plannedMaterialsPlaceholder": "Enter planned materials (up to 1000 characters)",
-    "team": "Team (Optional)",
-    "teamPlaceholder": "Enter team member IDs separated by comma",
-    "fillRequiredFields": "Please fill all required fields",
-    "orderCreated": "Work order created successfully",
-    "createOrderError": "Failed to create work order",
-    "startService": "Start Service",
-    "finishService": "Finish Service",
-    "serviceStarted": "Service started successfully",
-    "startServiceError": "Failed to start service",
-    "serviceCompleted": "Service completed successfully",
-    "finishServiceError": "Failed to finish service",
-    "signatureRequired": "Client signature is required to finish the service",
-    "locationPermissionRequired": "Location permission is required to create check-in",
-    "locationError": "Error getting location. Trying to continue..."
+    "production.create": "Create Production Orders"
   }
 }

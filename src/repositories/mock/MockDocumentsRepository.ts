@@ -1,10 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
+import { Directory, File, Paths } from 'expo-file-system';
 import { DocumentsRepository } from '../../services/repositories/interfaces';
 import { Document } from '../../types';
 
 const STORAGE_KEY = 'mock_documents';
-const DOCUMENTS_DIR = FileSystem.documentDirectory + 'documents/';
+const DOCUMENTS_DIR_NAME = 'documents';
 
 export class MockDocumentsRepository implements DocumentsRepository {
   private async getDocuments(): Promise<Document[]> {
@@ -35,27 +35,26 @@ export class MockDocumentsRepository implements DocumentsRepository {
     const mimeType = 'type' in file ? file.type : 'application/octet-stream';
     
     // Garantir que o diretório de documentos existe
-    const dirInfo = await FileSystem.getInfoAsync(DOCUMENTS_DIR);
+    const documentsDir = new Directory(Paths.document, DOCUMENTS_DIR_NAME);
+    const dirInfo = await documentsDir.info();
     if (!dirInfo.exists) {
-      await FileSystem.makeDirectoryAsync(DOCUMENTS_DIR, { intermediates: true });
+      await documentsDir.make();
     }
     
     // Copiar o arquivo para o diretório permanente
     const fileUri = 'uri' in file ? file.uri : '';
     const timestamp = Date.now();
     const savedFilename = `${timestamp}_${filename}`;
-    const destinationUri = DOCUMENTS_DIR + savedFilename;
+    const destinationFile = new File(documentsDir, savedFilename);
     
-    let finalStoragePath = destinationUri;
+    let finalStoragePath = destinationFile.uri;
     
     // Se temos um URI válido, copiar o arquivo
     if (fileUri && (fileUri.startsWith('file://') || fileUri.startsWith('content://'))) {
       try {
-        await FileSystem.copyAsync({
-          from: fileUri,
-          to: destinationUri,
-        });
-        finalStoragePath = destinationUri;
+        const sourceFile = new File(fileUri);
+        await sourceFile.copy(destinationFile);
+        finalStoragePath = destinationFile.uri;
       } catch (error) {
         console.error('Error copying file:', error);
         // Se falhar ao copiar, usar o URI original

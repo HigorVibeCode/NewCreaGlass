@@ -78,8 +78,12 @@ export class MockAuthRepository implements AuthRepository {
         return false;
       }
       
-      // Check if user is still active (in production, this would check with backend)
-      // For now, just check if session exists
+      // Check if user is still active
+      const user = await this.usersRepo.getUserById(session.user.id);
+      if (!user || !user.isActive) {
+        return false;
+      }
+      
       return true;
     } catch (error) {
       console.error('Error validating session:', error);

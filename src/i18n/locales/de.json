@@ -28,7 +28,7 @@
     "invalidCredentials": "Ungültiger Benutzername oder Passwort",
     "loginError": "Anmeldung fehlgeschlagen. Bitte versuchen Sie es erneut.",
     "loggingIn": "Wird angemeldet...",
-    "rememberLogin": "Benutzername und Passwort speichern"
+    "rememberLogin": "Anmeldung merken"
   },
   "navigation": {
     "production": "Produktion",
@@ -44,14 +44,10 @@
     "title": "Benachrichtigungen",
     "noNotifications": "Keine Benachrichtigungen",
     "markAsRead": "Als gelesen markieren",
-    "markAsReadError": "Fehler beim Markieren der Benachrichtigung als gelesen",
     "unread": "Ungelesen",
     "lowStockMessage": "Niedriger Bestand",
-    "productionAuthorized": "Produktionsauftrag autorisiert",
     "clearAll": "Alle Löschen",
-    "clearAllConfirm": "Sind Sie sicher, dass Sie alle Benachrichtigungen löschen möchten?",
-    "clearError": "Fehler beim Löschen der Benachrichtigungen",
-    "loadError": "Fehler beim Laden der Benachrichtigungen"
+    "clearAllConfirm": "Sind Sie sicher, dass Sie alle Benachrichtigungen löschen möchten?"
   },
   "bloodPriority": {
     "title": "Blood Priority",
@@ -77,19 +73,29 @@
     "categories": {
       "legalRequirements": {
         "title": "Rechtliche Anforderungen",
-        "subtitle": "Gesetzliche Anforderungen, Versicherungen und Standards"
+        "subtitle": "Rechtliche Dokumente und Zertifizierungen"
       },
       "equipmentTools": {
         "title": "Ausrüstung & Werkzeuge",
-        "subtitle": "Maschinen, PSA, Fahrzeuge"
+        "subtitle": "Ausrüstungshandbücher und Wartung",
+        "subCategories": {
+          "manuals": {
+            "title": "Handbücher",
+            "subtitle": "Handbücher für Ausrüstung und Werkzeuge"
+          },
+          "maintenance": {
+            "title": "Wartung",
+            "subtitle": "Wartungsaufzeichnungen für Ausrüstung"
+          }
+        }
       },
       "proceduresManuals": {
         "title": "Verfahren & Handbücher",
-        "subtitle": "Interne Anweisungen, Prozesse"
+        "subtitle": "Verfahrensdokumentation"
       },
       "professionalTraining": {
         "title": "Berufliche Ausbildung",
-        "subtitle": "Kontinuierliche Schulung"
+        "subtitle": "Schulungsmaterialien"
       }
     }
   },
@@ -195,13 +201,11 @@
     "title": "Produktion",
     "noData": "Keine Produktionsdaten",
     "createOrder": "Auftrag erstellen",
-    "orderDetails": "Auftragsdetails",
     "noOrders": "Keine Produktionsaufträge",
     "filterByStatus": "Nach Status filtern",
     "orderNumber": "Auftragsnummer",
     "orderNumberPlaceholder": "Auftragsnummer eingeben",
     "clientNamePlaceholder": "Kundenname eingeben",
-    "orderType": "Auftragstyp",
     "orderTypePlaceholder": "Auftragstyp eingeben",
     "selectDueDate": "Fälligkeitsdatum auswählen",
     "dueDate": "Fälligkeitsdatum",
@@ -253,6 +257,11 @@
       "delivered": "Geliefert",
       "completed": "Abgeschlossen"
     },
+    "orderType": {
+      "standard": "Standard",
+      "urgent": "Dringend",
+      "custom": "Individuell"
+    },
     "glassTypes": {
       "tempered": "Gebrannt (ESG)",
       "strengthened": "Verstärkt (TVG)",
@@ -281,47 +290,51 @@
   },
   "events": {
     "title": "Ereignisse",
-    "noData": "Keine Ereignisse",
-    "eventTitle": "Ereignistitel",
-    "filter": "Filter",
-    "history": "Verlauf",
-    "createReport": "Bericht erstellen",
-    "reportTitle": "Berichtstitel",
-    "reportTitlePlaceholder": "Berichtstitel eingeben",
-    "reportContent": "Berichtsinhalt",
-    "reportContentPlaceholder": "Berichtsinhalt eingeben",
-    "createEvent": "Ereignis erstellen",
-    "filterByType": "Nach Typ filtern",
-    "type": "Typ",
-    "titlePlaceholder": "Ereignistitel eingeben",
-    "selectType": "Typ auswählen",
-    "startDate": "Startdatum",
-    "endDate": "Enddatum",
-    "endDateOptional": "Enddatum (Optional)",
-    "startTime": "Startzeit",
-    "endTime": "Endzeit",
-    "endTimeOptional": "Endzeit (Optional)",
-    "location": "Standort",
-    "locationPlaceholder": "Standort eingeben",
-    "people": "Personen",
-    "selectPeople": "Personen auswählen",
-    "attachments": "Anhänge",
-    "addAttachment": "Anhang hinzufügen",
-    "maxAttachments": "Maximal 3 Anhänge erlaubt",
-    "fillRequiredFields": "Bitte füllen Sie alle erforderlichen Felder aus",
-    "createEventError": "Fehler beim Erstellen des Ereignisses",
-    "eventCreated": "Ereignis erfolgreich erstellt",
-    "addAttachmentError": "Fehler beim Hinzufügen des Anhangs",
-    "additionalInfo": "Zusätzliche Informationen",
-    "additionalInfoPlaceholder": "Zusätzliche Informationen eingeben (optional)",
-    "types": {
-      "meeting": "Besprechung",
-      "training": "Schulung",
-      "maintenance": "Wartung",
-      "installation": "Installation",
-      "inspection": "Inspektion",
-      "other": "Andere"
-    }
+    "noData": "Keine Ereignisse"
+  },
+  "maintenance": {
+    "title": "Wartung",
+    "noRecords": "Keine Wartungsaufzeichnungen",
+    "createRecord": "Aufzeichnung erstellen",
+    "editRecord": "Aufzeichnung bearbeiten",
+    "updateRecord": "Aufzeichnung aktualisieren",
+    "recordDetails": "Aufzeichnungsdetails",
+    "recordCreated": "Wartungsaufzeichnung erfolgreich erstellt",
+    "recordUpdated": "Wartungsaufzeichnung erfolgreich aktualisiert",
+    "recordDeleted": "Wartungsaufzeichnung erfolgreich gelöscht",
+    "recordNotFound": "Wartungsaufzeichnung nicht gefunden",
+    "loadError": "Fehler beim Laden der Wartungsaufzeichnung",
+    "createError": "Fehler beim Erstellen der Wartungsaufzeichnung",
+    "updateError": "Fehler beim Aktualisieren der Wartungsaufzeichnung",
+    "deleteError": "Fehler beim Löschen der Wartungsaufzeichnung",
+    "deleteConfirm": "Sind Sie sicher, dass Sie diese Wartungsaufzeichnung löschen möchten?",
+    "fillTitle": "Bitte geben Sie den Titel ein",
+    "fillEquipment": "Bitte geben Sie die Ausrüstung ein",
+    "fillType": "Bitte geben Sie den Typ ein",
+    "fillDescription": "Bitte geben Sie die Beschreibung ein",
+    "titlePlaceholder": "Titel eingeben",
+    "equipmentPlaceholder": "Ausrüstung eingeben",
+    "typePlaceholder": "Typ eingeben",
+    "basicInfo": "Grundinformationen",
+    "infos": "Informationsfelder",
+    "info": "Info",
+    "addInfo": "Info hinzufügen",
+    "addFirstInfo": "Erste Info hinzufügen",
+    "noInfos": "Keine Informationen hinzugefügt",
+    "description": "Beschreibung",
+    "descriptionPlaceholder": "Beschreibung eingeben",
+    "images": "Bilder",
+    "addImage": "Bild hinzufügen",
+    "maxImagesReached": "Maximal 3 Bilder pro Info",
+    "deleteInfoConfirm": "Sind Sie sicher, dass Sie diese Info löschen möchten?",
+    "deleteInfoError": "Fehler beim Löschen der Info",
+    "imagePickerError": "Fehler beim Auswählen des Bildes",
+    "saveInfo": "Info speichern",
+    "updateInfo": "Info aktualisieren",
+    "infoSaved": "Info erfolgreich gespeichert",
+    "saveInfoError": "Fehler beim Speichern der Info",
+    "createdAt": "Erstellt am",
+    "updatedAt": "Aktualisiert am"
   },
   "permissions": {
     "documents.upload": "Dokumente hochladen",
@@ -344,59 +357,6 @@
     "users.create": "Benutzer erstellen",
     "qr.scan": "QR-Codes scannen",
     "nfc.read": "NFC-Tags lesen",
-    "production.create": "Produktionsaufträge erstellen",
-    "events.view": "Ereignisse anzeigen",
-    "events.create": "Ereignisse erstellen",
-    "events.update": "Ereignisse aktualisieren",
-    "events.delete": "Ereignisse löschen",
-    "events.history": "Ereignisverlauf anzeigen",
-    "events.report.create": "Berichte erstellen"
-  },
-  "workOrders": {
-    "pendingOrders": "Ausstehende Arbeitsaufträge",
-    "allPending": "Alle Ausstehend",
-    "noPendingOrders": "Keine ausstehenden Arbeitsaufträge",
-    "createOrder": "Arbeitsauftrag erstellen",
-    "teamMembers": "Mitglieder",
-    "status": {
-      "planned": "Geplant",
-      "in_progress": "In Bearbeitung",
-      "paused": "Pausiert",
-      "completed": "Abgeschlossen",
-      "cancelled": "Abgebrochen"
-    },
-    "serviceType": "Service-Typ",
-    "serviceTypeOptions": {
-      "maintenance": "Wartung",
-      "installation": "Installation",
-      "internal": "Intern",
-      "external": "Extern"
-    },
-    "clientName": "Kundenname",
-    "clientNamePlaceholder": "Kundenname eingeben",
-    "clientAddress": "Kundenadresse",
-    "clientAddressPlaceholder": "Vollständige Adresse eingeben",
-    "clientContact": "Kundenkontakt",
-    "clientContactPlaceholder": "Telefon, E-Mail usw.",
-    "scheduledDate": "Geplantes Datum",
-    "scheduledTime": "Geplante Uhrzeit",
-    "internalNotes": "Interne Notizen (Optional)",
-    "internalNotesPlaceholder": "Interne Notizen eingeben (für Kunden nicht sichtbar)",
-    "plannedMaterials": "Geplante Materialien (Optional)",
-    "plannedMaterialsPlaceholder": "Geplante Materialien eingeben (bis zu 1000 Zeichen)",
-    "team": "Team (Optional)",
-    "teamPlaceholder": "Geben Sie Team-Mitglied-IDs durch Komma getrennt ein",
-    "fillRequiredFields": "Bitte füllen Sie alle Pflichtfelder aus",
-    "orderCreated": "Arbeitsauftrag erfolgreich erstellt",
-    "createOrderError": "Fehler beim Erstellen des Arbeitsauftrags",
-    "startService": "Service starten",
-    "finishService": "Service beenden",
-    "serviceStarted": "Service erfolgreich gestartet",
-    "startServiceError": "Fehler beim Starten des Service",
-    "serviceCompleted": "Service erfolgreich abgeschlossen",
-    "finishServiceError": "Fehler beim Beenden des Service",
-    "signatureRequired": "Unterschrift des Kunden ist erforderlich, um den Service zu beenden",
-    "locationPermissionRequired": "Standortberechtigung ist erforderlich, um den Check-in zu erstellen",
-    "locationError": "Fehler beim Abrufen des Standorts. Versuche fortzufahren..."
+    "production.create": "Produktionsaufträge erstellen"
   }
 }

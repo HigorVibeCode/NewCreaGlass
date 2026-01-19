@@ -102,29 +102,11 @@ export interface BloodPriorityRead {
   minTimerSeconds: number;
 }
 
-// Event types
-export type EventType = 'meeting' | 'training' | 'maintenance' | 'installation' | 'inspection' | 'other';
-
-export interface EventAttachment {
-  id: string;
-  filename: string;
-  mimeType: string;
-  storagePath: string;
-  createdAt: string;
-}
-
+// Event types (placeholder)
 export interface Event {
   id: string;
   title: string;
-  type: EventType;
-  startDate: string;
-  endDate: string;
-  startTime: string;
-  endTime: string;
-  location: string;
-  people: string; // Text field for people names
-  attachments: EventAttachment[];
-  description?: string;
+  description: string;
   createdAt: string;
   createdBy: string;
 }
@@ -191,123 +173,53 @@ export interface Production {
   createdBy: string;
 }
 
-// Work Order / Service Order types
-export type WorkOrderServiceType = 'maintenance' | 'installation' | 'internal' | 'external';
-export type WorkOrderStatus = 'planned' | 'in_progress' | 'paused' | 'completed' | 'cancelled';
-export type TimeStatusType = 'EM_ATENDIMENTO' | 'PAUSADO' | 'DESLOCAMENTO';
-export type ServiceLogType = 'ajuste' | 'problema' | 'material' | 'recomendacao';
-export type EvidenceType = 'antes' | 'durante' | 'depois';
-export type ChecklistItemType = 'planned' | 'execution';
+// Maintenance types
+export interface MaintenanceInfoImage {
+  id: string;
+  maintenanceInfoId: string;
+  storagePath: string;
+  filename: string;
+  mimeType: string;
+  orderIndex: number;
+  createdAt: string;
+}
 
-export interface WorkOrderChecklistItem {
+export interface MaintenanceInfo {
+  id: string;
+  maintenanceRecordId: string;
+  description: string;
+  orderIndex: number;
+  images: MaintenanceInfoImage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type MaintenanceHistoryChangeType = 
+  | 'created' 
+  | 'updated' 
+  | 'info_added' 
+  | 'info_updated' 
+  | 'info_deleted' 
+  | 'image_added' 
+  | 'image_deleted';
+
+export interface MaintenanceHistory {
+  id: string;
+  maintenanceRecordId: string;
+  changedBy: string;
+  changeType: MaintenanceHistoryChangeType;
+  changeDescription?: string;
+  changedAt: string;
+}
+
+export interface MaintenanceRecord {
   id: string;
   title: string;
-  description?: string;
-  checked: boolean;
-}
-
-export interface WorkOrderPlannedMaterial {
-  id: string;
-  name: string;
-  quantity: number;
-  unit: string;
-}
-
-export interface CheckIn {
-  id: string;
-  workOrderId: string;
-  timestamp: string;
-  latitude: number;
-  longitude: number;
-  toleranceRadius: number; // in meters
-  photoPath?: string;
-  performedBy: string;
+  equipment: string;
+  type: string;
+  infos: MaintenanceInfo[];
+  history: MaintenanceHistory[];
   createdAt: string;
-}
-
-export interface TimeStatus {
-  id: string;
-  workOrderId: string;
-  status: TimeStatusType;
-  pauseReason?: string; // Required if status is PAUSADO
-  startTime: string;
-  endTime?: string;
-  totalDuration: number; // in seconds
+  updatedAt: string;
   createdBy: string;
-  createdAt: string;
-}
-
-export interface ServiceLog {
-  id: string;
-  workOrderId: string;
-  type: ServiceLogType;
-  text: string;
-  author: string;
-  timestamp: string;
-  photoPath?: string;
-  videoPath?: string;
-  createdAt: string;
-}
-
-export interface Evidence {
-  id: string;
-  workOrderId: string;
-  type: EvidenceType;
-  photoPath: string;
-  videoPath?: string;
-  internalNotes?: string;
-  clientNotes?: string;
-  createdBy: string;
-  createdAt: string;
-}
-
-export interface ChecklistItem {
-  id: string;
-  workOrderId: string;
-  type: ChecklistItemType;
-  title: string;
-  description?: string;
-  completed: boolean;
-  completedAt?: string;
-  completedBy?: string;
-  createdAt: string;
-}
-
-export interface Signature {
-  id: string;
-  workOrderId: string;
-  signaturePath: string; // Storage path to signature image
-  fullName: string;
-  timestamp: string;
-  latitude: number;
-  longitude: number;
-  pinHash?: string; // Hashed PIN if PIN was used
-  createdBy: string;
-  createdAt: string;
-}
-
-export interface WorkOrder {
-  id: string;
-  clientName: string;
-  clientAddress: string;
-  clientContact: string;
-  serviceType: WorkOrderServiceType;
-  scheduledDate: string;
-  scheduledTime: string;
-  status: WorkOrderStatus;
-  plannedChecklist: WorkOrderChecklistItem[]; // JSON array
-  plannedMaterials: WorkOrderPlannedMaterial[]; // JSON array
-  internalNotes?: string;
-  teamMembers: string[]; // Array of user IDs
-  responsible: string; // User ID
-  isLocked: boolean; // Locked after finalization
-  checkIn?: CheckIn;
-  timeStatuses: TimeStatus[];
-  serviceLogs: ServiceLog[];
-  evidences: Evidence[];
-  checklistItems: ChecklistItem[];
-  signature?: Signature;
-  createdAt: string;
-  createdBy: string;
-  updatedAt?: string;
 }

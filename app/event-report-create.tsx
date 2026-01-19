@@ -152,13 +152,13 @@ export default function WorkOrderCreateScreen() {
     }
   };
 
-  const topPadding = insets.top + theme.spacing.md;
+  const topPadding = Platform.OS === 'ios' ? Math.max(insets.top + theme.spacing.lg, 60) : theme.spacing.xxl;
   const wrapperStyle = useMemo(() => ({ backgroundColor: colors.background }), [colors.background]);
 
   return (
     <View style={[styles.wrapper, wrapperStyle]}>
       <KeyboardAvoidingView
-        style={styles.container}
+        style={[styles.container, { backgroundColor: colors.background }]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: theme.spacing.md,
-    paddingBottom: theme.spacing.md,
+    paddingBottom: theme.spacing.lg,
     borderBottomWidth: 1,
   },
   backButton: {

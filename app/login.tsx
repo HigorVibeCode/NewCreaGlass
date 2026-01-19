@@ -1,4 +1,5 @@
 import { Image as ExpoImage } from 'expo-image';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { Button } from '../src/components/shared/Button';
@@ -12,6 +13,7 @@ import { clearSavedLogin, getSavedLogin, saveLogin } from '../src/utils/saved-lo
 
 export default function LoginScreen() {
   const { t } = useI18n();
+  const router = useRouter();
   const { setSession, setLoading, isLoading } = useAuth();
   const colors = useThemeColors();
   const [username, setUsername] = useState('');
@@ -55,11 +57,8 @@ export default function LoginScreen() {
         await clearSavedLogin();
       }
       
-      // Set session - AuthGuard will handle redirect
       setSession(session);
-      // Don't redirect here, let AuthGuard handle it to avoid loops
-      // Wait a bit for session to be set and AuthGuard to react
-      await new Promise(resolve => setTimeout(resolve, 100));
+      router.replace('/(tabs)/production');
     } catch (error: any) {
       console.error('Login error:', error);
       setError(t('auth.invalidCredentials'));
@@ -78,7 +77,7 @@ export default function LoginScreen() {
         {/* Logo */}
         <View style={styles.logoContainer}>
           <ExpoImage
-            source={require('../assets/images/icon.png')}
+            source={require('../assets/images/login-logo.png')}
             style={styles.logo}
             contentFit="contain"
             transition={200}
@@ -159,9 +158,6 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     alignSelf: 'center',
   },
-  errorContainer: {
-    marginBottom: theme.spacing.sm,
-  },
   rememberContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -171,5 +167,8 @@ const styles = StyleSheet.create({
   rememberText: {
     marginLeft: theme.spacing.sm,
     fontSize: 14,
+  },
+  errorContainer: {
+    marginBottom: theme.spacing.sm,
   },
 });

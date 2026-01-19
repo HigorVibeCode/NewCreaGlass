@@ -1,11 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react';
 import { useRouter, useSegments } from 'expo-router';
-import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
-import { useAuth } from '../../store/auth-store';
-import { repos } from '../../services/container';
-import { useThemeColors } from '../../hooks/use-theme-colors';
-import { useAuthStore } from '../../store/auth-store';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { useRealtime } from '../../hooks/use-realtime';
+import { useThemeColors } from '../../hooks/use-theme-colors';
+import { repos } from '../../services/container';
+import { useAuth, useAuthStore } from '../../store/auth-store';
 
 // Platform-specific storage helper
 const getStorage = () => {

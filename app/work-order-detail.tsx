@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import * as Location from 'expo-location';
-import * as FileSystem from 'expo-file-system';
 import SignatureCanvas from 'react-native-signature-canvas';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

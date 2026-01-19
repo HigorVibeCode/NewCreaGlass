@@ -1,12 +1,20 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Platform } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { useAppTheme } from '../src/hooks/use-app-theme';
 import { theme } from '../src/theme';
+
+interface SubCategory {
+  id: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  iconColor: string;
+  iconBgColor: string;
+  chevronColor: string;
+}
 
 const categoryConfig = {
   legalRequirements: {
@@ -40,19 +48,60 @@ export default function DocumentsCategoryScreen() {
   const isDark = effectiveTheme === 'dark';
   const insets = useSafeAreaInsets();
 
-  const category = categoryId ? categoryConfig[categoryId as keyof typeof categoryConfig] : null;
+  // Verificar se é uma subcategoria (equipmentTools.manuals ou equipmentTools.maintenance)
+  const isSubCategory = categoryId?.includes('.');
+  const baseCategoryId = isSubCategory ? categoryId?.split('.')[0] : categoryId;
+  const subCategoryId = isSubCategory ? categoryId?.split('.')[1] : null;
+
+  const category = baseCategoryId ? categoryConfig[baseCategoryId as keyof typeof categoryConfig] : null;
   const config = category || categoryConfig.legalRequirements;
+
+  // Subcategorias para Equipment and Tools
+  const equipmentToolsSubCategories: SubCategory[] = [
+    {
+      id: 'manuals',
+      icon: 'book',
+      iconColor: '#3b82f6',
+      iconBgColor: '#dbeafe',
+      chevronColor: '#3b82f6',
+    },
+    {
+      id: 'maintenance',
+      icon: 'construct',
+      iconColor: '#f59e0b',
+      iconBgColor: '#fef3c7',
+      chevronColor: '#f59e0b',
+    },
+  ];
+
+  const isEquipmentTools = baseCategoryId === 'equipmentTools';
+  const currentSubCategory = subCategoryId 
+    ? equipmentToolsSubCategories.find(sub => sub.id === subCategoryId)
+    : null;
+
+  const handleSubCategoryPress = (subCategoryId: string) => {
+    if (subCategoryId === 'maintenance') {
+      // Navegar para a lista de manutenções
+      router.push('/maintenance-list');
+    } else {
+      // Para outras subcategorias, navegar para a tela de documentos
+      router.push({
+        pathname: '/documents-category',
+        params: { categoryId: `equipmentTools.${subCategoryId}` },
+      } as any);
+    }
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SafeAreaView edges={['top']} style={styles.safeArea}>
-        {/* Custom Header */}
+      {/* Custom Header */}
         <View
           style={[
             styles.header,
             {
               backgroundColor: colors.background,
-              paddingTop: Platform.OS === 'ios' ? Math.max(insets.top, theme.spacing.sm) : theme.spacing.md,
+              paddingTop: Platform.OS === 'ios' ? Math.max(insets.top + theme.spacing.md, 60) : theme.spacing.xl + theme.spacing.md,
+              paddingBottom: theme.spacing.md,
               borderBottomWidth: 1,
               borderBottomColor: colors.border,
             },
@@ -83,7 +132,6 @@ export default function DocumentsCategoryScreen() {
             </View>
           </View>
         </View>
-      </SafeAreaView>
 
       {/* Content */}
       <ScrollView
@@ -94,18 +142,69 @@ export default function DocumentsCategoryScreen() {
         <View style={styles.content}>
           <View style={styles.subtitleContainer}>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              {t(`documents.categories.${categoryId}.subtitle`)}
+              {isSubCategory && subCategoryId
+                ? t(`documents.categories.equipmentTools.subCategories.${subCategoryId}.subtitle`)
+                : t(`documents.categories.${baseCategoryId || categoryId}.subtitle`)}
             </Text>
           </View>
 
-          <View style={styles.emptyState}>
-            <View style={[styles.emptyIconContainer, { backgroundColor: colors.backgroundSecondary }]}>
-              <Ionicons name="document-outline" size={48} color={colors.textTertiary} />
+          {isEquipmentTools && !isSubCategory ? (
+            // Mostrar subcategorias para Equipment and Tools
+            <View style={styles.subCategoriesContainer}>
+              {equipmentToolsSubCategories.map((subCategory) => (
+                <TouchableOpacity
+                  key={subCategory.id}
+                  style={[styles.subCategoryCard, { backgroundColor: colors.cardBackground }]}
+                  onPress={() => handleSubCategoryPress(subCategory.id)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.subCategoryContent}>
+                    <View
+                      style={[
+                        styles.subCategoryIconContainer,
+                        {
+                          backgroundColor: isDark
+                            ? `${subCategory.iconBgColor}40`
+                            : subCategory.iconBgColor,
+                        },
+                      ]}
+                    >
+                      <Ionicons name={subCategory.icon} size={24} color={subCategory.iconColor} />
+                    </View>
+                    <View style={styles.subCategoryTextContainer}>
+                      <Text style={[styles.subCategoryTitle, { color: colors.text }]}>
+                        {t(`documents.categories.equipmentTools.subCategories.${subCategory.id}.title`)}
+                      </Text>
+                      <Text style={[styles.subCategorySubtitle, { color: colors.textSecondary }]}>
+                        {t(`documents.categories.equipmentTools.subCategories.${subCategory.id}.subtitle`)}
+                      </Text>
+                    </View>
+                    <View style={[styles.subCategoryChevronContainer, { backgroundColor: colors.backgroundSecondary }]}>
+                      <Ionicons
+                        name="chevron-forward"
+                        size={20}
+                        color={subCategory.chevronColor}
+                      />
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
             </View>
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              {t('documents.noDocuments')}
-            </Text>
-          </View>
+          ) : (
+            // Mostrar estado vazio para subcategorias e outras categorias
+            <View style={styles.emptyState}>
+              <View style={[styles.emptyIconContainer, { backgroundColor: colors.backgroundSecondary }]}>
+                <Ionicons 
+                  name={isSubCategory && currentSubCategory ? currentSubCategory.icon : 'document-outline'} 
+                  size={48} 
+                  color={isSubCategory && currentSubCategory ? currentSubCategory.iconColor : colors.textTertiary} 
+                />
+              </View>
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                {t('documents.noDocuments')}
+              </Text>
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -115,9 +214,6 @@ export default function DocumentsCategoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  safeArea: {
-    zIndex: 10,
   },
   header: {
     paddingHorizontal: theme.spacing.md,
@@ -187,5 +283,43 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: theme.typography.fontSize.md,
     textAlign: 'center',
+  },
+  subCategoriesContainer: {
+    gap: theme.spacing.md,
+  },
+  subCategoryCard: {
+    borderRadius: theme.borderRadius.md,
+    padding: theme.spacing.md,
+    ...theme.shadows.sm,
+  },
+  subCategoryContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+  },
+  subCategoryIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  subCategoryTextContainer: {
+    flex: 1,
+    gap: theme.spacing.xs,
+  },
+  subCategoryTitle: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  subCategorySubtitle: {
+    fontSize: theme.typography.fontSize.sm,
+  },
+  subCategoryChevronContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

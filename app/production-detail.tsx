@@ -1,31 +1,28 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import {
-  View,
-  StyleSheet,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  Alert,
-  Linking,
-  Modal,
-  TouchableWithoutFeedback,
-  Dimensions,
-  Platform,
-} from 'react-native';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
-import * as IntentLauncher from 'expo-intent-launcher';
-import { Image } from 'expo-image';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useI18n } from '../src/hooks/use-i18n';
-import { useAuth } from '../src/store/auth-store';
-import { repos } from '../src/services/container';
-import { Production, ProductionStatus, GlassType, StructureType, PaintType, InventoryItem, ProductionStatusHistory, User } from '../src/types';
-import { theme } from '../src/theme';
-import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { File } from 'expo-file-system';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+    Alert,
+    Dimensions,
+    Linking,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DropdownOption } from '../src/components/shared/Dropdown';
+import { useI18n } from '../src/hooks/use-i18n';
+import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { repos } from '../src/services/container';
+import { useAuth } from '../src/store/auth-store';
+import { theme } from '../src/theme';
+import { GlassType, InventoryItem, PaintType, Production, ProductionStatus, ProductionStatusHistory, StructureType, User } from '../src/types';
 
 export default function ProductionDetailScreen() {
   const { t } = useI18n();
@@ -42,7 +39,6 @@ export default function ProductionDetailScreen() {
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
   const [statusHistory, setStatusHistory] = useState<ProductionStatusHistory[]>([]);
   const [historyUsers, setHistoryUsers] = useState<Map<string, User>>(new Map());
-  const [viewingImage, setViewingImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (productionId) {
@@ -338,7 +334,8 @@ export default function ProductionDetailScreen() {
       // Verificar se o arquivo existe e obter o URI correto
       if (fileUri.startsWith('file://') || fileUri.startsWith('content://')) {
         try {
-          const fileInfo = await FileSystem.getInfoAsync(fileUri);
+          const file = new File(fileUri);
+          const fileInfo = await file.info();
           if (!fileInfo.exists) {
             Alert.alert(t('common.error'), t('documents.downloadError'));
             return;
@@ -352,120 +349,28 @@ export default function ProductionDetailScreen() {
         fileUri = fileUri.startsWith('/') ? `file://${fileUri}` : `file://${fileUri}`;
       }
 
-      // Para imagens, usar visualizador de imagem em modal
+      // Para imagens, usar o visualizador nativo do dispositivo
       if (attachment.mimeType.startsWith('image/')) {
-        setViewingImage(fileUri);
+        try {
+          // Tentar abrir diretamente - o sistema operacional escolherá o visualizador apropriado
+          const supported = await Linking.canOpenURL(fileUri);
+          if (supported) {
+            await Linking.openURL(fileUri);
+          } else {
+            // Mesmo se canOpenURL retornar false, tentar abrir (pode funcionar)
+            await Linking.openURL(fileUri);
+          }
+        } catch (openError) {
+          console.error('Error opening image:', openError);
+          Alert.alert(t('common.error'), t('documents.downloadError'));
+        }
       } else {
-        // Para PDFs e outros documentos, abrir no visualizador nativo
-        const isLocalFile = fileUri.startsWith('file://') || fileUri.startsWith('content://');
-        
-        if (isLocalFile) {
-          // Para arquivos locais, abrir com IntentLauncher (mostra seletor de visualizadores)
-          try {
-            if (Platform.OS === 'android') {
-              // Android: usar IntentLauncher com content URI
-              let contentUri = fileUri;
-              
-              // Garantir que o arquivo esteja em um diretório acessível para obter content URI válido
-              // Tentar documentDirectory primeiro, depois cacheDirectory como fallback
-              const docDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
-              if (!docDir) {
-                Alert.alert(t('common.error'), 'Unable to access file system. Please try again.');
-                return;
-              }
-              
-              const filename = attachment.filename || `document_${Date.now()}.pdf`;
-              const docPath = docDir + filename;
-              
-              // Se o arquivo já não estiver no documentDirectory, copiar
-              if (!fileUri.startsWith(docDir)) {
-                try {
-                  console.log('Copying file to documentDirectory:', fileUri, '->', docPath);
-                  await FileSystem.copyAsync({
-                    from: fileUri,
-                    to: docPath,
-                  });
-                  fileUri = docPath;
-                  console.log('File copied successfully');
-                } catch (copyError: any) {
-                  console.warn('Could not copy file to documentDirectory:', copyError);
-                  // Tentar usar o URI original mesmo assim
-                }
-              } else {
-                fileUri = docPath;
-              }
-              
-              // Obter content URI
-              try {
-                // Método 1: Tentar usar getContentUriAsync (Expo SDK 50+)
-                if (FileSystem.getContentUriAsync && typeof FileSystem.getContentUriAsync === 'function') {
-                  contentUri = await FileSystem.getContentUriAsync(fileUri);
-                  console.log('Using getContentUriAsync, content URI:', contentUri);
-                } else {
-                  // Para versões antigas, usar o fileUri do documentDirectory diretamente
-                  // O Expo FileSystem pode lidar com isso internamente
-                  contentUri = fileUri;
-                  console.log('Using file URI from documentDirectory:', contentUri);
-                }
-              } catch (contentUriError: any) {
-                console.warn('Could not get content URI:', contentUriError);
-                // Usar o fileUri do documentDirectory como fallback
-                contentUri = fileUri;
-              }
-              
-              // Abrir com IntentLauncher usando ACTION_VIEW (mostra seletor de visualizadores)
-              // Remover category para mostrar todos os apps que podem visualizar
-              try {
-                await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
-                  data: contentUri,
-                  type: attachment.mimeType || 'application/pdf',
-                  flags: 1, // FLAG_ACTIVITY_NEW_TASK
-                });
-                console.log('IntentLauncher succeeded - file opened');
-              } catch (intentError: any) {
-                console.error('Error opening with IntentLauncher:', intentError);
-                
-                if (intentError.message?.includes('No Activity found') || intentError.code === 'NO_ACTIVITY') {
-                  Alert.alert(
-                    t('common.error'), 
-                    'No app found to open this file. Please install a PDF viewer app (e.g., Adobe Reader, Google Drive).'
-                  );
-                } else if (intentError.message?.includes('FileUriExposedException') || 
-                          intentError.message?.includes('exposed beyond app')) {
-                  Alert.alert(
-                    t('common.error'), 
-                    'Unable to open file due to Android security restrictions. Please try again or install a PDF viewer app.'
-                  );
-                } else {
-                  Alert.alert(t('common.error'), intentError.message || t('documents.downloadError'));
-                }
-              }
-            } else {
-              // iOS - usar Linking
-              const supported = await Linking.canOpenURL(fileUri);
-              if (supported) {
-                await Linking.openURL(fileUri);
-              } else {
-                Alert.alert(t('common.error'), t('documents.downloadError'));
-              }
-            }
-          } catch (openError: any) {
-            console.error('Error opening file:', openError);
-            Alert.alert(t('common.error'), openError?.message || t('documents.downloadError'));
-          }
+        // Para PDFs e outros documentos
+        const supported = await Linking.canOpenURL(fileUri);
+        if (supported) {
+          await Linking.openURL(fileUri);
         } else {
-          // Para URLs remotas, usar Linking normalmente
-          try {
-            const supported = await Linking.canOpenURL(fileUri);
-            if (supported) {
-              await Linking.openURL(fileUri);
-            } else {
-              Alert.alert(t('common.error'), t('documents.downloadError'));
-            }
-          } catch (openError) {
-            console.error('Error opening URL:', openError);
-            Alert.alert(t('common.error'), t('documents.downloadError'));
-          }
+          Alert.alert(t('common.error'), t('documents.downloadError'));
         }
       }
     } catch (error) {
@@ -474,40 +379,24 @@ export default function ProductionDetailScreen() {
     }
   };
 
-  const topPadding = insets.top + theme.spacing.md;
-  const wrapperStyle = useMemo(() => ({ backgroundColor: colors.background }), [colors.background]);
-
   if (isLoading || !production) {
     return (
-      <View style={[styles.wrapper, wrapperStyle]}>
-        <View style={[styles.container, { paddingTop: topPadding }]}>
-          <View style={styles.loadingContainer}>
-            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-              {t('common.loading')}
-            </Text>
-          </View>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.loadingContainer}>
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+            {t('common.loading')}
+          </Text>
         </View>
       </View>
     );
   }
 
   return (
-    <View style={[styles.wrapper, wrapperStyle]}>
-      <View style={[styles.header, { paddingTop: topPadding, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
-        <TouchableOpacity
-          style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          {t('production.orderDetails')}
-        </Text>
-        <View style={styles.headerSpacer} />
-      </View>
-
-      <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+    <>
+    <ScrollView 
+      style={[styles.container, { backgroundColor: colors.background }]}
+      contentContainerStyle={{ paddingTop: Platform.OS === 'ios' ? Math.max(insets.top + theme.spacing.md, 60) : theme.spacing.xl + theme.spacing.md }}
+    >
       <View style={styles.content}>
         <View style={[styles.headerCard, { backgroundColor: colors.cardBackground }]}>
           <View style={styles.headerRow}>
@@ -800,73 +689,13 @@ export default function ProductionDetailScreen() {
         </View>
       </View>
     </Modal>
-
-    {/* Modal para visualização de imagens */}
-    {viewingImage && (
-      <Modal
-        visible={viewingImage !== null}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setViewingImage(null)}
-      >
-        <TouchableWithoutFeedback onPress={() => setViewingImage(null)}>
-          <View style={styles.imageModalContainer}>
-            <TouchableWithoutFeedback>
-              <View style={styles.imageModalContent}>
-                <TouchableOpacity
-                  style={styles.closeButton}
-                  onPress={() => setViewingImage(null)}
-                >
-                  <Ionicons name="close" size={28} color={colors.text} />
-                </TouchableOpacity>
-                <Image
-                  source={{ uri: viewingImage }}
-                  style={styles.imageViewer}
-                  contentFit="contain"
-                  transition={200}
-                />
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
-    )}
-    </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    flex: 1,
-  },
   container: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.md,
-    paddingBottom: theme.spacing.md,
-    borderBottomWidth: 1,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: theme.borderRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...theme.shadows.sm,
-  },
-  headerTitle: {
-    fontSize: theme.typography.fontSize.xl,
-    fontWeight: theme.typography.fontWeight.bold,
-    flex: 1,
-    textAlign: 'center',
-    marginHorizontal: theme.spacing.md,
-  },
-  headerSpacer: {
-    width: 40,
   },
   content: {
     padding: theme.spacing.lg,
@@ -1099,30 +928,5 @@ const styles = StyleSheet.create({
   historyMetaText: {
     fontSize: theme.typography.fontSize.xs,
     lineHeight: theme.typography.fontSize.xs * 1.4,
-  },
-  imageModalContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  imageModalContent: {
-    width: Dimensions.get('window').width,
-    height: Dimensions.get('window').height,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeButton: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 40,
-    right: 20,
-    zIndex: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderRadius: 20,
-    padding: 8,
-  },
-  imageViewer: {
-    width: Dimensions.get('window').width,
-    height: Dimensions.get('window').height,
   },
 });

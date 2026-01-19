@@ -28,7 +28,7 @@
     "invalidCredentials": "Nom d'utilisateur ou mot de passe invalide",
     "loginError": "Échec de la connexion. Veuillez réessayer.",
     "loggingIn": "Connexion en cours...",
-    "rememberLogin": "Mémoriser le nom d'utilisateur et le mot de passe"
+    "rememberLogin": "Se souvenir de la connexion"
   },
   "navigation": {
     "production": "Production",
@@ -44,14 +44,10 @@
     "title": "Notifications",
     "noNotifications": "Aucune notification",
     "markAsRead": "Marquer comme lu",
-    "markAsReadError": "Échec du marquage de la notification comme lue",
     "unread": "Non lu",
     "lowStockMessage": "Stock faible",
-    "productionAuthorized": "Commande de production autorisée",
     "clearAll": "Tout Effacer",
-    "clearAllConfirm": "Êtes-vous sûr de vouloir effacer toutes les notifications?",
-    "clearError": "Échec de l'effacement des notifications",
-    "loadError": "Échec du chargement des notifications"
+    "clearAllConfirm": "Êtes-vous sûr de vouloir effacer toutes les notifications?"
   },
   "bloodPriority": {
     "title": "Blood Priority",
@@ -77,19 +73,29 @@
     "categories": {
       "legalRequirements": {
         "title": "Exigences Légales",
-        "subtitle": "Exigences légales, assurances et normes"
+        "subtitle": "Documents et certifications légales"
       },
       "equipmentTools": {
-        "title": "Équipement et Outils",
-        "subtitle": "Machines, EPI, véhicules"
+        "title": "Équipement & Outils",
+        "subtitle": "Manuels d'équipement et maintenance",
+        "subCategories": {
+          "manuals": {
+            "title": "Manuels",
+            "subtitle": "Manuels d'équipement et d'outils"
+          },
+          "maintenance": {
+            "title": "Maintenance",
+            "subtitle": "Enregistrements de maintenance d'équipement"
+          }
+        }
       },
       "proceduresManuals": {
-        "title": "Procédures et Manuels",
-        "subtitle": "Instructions internes, processus"
+        "title": "Procédures & Manuels",
+        "subtitle": "Documentation des procédures"
       },
       "professionalTraining": {
         "title": "Formation Professionnelle",
-        "subtitle": "Formation continue"
+        "subtitle": "Matériel de formation"
       }
     }
   },
@@ -195,13 +201,11 @@
     "title": "Production",
     "noData": "Aucune donnée de production",
     "createOrder": "Créer une Commande",
-    "orderDetails": "Détails de la Commande",
     "noOrders": "Aucune commande de production",
     "filterByStatus": "Filtrer par Statut",
     "orderNumber": "Numéro de Commande",
     "orderNumberPlaceholder": "Entrez le numéro de commande",
     "clientNamePlaceholder": "Entrez le nom du client",
-    "orderType": "Type de Commande",
     "orderTypePlaceholder": "Entrez le type de commande",
     "selectDueDate": "Sélectionnez la date d'échéance",
     "dueDate": "Date d'Échéance",
@@ -253,6 +257,11 @@
       "delivered": "Livré",
       "completed": "Terminée"
     },
+    "orderType": {
+      "standard": "Standard",
+      "urgent": "Urgent",
+      "custom": "Personnalisé"
+    },
     "glassTypes": {
       "tempered": "Trempé (ESG)",
       "strengthened": "Trempé (TVG)",
@@ -281,47 +290,51 @@
   },
   "events": {
     "title": "Événements",
-    "noData": "Aucun événement",
-    "eventTitle": "Titre de l'événement",
-    "filter": "Filtrer",
-    "history": "Historique",
-    "createReport": "Créer un rapport",
-    "reportTitle": "Titre du rapport",
-    "reportTitlePlaceholder": "Entrez le titre du rapport",
-    "reportContent": "Contenu du rapport",
-    "reportContentPlaceholder": "Entrez le contenu du rapport",
-    "createEvent": "Créer un événement",
-    "filterByType": "Filtrer par type",
-    "type": "Type",
-    "titlePlaceholder": "Entrez le titre de l'événement",
-    "selectType": "Sélectionnez le type",
-    "startDate": "Date de début",
-    "endDate": "Date de fin",
-    "endDateOptional": "Date de fin (Optionnelle)",
-    "startTime": "Heure de début",
-    "endTime": "Heure de fin",
-    "endTimeOptional": "Heure de fin (Optionnelle)",
-    "location": "Lieu",
-    "locationPlaceholder": "Entrez le lieu",
-    "people": "Personnes",
-    "selectPeople": "Sélectionnez des personnes",
-    "attachments": "Pièces jointes",
-    "addAttachment": "Ajouter une pièce jointe",
-    "maxAttachments": "Maximum 3 pièces jointes autorisées",
-    "fillRequiredFields": "Veuillez remplir tous les champs obligatoires",
-    "createEventError": "Échec de la création de l'événement",
-    "eventCreated": "Événement créé avec succès",
-    "addAttachmentError": "Échec de l'ajout de la pièce jointe",
-    "additionalInfo": "Informations supplémentaires",
-    "additionalInfoPlaceholder": "Entrez des informations supplémentaires (optionnel)",
-    "types": {
-      "meeting": "Réunion",
-      "training": "Formation",
-      "maintenance": "Maintenance",
-      "installation": "Installation",
-      "inspection": "Inspection",
-      "other": "Autre"
-    }
+    "noData": "Aucun événement"
+  },
+  "maintenance": {
+    "title": "Maintenance",
+    "noRecords": "Aucun enregistrement de maintenance",
+    "createRecord": "Créer un enregistrement",
+    "editRecord": "Modifier l'enregistrement",
+    "updateRecord": "Mettre à jour l'enregistrement",
+    "recordDetails": "Détails de l'enregistrement",
+    "recordCreated": "Enregistrement de maintenance créé avec succès",
+    "recordUpdated": "Enregistrement de maintenance mis à jour avec succès",
+    "recordDeleted": "Enregistrement de maintenance supprimé avec succès",
+    "recordNotFound": "Enregistrement de maintenance introuvable",
+    "loadError": "Erreur lors du chargement de l'enregistrement de maintenance",
+    "createError": "Erreur lors de la création de l'enregistrement de maintenance",
+    "updateError": "Erreur lors de la mise à jour de l'enregistrement de maintenance",
+    "deleteError": "Erreur lors de la suppression de l'enregistrement de maintenance",
+    "deleteConfirm": "Êtes-vous sûr de vouloir supprimer cet enregistrement de maintenance?",
+    "fillTitle": "Veuillez remplir le titre",
+    "fillEquipment": "Veuillez remplir l'équipement",
+    "fillType": "Veuillez remplir le type",
+    "fillDescription": "Veuillez remplir la description",
+    "titlePlaceholder": "Entrez le titre",
+    "equipmentPlaceholder": "Entrez l'équipement",
+    "typePlaceholder": "Entrez le type",
+    "basicInfo": "Informations de Base",
+    "infos": "Boîtes d'Information",
+    "info": "Info",
+    "addInfo": "Ajouter Info",
+    "addFirstInfo": "Ajouter Première Info",
+    "noInfos": "Aucune information ajoutée",
+    "description": "Description",
+    "descriptionPlaceholder": "Entrez la description",
+    "images": "Images",
+    "addImage": "Ajouter Image",
+    "maxImagesReached": "Maximum de 3 images par info",
+    "deleteInfoConfirm": "Êtes-vous sûr de vouloir supprimer cette info?",
+    "deleteInfoError": "Erreur lors de la suppression de l'info",
+    "imagePickerError": "Erreur lors de la sélection de l'image",
+    "saveInfo": "Enregistrer Info",
+    "updateInfo": "Mettre à jour Info",
+    "infoSaved": "Info enregistrée avec succès",
+    "saveInfoError": "Erreur lors de l'enregistrement de l'info",
+    "createdAt": "Créé le",
+    "updatedAt": "Mis à jour le"
   },
   "permissions": {
     "documents.upload": "Télécharger des documents",
@@ -344,59 +357,6 @@
     "users.create": "Créer des utilisateurs",
     "qr.scan": "Scanner les codes QR",
     "nfc.read": "Lire les tags NFC",
-    "production.create": "Créer des Commandes de Production",
-    "events.view": "Voir les événements",
-    "events.create": "Créer des événements",
-    "events.update": "Mettre à jour les événements",
-    "events.delete": "Supprimer des événements",
-    "events.history": "Voir l'historique des événements",
-    "events.report.create": "Créer des rapports"
-  },
-  "workOrders": {
-    "pendingOrders": "Ordres de travail en attente",
-    "allPending": "Tous en attente",
-    "noPendingOrders": "Aucun ordre de travail en attente",
-    "createOrder": "Créer un ordre de travail",
-    "teamMembers": "membres",
-    "status": {
-      "planned": "Planifié",
-      "in_progress": "En cours",
-      "paused": "En pause",
-      "completed": "Terminé",
-      "cancelled": "Annulé"
-    },
-    "serviceType": "Type de Service",
-    "serviceTypeOptions": {
-      "maintenance": "Maintenance",
-      "installation": "Installation",
-      "internal": "Interne",
-      "external": "Externe"
-    },
-    "clientName": "Nom du client",
-    "clientNamePlaceholder": "Entrez le nom du client",
-    "clientAddress": "Adresse du client",
-    "clientAddressPlaceholder": "Entrez l'adresse complète",
-    "clientContact": "Contact client",
-    "clientContactPlaceholder": "Téléphone, email, etc.",
-    "scheduledDate": "Date prévue",
-    "scheduledTime": "Heure prévue",
-    "internalNotes": "Notes internes (Optionnel)",
-    "internalNotesPlaceholder": "Entrez des notes internes (non visibles au client)",
-    "plannedMaterials": "Matériaux planifiés (Optionnel)",
-    "plannedMaterialsPlaceholder": "Entrez les matériaux planifiés (jusqu'à 1000 caractères)",
-    "team": "Équipe (Optionnel)",
-    "teamPlaceholder": "Entrez les ID des membres de l'équipe séparés par une virgule",
-    "fillRequiredFields": "Veuillez remplir tous les champs obligatoires",
-    "orderCreated": "Ordre de travail créé avec succès",
-    "createOrderError": "Échec de la création de l'ordre de travail",
-    "startService": "Démarrer le service",
-    "finishService": "Terminer le service",
-    "serviceStarted": "Service démarré avec succès",
-    "startServiceError": "Échec du démarrage du service",
-    "serviceCompleted": "Service terminé avec succès",
-    "finishServiceError": "Échec de la fin du service",
-    "signatureRequired": "La signature du client est requise pour terminer le service",
-    "locationPermissionRequired": "L'autorisation de localisation est requise pour créer le check-in",
-    "locationError": "Erreur lors de l'obtention de la localisation. Tentative de continuer..."
+    "production.create": "Créer des Commandes de Production"
   }
 }

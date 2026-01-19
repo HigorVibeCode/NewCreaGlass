@@ -1,39 +1,37 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import {
-  View,
-  StyleSheet,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import { useI18n } from '../src/hooks/use-i18n';
-import { useAuth } from '../src/store/auth-store';
-import { Button } from '../src/components/shared/Button';
-import { Input } from '../src/components/shared/Input';
-import { Dropdown, DropdownOption } from '../src/components/shared/Dropdown';
-import { DatePicker } from '../src/components/shared/DatePicker';
-import { repos } from '../src/services/container';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
-  Production,
-  GlassType,
-  StructureType,
-  PaintType,
-  InventoryItem,
-  ProductionItem,
-  ProductionAttachment,
-} from '../src/types';
-import { theme } from '../src/theme';
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import { Button } from '../src/components/shared/Button';
+import { DatePicker } from '../src/components/shared/DatePicker';
+import { Dropdown, DropdownOption } from '../src/components/shared/Dropdown';
+import { Input } from '../src/components/shared/Input';
+import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { repos } from '../src/services/container';
+import { useAuth } from '../src/store/auth-store';
+import { theme } from '../src/theme';
+import {
+    GlassType,
+    InventoryItem,
+    PaintType,
+    Production,
+    ProductionAttachment,
+    ProductionItem,
+    StructureType,
+} from '../src/types';
 
-// Glass group will be found by name
-const GLASS_GROUP_NAME = 'Glass';
+const GLASS_GROUP_ID = 'group-glass';
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 const MAX_ATTACHMENTS = 3;
 
@@ -50,7 +48,6 @@ export default function ProductionCreateScreen() {
   const { t } = useI18n();
   const { user } = useAuth();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const { productionId } = useLocalSearchParams<{ productionId: string }>();
 
@@ -119,23 +116,11 @@ export default function ProductionCreateScreen() {
   const loadGlassItems = async () => {
     setLoadingGlassItems(true);
     try {
-      // Find Glass group by name
-      const groups = await repos.inventoryRepo.getAllGroups();
-      const glassGroup = groups.find(g => g.name === GLASS_GROUP_NAME);
-      
-      if (glassGroup) {
-        const items = await repos.inventoryRepo.getItemsByGroup(glassGroup.id);
-        setGlassItems(items);
-      } else {
-        // No glass group found, set empty array
-        console.warn('Glass group not found');
-        setGlassItems([]);
-      }
+      const items = await repos.inventoryRepo.getItemsByGroup(GLASS_GROUP_ID);
+      setGlassItems(items);
     } catch (error) {
       console.error('Error loading glass items:', error);
-      // Set empty array instead of showing error to allow creating items
-      setGlassItems([]);
-      // Don't show alert for empty groups - this is normal for new installations
+      Alert.alert(t('common.error'), t('production.loadGlassItemsError'));
     } finally {
       setLoadingGlassItems(false);
     }
@@ -260,18 +245,14 @@ export default function ProductionCreateScreen() {
 
       if (isEditing && productionId) {
         // Update existing production
-        await repos.productionRepo.updateProduction(
-          productionId,
-          {
-            orderNumber: orderNumber.trim(),
-            clientName: clientName.trim(),
-            orderType: orderType.trim(),
-            dueDate,
-            items: [item],
-            attachments,
-          },
-          user.id
-        );
+        await repos.productionRepo.updateProduction(productionId, {
+          orderNumber: orderNumber.trim(),
+          clientName: clientName.trim(),
+          orderType: orderType.trim(),
+          dueDate,
+          items: [item],
+          attachments,
+        });
         Alert.alert(t('common.success'), 'Order updated successfully', [
           { text: t('common.confirm'), onPress: () => router.back() },
         ]);
@@ -293,14 +274,9 @@ export default function ProductionCreateScreen() {
           { text: t('common.confirm'), onPress: () => router.back() },
         ]);
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error(`Error ${isEditing ? 'updating' : 'creating'} production order:`, error);
-      const errorMessage = error?.message || (isEditing ? 'Failed to update order' : t('production.createOrderError'));
-      Alert.alert(
-        t('common.error'), 
-        errorMessage,
-        [{ text: t('common.confirm') }]
-      );
+      Alert.alert(t('common.error'), isEditing ? 'Failed to update order' : t('production.createOrderError'));
     } finally {
       setIsCreating(false);
     }
@@ -316,31 +292,13 @@ export default function ProductionCreateScreen() {
       ]
     : [{ label: t('common.select'), value: '' }];
 
-  const topPadding = insets.top + theme.spacing.md;
-  const wrapperStyle = useMemo(() => ({ backgroundColor: colors.background }), [colors.background]);
-
   return (
-    <View style={[styles.wrapper, wrapperStyle]}>
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-        <View style={[styles.header, { paddingTop: topPadding, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
-          <TouchableOpacity
-            style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>
-            {t('production.createOrder')}
-          </Text>
-          <View style={styles.headerSpacer} />
-        </View>
-
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         <Input
           label="Client Name"
           value={clientName}
@@ -349,7 +307,7 @@ export default function ProductionCreateScreen() {
         />
 
         <Input
-          label={t('production.orderType')}
+          label="Order Type"
           value={orderType}
           onChangeText={setOrderType}
           placeholder={t('production.orderTypePlaceholder')}
@@ -467,43 +425,13 @@ export default function ProductionCreateScreen() {
           />
         </View>
       </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    flex: 1,
-  },
   container: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.md,
-    paddingBottom: theme.spacing.md,
-    borderBottomWidth: 1,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: theme.borderRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...theme.shadows.sm,
-  },
-  headerTitle: {
-    fontSize: theme.typography.fontSize.xl,
-    fontWeight: theme.typography.fontWeight.bold,
-    flex: 1,
-    textAlign: 'center',
-    marginHorizontal: theme.spacing.md,
-  },
-  headerSpacer: {
-    width: 40,
   },
   scrollView: {
     flex: 1,

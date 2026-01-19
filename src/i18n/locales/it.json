@@ -31,7 +31,7 @@
     "invalidCredentials": "Nome utente o password non validi",
     "loginError": "Accesso fallito. Riprova.",
     "loggingIn": "Accesso in corso...",
-    "rememberLogin": "Ricorda nome utente e password"
+    "rememberLogin": "Ricorda accesso"
   },
   "navigation": {
     "production": "Produzione",
@@ -47,14 +47,10 @@
     "title": "Notifiche",
     "noNotifications": "Nessuna notifica",
     "markAsRead": "Segna come letto",
-    "markAsReadError": "Errore nel segnare la notifica come letta",
     "unread": "Non letto",
     "lowStockMessage": "Scorta bassa",
-    "productionAuthorized": "Ordine di produzione autorizzato",
     "clearAll": "Cancella Tutto",
-    "clearAllConfirm": "Sei sicuro di voler cancellare tutte le notifiche?",
-    "clearError": "Errore nel cancellare le notifiche",
-    "loadError": "Errore nel caricare le notifiche"
+    "clearAllConfirm": "Sei sicuro di voler cancellare tutte le notifiche?"
   },
   "bloodPriority": {
     "title": "Blood Priority",
@@ -80,19 +76,29 @@
     "categories": {
       "legalRequirements": {
         "title": "Requisiti Legali",
-        "subtitle": "Requisiti legali, assicurazioni e standard"
+        "subtitle": "Documenti e certificazioni legali"
       },
       "equipmentTools": {
-        "title": "Attrezzature e Strumenti",
-        "subtitle": "Macchine, DPI, veicoli"
+        "title": "Attrezzature & Strumenti",
+        "subtitle": "Manuali e manutenzione attrezzature",
+        "subCategories": {
+          "manuals": {
+            "title": "Manuali",
+            "subtitle": "Manuali di attrezzature e strumenti"
+          },
+          "maintenance": {
+            "title": "Manutenzione",
+            "subtitle": "Registri di manutenzione attrezzature"
+          }
+        }
       },
       "proceduresManuals": {
-        "title": "Procedure e Manuali",
-        "subtitle": "Istruzioni interne, processi"
+        "title": "Procedure & Manuali",
+        "subtitle": "Documentazione delle procedure"
       },
       "professionalTraining": {
         "title": "Formazione Professionale",
-        "subtitle": "Formazione continua"
+        "subtitle": "Materiali di formazione"
       }
     }
   },
@@ -198,13 +204,11 @@
     "title": "Produzione",
     "noData": "Nessun dato di produzione",
     "createOrder": "Crea Ordine",
-    "orderDetails": "Dettagli Ordine",
     "noOrders": "Nessun ordine di produzione",
     "filterByStatus": "Filtra per Stato",
     "orderNumber": "Numero Ordine",
     "orderNumberPlaceholder": "Inserisci il numero ordine",
     "clientNamePlaceholder": "Inserisci il nome del cliente",
-    "orderType": "Tipo di Ordine",
     "orderTypePlaceholder": "Inserisci il tipo di ordine",
     "selectDueDate": "Seleziona la data di scadenza",
     "dueDate": "Data di Scadenza",
@@ -256,6 +260,11 @@
       "delivered": "Consegnato",
       "completed": "Completato"
     },
+    "orderType": {
+      "standard": "Standard",
+      "urgent": "Urgente",
+      "custom": "Personalizzato"
+    },
     "glassTypes": {
       "tempered": "Temprato (ESG)",
       "strengthened": "Temprato (TVG)",
@@ -284,47 +293,51 @@
   },
   "events": {
     "title": "Eventi",
-    "noData": "Nessun evento",
-    "eventTitle": "Titolo dell'evento",
-    "filter": "Filtra",
-    "history": "Cronologia",
-    "createReport": "Crea rapporto",
-    "reportTitle": "Titolo del rapporto",
-    "reportTitlePlaceholder": "Inserisci il titolo del rapporto",
-    "reportContent": "Contenuto del rapporto",
-    "reportContentPlaceholder": "Inserisci il contenuto del rapporto",
-    "createEvent": "Crea evento",
-    "filterByType": "Filtra per tipo",
-    "type": "Tipo",
-    "titlePlaceholder": "Inserisci il titolo dell'evento",
-    "selectType": "Seleziona tipo",
-    "startDate": "Data di inizio",
-    "endDate": "Data di fine",
-    "endDateOptional": "Data di fine (Opzionale)",
-    "startTime": "Ora di inizio",
-    "endTime": "Ora di fine",
-    "endTimeOptional": "Ora di fine (Opzionale)",
-    "location": "Luogo",
-    "locationPlaceholder": "Inserisci il luogo",
-    "people": "Persone",
-    "selectPeople": "Seleziona persone",
-    "attachments": "Allegati",
-    "addAttachment": "Aggiungi allegato",
-    "maxAttachments": "Massimo 3 allegati consentiti",
-    "fillRequiredFields": "Si prega di compilare tutti i campi obbligatori",
-    "createEventError": "Impossibile creare l'evento",
-    "eventCreated": "Evento creato con successo",
-    "addAttachmentError": "Impossibile aggiungere l'allegato",
-    "additionalInfo": "Informazioni aggiuntive",
-    "additionalInfoPlaceholder": "Inserisci informazioni aggiuntive (opzionale)",
-    "types": {
-      "meeting": "Riunione",
-      "training": "Formazione",
-      "maintenance": "Manutenzione",
-      "installation": "Installazione",
-      "inspection": "Ispezione",
-      "other": "Altro"
-    }
+    "noData": "Nessun evento"
+  },
+  "maintenance": {
+    "title": "Manutenzione",
+    "noRecords": "Nessun registro di manutenzione",
+    "createRecord": "Crea Registro",
+    "editRecord": "Modifica Registro",
+    "updateRecord": "Aggiorna Registro",
+    "recordDetails": "Dettagli Registro",
+    "recordCreated": "Registro di manutenzione creato con successo",
+    "recordUpdated": "Registro di manutenzione aggiornato con successo",
+    "recordDeleted": "Registro di manutenzione eliminato con successo",
+    "recordNotFound": "Registro di manutenzione non trovato",
+    "loadError": "Errore nel caricamento del registro di manutenzione",
+    "createError": "Errore nella creazione del registro di manutenzione",
+    "updateError": "Errore nell'aggiornamento del registro di manutenzione",
+    "deleteError": "Errore nell'eliminazione del registro di manutenzione",
+    "deleteConfirm": "Sei sicuro di voler eliminare questo registro di manutenzione?",
+    "fillTitle": "Si prega di compilare il titolo",
+    "fillEquipment": "Si prega di compilare l'attrezzatura",
+    "fillType": "Si prega di compilare il tipo",
+    "fillDescription": "Si prega di compilare la descrizione",
+    "titlePlaceholder": "Inserisci il titolo",
+    "equipmentPlaceholder": "Inserisci l'attrezzatura",
+    "typePlaceholder": "Inserisci il tipo",
+    "basicInfo": "Informazioni di Base",
+    "infos": "Caselle di Informazione",
+    "info": "Info",
+    "addInfo": "Aggiungi Info",
+    "addFirstInfo": "Aggiungi Prima Info",
+    "noInfos": "Nessuna informazione aggiunta",
+    "description": "Descrizione",
+    "descriptionPlaceholder": "Inserisci la descrizione",
+    "images": "Immagini",
+    "addImage": "Aggiungi Immagine",
+    "maxImagesReached": "Massimo 3 immagini per info",
+    "deleteInfoConfirm": "Sei sicuro di voler eliminare questa info?",
+    "deleteInfoError": "Errore nell'eliminazione dell'info",
+    "imagePickerError": "Errore nella selezione dell'immagine",
+    "saveInfo": "Salva Info",
+    "updateInfo": "Aggiorna Info",
+    "infoSaved": "Info salvata con successo",
+    "saveInfoError": "Errore nel salvataggio dell'info",
+    "createdAt": "Creato il",
+    "updatedAt": "Aggiornato il"
   },
   "permissions": {
     "documents.upload": "Carica documenti",
@@ -347,59 +360,6 @@
     "users.create": "Crea utenti",
     "qr.scan": "Scansiona codici QR",
     "nfc.read": "Leggi tag NFC",
-    "production.create": "Crea Ordini di Produzione",
-    "events.view": "Visualizza eventi",
-    "events.create": "Crea eventi",
-    "events.update": "Aggiorna eventi",
-    "events.delete": "Elimina eventi",
-    "events.history": "Visualizza cronologia eventi",
-    "events.report.create": "Crea rapporti"
-  },
-  "workOrders": {
-    "pendingOrders": "Ordini di lavoro pending",
-    "allPending": "Tutti pending",
-    "noPendingOrders": "Nessun ordine di lavoro pending",
-    "createOrder": "Crea ordine di lavoro",
-    "teamMembers": "membri",
-    "status": {
-      "planned": "Pianificato",
-      "in_progress": "In corso",
-      "paused": "In pausa",
-      "completed": "Completato",
-      "cancelled": "Annullato"
-    },
-    "serviceType": "Tipo di Servizio",
-    "serviceTypeOptions": {
-      "maintenance": "Manutenzione",
-      "installation": "Installazione",
-      "internal": "Interno",
-      "external": "Esterno"
-    },
-    "clientName": "Nome cliente",
-    "clientNamePlaceholder": "Inserisci il nome del cliente",
-    "clientAddress": "Indirizzo cliente",
-    "clientAddressPlaceholder": "Inserisci l'indirizzo completo",
-    "clientContact": "Contatto cliente",
-    "clientContactPlaceholder": "Telefono, email, ecc.",
-    "scheduledDate": "Data programmata",
-    "scheduledTime": "Ora programmata",
-    "internalNotes": "Note interne (Opzionale)",
-    "internalNotesPlaceholder": "Inserisci note interne (non visibili al cliente)",
-    "plannedMaterials": "Materiali pianificati (Opzionale)",
-    "plannedMaterialsPlaceholder": "Inserisci i materiali pianificati (fino a 1000 caratteri)",
-    "team": "Team (Opzionale)",
-    "teamPlaceholder": "Inserisci gli ID dei membri del team separati da virgola",
-    "fillRequiredFields": "Compila tutti i campi obbligatori",
-    "orderCreated": "Ordine di lavoro creato con successo",
-    "createOrderError": "Errore nella creazione dell'ordine di lavoro",
-    "startService": "Avvia servizio",
-    "finishService": "Termina servizio",
-    "serviceStarted": "Servizio avviato con successo",
-    "startServiceError": "Errore nell'avvio del servizio",
-    "serviceCompleted": "Servizio completato con successo",
-    "finishServiceError": "Errore nella fine del servizio",
-    "signatureRequired": "La firma del cliente è obbligatoria per terminare il servizio",
-    "locationPermissionRequired": "Il permesso di localizzazione è necessario per creare il check-in",
-    "locationError": "Errore nell'ottenere la localizzazione. Tentativo di continuare..."
+    "production.create": "Crea Ordini di Produzione"
   }
 }

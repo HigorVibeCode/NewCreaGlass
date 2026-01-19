@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { InventoryRepository } from '../../services/repositories/interfaces';
-import { InventoryGroup, InventoryItem, InventoryHistory } from '../../types';
-import { repos } from '../../services/container';
+import { InventoryGroup, InventoryHistory, InventoryItem } from '../../types';
 
 const STORAGE_KEY_GROUPS = 'mock_inventory_groups';
 const STORAGE_KEY_ITEMS = 'mock_inventory_items';
