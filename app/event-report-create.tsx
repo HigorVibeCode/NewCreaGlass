@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,7 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
@@ -19,6 +19,7 @@ import { Input } from '../src/components/shared/Input';
 import { Dropdown, DropdownOption } from '../src/components/shared/Dropdown';
 import { DatePicker } from '../src/components/shared/DatePicker';
 import { TimePicker } from '../src/components/shared/TimePicker';
+import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { repos } from '../src/services/container';
 import { WorkOrder, WorkOrderServiceType } from '../src/types';
 import { theme } from '../src/theme';
@@ -30,6 +31,7 @@ export default function WorkOrderCreateScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
+  const { workOrderId } = useLocalSearchParams<{ workOrderId: string }>();
 
   const [clientName, setClientName] = useState('');
   const [clientAddress, setClientAddress] = useState('');
@@ -41,6 +43,52 @@ export default function WorkOrderCreateScreen() {
   const [plannedMaterials, setPlannedMaterials] = useState('');
   const [team, setTeam] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+
+  // Load work order data if in edit mode
+  useEffect(() => {
+    if (workOrderId) {
+      setIsEditMode(true);
+      loadWorkOrder();
+    }
+  }, [workOrderId]);
+
+  const loadWorkOrder = async () => {
+    if (!workOrderId) return;
+    setIsLoading(true);
+    try {
+      const workOrderData = await repos.workOrdersRepo.getWorkOrderById(workOrderId);
+      if (workOrderData) {
+        setClientName(workOrderData.clientName || '');
+        setClientAddress(workOrderData.clientAddress || '');
+        setClientContact(workOrderData.clientContact || '');
+        setServiceType(workOrderData.serviceType || '');
+        setScheduledDate(workOrderData.scheduledDate || '');
+        setScheduledTime(workOrderData.scheduledTime || '');
+        setInternalNotes(workOrderData.internalNotes || '');
+        // Convert plannedMaterials array to string
+        const materialsText = workOrderData.plannedMaterials && workOrderData.plannedMaterials.length > 0
+          ? workOrderData.plannedMaterials.map((m: any) => m.name || '').join(', ')
+          : '';
+        setPlannedMaterials(materialsText);
+        // Convert teamMembers array to string (comma-separated)
+        const teamText = workOrderData.teamMembers && workOrderData.teamMembers.length > 0
+          ? workOrderData.teamMembers.join(', ')
+          : '';
+        setTeam(teamText);
+      } else {
+        Alert.alert(t('common.error'), 'Work order not found', [
+          { text: t('common.confirm'), onPress: () => router.back() },
+        ]);
+      }
+    } catch (error) {
+      console.error('Error loading work order:', error);
+      Alert.alert(t('common.error'), 'Failed to load work order');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const serviceTypeOptions: DropdownOption[] = [
     { label: t('common.select'), value: '' },
@@ -89,7 +137,7 @@ export default function WorkOrderCreateScreen() {
     return true;
   };
 
-  const handleCreateWorkOrder = async () => {
+  const handleSaveWorkOrder = async () => {
     if (!user) return;
 
     if (!validateForm()) return;
@@ -118,51 +166,83 @@ export default function WorkOrderCreateScreen() {
         ? team.split(',').map(id => id.trim()).filter(id => id.length > 0 && isValidUUID(id))
         : [];
 
-      const newWorkOrder: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'> = {
-        clientName: clientName.trim(),
-        clientAddress: clientAddress.trim(),
-        clientContact: clientContact.trim(),
-        serviceType: serviceType as WorkOrderServiceType,
-        scheduledDate,
-        scheduledTime,
-        status: 'planned',
-        plannedChecklist: [],
-        plannedMaterials: plannedMaterialsArray,
-        internalNotes: internalNotes.trim() || undefined,
-        teamMembers: teamMembersArray,
-        responsible: user.id,
-        isLocked: false,
-        timeStatuses: [],
-        serviceLogs: [],
-        evidences: [],
-        checklistItems: [],
-        createdBy: user.id,
-      };
+      if (isEditMode && workOrderId) {
+        // Update existing work order
+        const updates: Partial<WorkOrder> = {
+          clientName: clientName.trim(),
+          clientAddress: clientAddress.trim(),
+          clientContact: clientContact.trim(),
+          serviceType: serviceType as WorkOrderServiceType,
+          scheduledDate,
+          scheduledTime,
+          plannedMaterials: plannedMaterialsArray,
+          internalNotes: internalNotes.trim() || undefined,
+          teamMembers: teamMembersArray,
+        };
 
-      await repos.workOrdersRepo.createWorkOrder(newWorkOrder);
-      Alert.alert(t('common.success'), t('workOrders.orderCreated') || 'Ordem de serviço criada com sucesso', [
-        { text: t('common.confirm'), onPress: () => router.back() },
-      ]);
+        await repos.workOrdersRepo.updateWorkOrder(workOrderId, updates);
+        Alert.alert(t('common.success'), t('workOrders.orderUpdated') || 'Ordem de serviço atualizada com sucesso', [
+          { 
+            text: t('common.confirm'), 
+            onPress: () => router.replace({
+              pathname: '/work-order-detail',
+              params: { workOrderId },
+            }),
+          },
+        ]);
+      } else {
+        // Create new work order
+        const newWorkOrder: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'> = {
+          clientName: clientName.trim(),
+          clientAddress: clientAddress.trim(),
+          clientContact: clientContact.trim(),
+          serviceType: serviceType as WorkOrderServiceType,
+          scheduledDate,
+          scheduledTime,
+          status: 'planned',
+          plannedChecklist: [],
+          plannedMaterials: plannedMaterialsArray,
+          internalNotes: internalNotes.trim() || undefined,
+          teamMembers: teamMembersArray,
+          responsible: user.id,
+          isLocked: false,
+          timeStatuses: [],
+          serviceLogs: [],
+          evidences: [],
+          checklistItems: [],
+          createdBy: user.id,
+        };
+
+        const createdWorkOrder = await repos.workOrdersRepo.createWorkOrder(newWorkOrder);
+        Alert.alert(t('common.success'), t('workOrders.orderCreated') || 'Ordem de serviço criada com sucesso', [
+          { 
+            text: t('common.confirm'), 
+            onPress: () => router.replace({
+              pathname: '/work-order-detail',
+              params: { workOrderId: createdWorkOrder.id },
+            }),
+          },
+        ]);
+      }
     } catch (error: any) {
-      console.error('Error creating work order:', error);
-      const errorMessage = error?.message || t('workOrders.createOrderError') || 'Falha ao criar ordem de serviço';
+      console.error('Error saving work order:', error);
+      const errorMessage = error?.message || (isEditMode 
+        ? (t('workOrders.updateOrderError') || 'Falha ao atualizar ordem de serviço')
+        : (t('workOrders.createOrderError') || 'Falha ao criar ordem de serviço'));
       Alert.alert(t('common.error'), errorMessage, [{ text: t('common.confirm') }]);
     } finally {
       setIsCreating(false);
     }
   };
 
-  const topPadding = Platform.OS === 'ios' ? Math.max(insets.top + theme.spacing.lg, 60) : theme.spacing.xxl;
-  const wrapperStyle = useMemo(() => ({ backgroundColor: colors.background }), [colors.background]);
-
   return (
-    <View style={[styles.wrapper, wrapperStyle]}>
+    <ScreenWrapper>
       <KeyboardAvoidingView
-        style={[styles.container, { backgroundColor: colors.background }]}
+        style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        <View style={[styles.header, { paddingTop: topPadding, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
+        <View style={[styles.header, { paddingTop: insets.top + theme.spacing.md, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
           <TouchableOpacity
             style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
             onPress={() => router.back()}
@@ -171,12 +251,15 @@ export default function WorkOrderCreateScreen() {
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>
-            {t('workOrders.createOrder') || 'Criar Ordem de Serviço'}
+            {isEditMode ? (t('workOrders.editOrder') || 'Editar Ordem de Serviço') : (t('workOrders.createOrder') || 'Criar Ordem de Serviço')}
           </Text>
           <View style={styles.headerSpacer} />
         </View>
 
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+        <ScrollView 
+          style={styles.scrollView} 
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + theme.spacing.md }]}
+        >
           <Input
             label={t('workOrders.clientName') || 'Nome do Cliente'}
             value={clientName}
@@ -264,22 +347,19 @@ export default function WorkOrderCreateScreen() {
               style={styles.button}
             />
             <Button
-              title={t('common.create')}
-              onPress={handleCreateWorkOrder}
-              loading={isCreating}
+              title={isEditMode ? (t('common.save') || 'Save') : t('common.create')}
+              onPress={handleSaveWorkOrder}
+              loading={isCreating || isLoading}
               style={styles.button}
             />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </View>
+    </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    flex: 1,
-  },
   container: {
     flex: 1,
   },

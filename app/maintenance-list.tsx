@@ -1,25 +1,25 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { useAppTheme } from '../src/hooks/use-app-theme';
 import { Button } from '../src/components/shared/Button';
+import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { repos } from '../src/services/container';
 import { MaintenanceRecord } from '../src/types';
 import { theme } from '../src/theme';
-import { Platform } from 'react-native';
 
 export default function MaintenanceListScreen() {
   const { t } = useI18n();
   const router = useRouter();
   const colors = useThemeColors();
   const { effectiveTheme } = useAppTheme();
-  const isDark = effectiveTheme === 'dark';
   const insets = useSafeAreaInsets();
+  const isDark = effectiveTheme === 'dark';
   const [records, setRecords] = useState<MaintenanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -66,20 +66,19 @@ export default function MaintenanceListScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SafeAreaView edges={['top']} style={styles.safeArea}>
-        {/* Custom Header */}
-        <View
-          style={[
-            styles.header,
-            {
-              backgroundColor: colors.background,
-              paddingTop: Platform.OS === 'ios' ? Math.max(insets.top, theme.spacing.sm) : theme.spacing.md,
-              borderBottomWidth: 1,
-              borderBottomColor: colors.border,
-            },
-          ]}
-        >
+    <ScreenWrapper>
+      {/* Custom Header */}
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: colors.background,
+            paddingTop: insets.top + theme.spacing.md,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+          },
+        ]}
+      >
           <View style={styles.headerContent}>
             <TouchableOpacity
               style={styles.backButton}
@@ -112,7 +111,6 @@ export default function MaintenanceListScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      </SafeAreaView>
 
       {/* Content */}
       {isLoading ? (
@@ -187,17 +185,11 @@ export default function MaintenanceListScreen() {
           )}
         </ScrollView>
       )}
-    </View>
+    </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  safeArea: {
-    zIndex: 10,
-  },
   header: {
     paddingHorizontal: theme.spacing.md,
     paddingBottom: theme.spacing.md,

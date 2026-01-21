@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -12,6 +13,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../src/components/shared/Button';
 import { DatePicker } from '../src/components/shared/DatePicker';
 import { Dropdown, DropdownOption } from '../src/components/shared/Dropdown';
@@ -49,6 +51,7 @@ export default function ProductionCreateScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
   const { productionId } = useLocalSearchParams<{ productionId: string }>();
 
   const [orderNumber, setOrderNumber] = useState('');
@@ -158,30 +161,129 @@ export default function ProductionCreateScreen() {
     setProductionItem({ ...productionItem, [field]: value });
   };
 
-  const handleAddAttachment = async () => {
+  const handleTakePhoto = async () => {
+    if (attachments.length >= MAX_ATTACHMENTS) {
+      Alert.alert(t('common.error'), t('production.maxAttachments'));
+      return;
+    }
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(t('common.error'), t('production.cameraPermissionDenied') || 'Permissão da câmera negada');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        allowsEditing: false,
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets[0]) return;
+
+      const asset = result.assets[0];
+      const filename = asset.uri.split('/').pop() || `photo_${Date.now()}.jpg`;
+      const mimeType = asset.mimeType || 'image/jpeg';
+
+      const newAttachment: ProductionAttachment = {
+        id: 'attach-' + Date.now(),
+        filename,
+        mimeType,
+        storagePath: asset.uri,
+        createdAt: new Date().toISOString(),
+      };
+
+      setAttachments([...attachments, newAttachment]);
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert(t('common.error'), t('production.addAttachmentError'));
+    }
+  };
+
+  const handleChooseFromLibrary = async () => {
     if (attachments.length >= MAX_ATTACHMENTS) {
       Alert.alert(t('common.error'), t('production.maxAttachments'));
       return;
     }
 
     try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(t('common.error'), t('production.mediaPermissionDenied') || 'Permissão da galeria negada');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        allowsEditing: false,
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets[0]) return;
+
+      const asset = result.assets[0];
+      const filename = asset.uri.split('/').pop() || `image_${Date.now()}.jpg`;
+      const mimeType = asset.mimeType || 'image/jpeg';
+
+      const newAttachment: ProductionAttachment = {
+        id: 'attach-' + Date.now(),
+        filename,
+        mimeType,
+        storagePath: asset.uri,
+        createdAt: new Date().toISOString(),
+      };
+
+      setAttachments([...attachments, newAttachment]);
+    } catch (error) {
+      console.error('Error choosing from library:', error);
+      Alert.alert(t('common.error'), t('production.addAttachmentError'));
+    }
+  };
+
+  const handleChooseDocument = async () => {
+    if (attachments.length >= MAX_ATTACHMENTS) {
+      Alert.alert(t('common.error'), t('production.maxAttachments'));
+      return;
+    }
+
+    try {
+      // Usar tipos específicos do DocumentPicker para melhor compatibilidade
       const result = await DocumentPicker.getDocumentAsync({
-        type: ALLOWED_MIME_TYPES,
+        type: [
+          'application/pdf',
+          'image/jpeg',
+          'image/png',
+          'image/webp',
+        ],
         copyToCacheDirectory: true,
+        multiple: false,
       });
 
       if (result.canceled) return;
 
       const file = result.assets[0];
-      if (!ALLOWED_MIME_TYPES.includes(file.mimeType || '')) {
-        Alert.alert(t('common.error'), t('documents.allowedTypes'));
+      
+      // Verificar se o tipo é permitido após seleção
+      const fileMimeType = file.mimeType || 'application/octet-stream';
+      const fileExtension = file.name?.split('.').pop()?.toLowerCase() || '';
+      
+      // Verificar extensão e MIME type
+      const isImage = ['jpg', 'jpeg', 'png', 'webp'].includes(fileExtension) || 
+                      fileMimeType.startsWith('image/');
+      const isPDF = fileExtension === 'pdf' || fileMimeType === 'application/pdf';
+      
+      if (!isImage && !isPDF) {
+        Alert.alert(
+          t('common.error'), 
+          t('documents.allowedTypes') || 'Apenas imagens (JPG, PNG, WEBP) e PDF são permitidos'
+        );
         return;
       }
 
       const newAttachment: ProductionAttachment = {
         id: 'attach-' + Date.now(),
         filename: file.name,
-        mimeType: file.mimeType || 'application/octet-stream',
+        mimeType: fileMimeType,
         storagePath: file.uri,
         createdAt: new Date().toISOString(),
       };
@@ -298,7 +400,29 @@ export default function ProductionCreateScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+      <View style={[styles.header, { paddingTop: insets.top + theme.spacing.md, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
+        <TouchableOpacity
+          style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>
+          {isEditing ? (t('production.editOrder') || 'Edit Order') : t('production.createOrder')}
+        </Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={[
+          styles.content, 
+          { 
+            paddingBottom: insets.bottom + theme.spacing.md 
+          }
+        ]}
+      >
         <Input
           label="Client Name"
           value={clientName}
@@ -380,19 +504,43 @@ export default function ProductionCreateScreen() {
         </View>
 
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              {t('production.attachments')} ({attachments.length}/{MAX_ATTACHMENTS})
-            </Text>
-            {attachments.length < MAX_ATTACHMENTS && (
-              <Button
-                title={t('production.addAttachment')}
-                onPress={handleAddAttachment}
-                variant="outline"
-                style={styles.addButton}
-              />
-            )}
-          </View>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            {t('production.attachments')} ({attachments.length}/{MAX_ATTACHMENTS})
+          </Text>
+          {attachments.length < MAX_ATTACHMENTS && (
+            <View style={styles.attachmentOptions}>
+              <TouchableOpacity
+                style={[styles.attachmentOption, { backgroundColor: colors.backgroundSecondary }]}
+                onPress={handleTakePhoto}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="camera" size={28} color={colors.primary} />
+                <Text style={[styles.attachmentOptionLabel, { color: colors.text }]}>
+                  {t('production.takePhoto') || 'Tirar Foto'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.attachmentOption, { backgroundColor: colors.backgroundSecondary }]}
+                onPress={handleChooseFromLibrary}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="image" size={28} color={colors.primary} />
+                <Text style={[styles.attachmentOptionLabel, { color: colors.text }]}>
+                  {t('production.chooseFromLibrary') || 'Galeria'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.attachmentOption, { backgroundColor: colors.backgroundSecondary }]}
+                onPress={handleChooseDocument}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="document-text" size={28} color={colors.primary} />
+                <Text style={[styles.attachmentOptionLabel, { color: colors.text }]}>
+                  {t('production.chooseDocument') || 'PDF'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {attachments.map((attachment) => (
             <View
@@ -433,6 +581,32 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.md,
+    paddingBottom: theme.spacing.lg,
+    borderBottomWidth: 1,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: theme.borderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...theme.shadows.sm,
+  },
+  headerTitle: {
+    fontSize: theme.typography.fontSize.xl,
+    fontWeight: theme.typography.fontWeight.bold,
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: theme.spacing.md,
+  },
+  headerSpacer: {
+    width: 40,
+  },
   scrollView: {
     flex: 1,
   },
@@ -453,8 +627,25 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.lg,
     fontWeight: theme.typography.fontWeight.bold,
   },
-  addButton: {
-    paddingHorizontal: theme.spacing.md,
+  attachmentOptions: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+  },
+  attachmentOption: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    minHeight: 100,
+    gap: theme.spacing.xs,
+    ...theme.shadows.sm,
+  },
+  attachmentOptionLabel: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+    textAlign: 'center',
   },
   itemCard: {
     padding: theme.spacing.md,

@@ -3,12 +3,14 @@ import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableW
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useAuth } from '../src/store/auth-store';
 import { usePermissions } from '../src/hooks/use-permissions';
 import { PermissionGuard } from '../src/components/shared/PermissionGuard';
 import { Button } from '../src/components/shared/Button';
 import { Input } from '../src/components/shared/Input';
+import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { repos } from '../src/services/container';
 import { InventoryGroup, InventoryItem } from '../src/types';
 import { theme } from '../src/theme';
@@ -19,6 +21,7 @@ export default function InventoryGroupScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
   const { hasPermission } = usePermissions();
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   
@@ -272,23 +275,47 @@ export default function InventoryGroupScreen() {
   }
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.content}>
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+    <ScreenWrapper>
+      {/* Custom Header */}
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: colors.background,
+            paddingTop: insets.top + theme.spacing.md,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+          },
+        ]}
+      >
+        <View style={styles.headerContent}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <View style={styles.headerTitleContainer}>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>
               {group.name}
             </Text>
-            <PermissionGuard permission="inventory.item.create">
-              <TouchableOpacity
-                style={[styles.addButton, { backgroundColor: colors.primary }]}
-                onPress={() => setShowCreateItem(true)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="add" size={24} color={colors.textInverse} />
-              </TouchableOpacity>
-            </PermissionGuard>
           </View>
+          <PermissionGuard permission="inventory.item.create">
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => setShowCreateItem(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="add" size={24} color={colors.primary} />
+            </TouchableOpacity>
+          </PermissionGuard>
+        </View>
+      </View>
+
+      <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.content}>
+          <View style={styles.section}>
 
           {items.length === 0 ? (
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
@@ -374,6 +401,7 @@ export default function InventoryGroupScreen() {
           )}
         </View>
       </View>
+      </ScrollView>
 
       <Modal
         visible={showCreateItem}
@@ -532,11 +560,41 @@ export default function InventoryGroupScreen() {
           </View>
         </TouchableWithoutFeedback>
       </Modal>
-    </ScrollView>
+    </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
+  header: {
+    borderBottomWidth: 1,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.md,
+    paddingBottom: theme.spacing.md,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: theme.spacing.sm,
+  },
+  headerTitleContainer: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  addButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   container: {
     flex: 1,
   },
@@ -545,23 +603,6 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: theme.spacing.xl,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: theme.spacing.md,
-  },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: theme.borderRadius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sectionTitle: {
-    fontSize: theme.typography.fontSize.lg,
-    fontWeight: theme.typography.fontWeight.bold,
   },
   emptyText: {
     fontSize: theme.typography.fontSize.md,

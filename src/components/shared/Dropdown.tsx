@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemeColors } from '../../hooks/use-theme-colors';
 import { theme } from '../../theme';
 
@@ -19,6 +20,7 @@ interface DropdownProps {
 export const Dropdown: React.FC<DropdownProps> = ({ label, value, options, onSelect }) => {
   const [visible, setVisible] = useState(false);
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
   
   const safeOptions = options && options.length > 0 ? options : [{ label: 'Select...', value: '' }];
   const selectedOption = safeOptions.find(opt => opt.value === value) || safeOptions[0];
@@ -56,7 +58,12 @@ export const Dropdown: React.FC<DropdownProps> = ({ label, value, options, onSel
                     <Ionicons name="close" size={24} color={colors.text} />
                   </TouchableOpacity>
                 </View>
-                <View style={styles.optionsList}>
+                <ScrollView
+                  style={styles.optionsList}
+                  contentContainerStyle={{ paddingBottom: insets.bottom + theme.spacing.md }}
+                  showsVerticalScrollIndicator={true}
+                  nestedScrollEnabled={true}
+                >
                   {safeOptions.map((option) => (
                     <TouchableOpacity
                       key={option.value}
@@ -82,7 +89,7 @@ export const Dropdown: React.FC<DropdownProps> = ({ label, value, options, onSel
                       )}
                     </TouchableOpacity>
                   ))}
-                </View>
+                </ScrollView>
               </View>
             </TouchableWithoutFeedback>
           </View>

@@ -28,7 +28,9 @@ export default function ProductionScreen() {
     try {
       const status = selectedStatus === 'all' ? undefined : selectedStatus;
       const allProductions = await repos.productionRepo.getAllProductions(status);
-      setProductions(allProductions);
+      // Filter out completed productions - they go to history only
+      const activeProductions = allProductions.filter(p => p.status !== 'completed');
+      setProductions(activeProductions);
     } catch (error) {
       console.error('Error loading productions:', error);
     } finally {
@@ -157,6 +159,13 @@ export default function ProductionScreen() {
       <ScrollView style={styles.scrollView}>
         <View style={styles.content}>
           <View style={styles.topBar}>
+            <TouchableOpacity
+              style={[styles.historyButton, { backgroundColor: colors.backgroundSecondary }]}
+              onPress={() => router.push('/production-orders-history')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="checkbox-outline" size={20} color={colors.text} />
+            </TouchableOpacity>
             <TouchableOpacity
               style={[styles.filterButton, { backgroundColor: colors.backgroundSecondary }]}
               onPress={() => setFilterModalVisible(true)}
@@ -303,6 +312,14 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: theme.spacing.sm,
     marginBottom: theme.spacing.md,
+  },
+  historyButton: {
+    width: 36,
+    height: 36,
+    borderRadius: theme.borderRadius.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...theme.shadows.sm,
   },
   filterButton: {
     width: 36,

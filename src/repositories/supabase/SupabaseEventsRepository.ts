@@ -96,6 +96,70 @@ export class SupabaseEventsRepository implements EventsRepository {
     return this.loadEventWithRelations(eventData);
   }
 
+  async updateEvent(eventId: string, updates: Partial<Event>): Promise<Event> {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) {
+      throw new Error('User not authenticated');
+    }
+
+    const updateData: any = {};
+    if (updates.title !== undefined) updateData.title = updates.title;
+    if (updates.type !== undefined) updateData.type = updates.type;
+    if (updates.startDate !== undefined) updateData.start_date = updates.startDate;
+    if (updates.endDate !== undefined) updateData.end_date = updates.endDate && updates.endDate.trim() ? updates.endDate : null;
+    if (updates.startTime !== undefined) updateData.start_time = updates.startTime;
+    if (updates.endTime !== undefined) updateData.end_time = updates.endTime && updates.endTime.trim() ? updates.endTime : null;
+    if (updates.location !== undefined) updateData.location = updates.location;
+    if (updates.people !== undefined) updateData.people = updates.people || '';
+    if (updates.description !== undefined) updateData.description = updates.description || null;
+
+    const { data, error } = await supabase
+      .from('events')
+      .update(updateData)
+      .eq('id', eventId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating event:', error);
+      throw new Error(`Failed to update event: ${error.message}`);
+    }
+
+    // Handle attachments update - delete existing and insert new ones
+    if (updates.attachments !== undefined) {
+      // Delete existing attachments
+      const { error: deleteAttachmentsError } = await supabase
+        .from('event_attachments')
+        .delete()
+        .eq('event_id', eventId);
+
+      if (deleteAttachmentsError) {
+        console.error('Error deleting event attachments:', deleteAttachmentsError);
+      }
+
+      // Insert new attachments
+      if (updates.attachments.length > 0) {
+        const attachmentsToInsert = updates.attachments.map((att) => ({
+          event_id: eventId,
+          filename: att.filename,
+          mime_type: att.mimeType,
+          storage_path: att.storagePath,
+        }));
+
+        const { error: attachmentsError } = await supabase
+          .from('event_attachments')
+          .insert(attachmentsToInsert);
+
+        if (attachmentsError) {
+          console.error('Error creating event attachments:', attachmentsError);
+          // Don't fail the whole operation if attachments fail
+        }
+      }
+    }
+
+    return this.loadEventWithRelations(data);
+  }
+
   async deleteEvent(eventId: string): Promise<void> {
     // Delete attachments first
     const { error: deleteAttachmentsError } = await supabase

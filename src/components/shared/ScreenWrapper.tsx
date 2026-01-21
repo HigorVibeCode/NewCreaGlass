@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useThemeColors } from '../../hooks/use-theme-colors';
 
 interface ScreenWrapperProps {
@@ -16,7 +17,10 @@ export const ScreenWrapper: React.FC<ScreenWrapperProps> = ({
   const colors = useThemeColors();
   
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView 
+      style={[styles.container, { backgroundColor: colors.background }]} 
+      edges={['top']}
+    >
       <View style={[
         styles.content,
         Platform.OS === 'web' && {
@@ -27,7 +31,7 @@ export const ScreenWrapper: React.FC<ScreenWrapperProps> = ({
       ]}>
         {children}
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 

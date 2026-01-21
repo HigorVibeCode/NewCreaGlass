@@ -1,11 +1,12 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { useAppTheme } from '../src/hooks/use-app-theme';
+import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { theme } from '../src/theme';
 
 interface SubCategory {
@@ -45,8 +46,8 @@ export default function DocumentsCategoryScreen() {
   const { t } = useI18n();
   const colors = useThemeColors();
   const { effectiveTheme } = useAppTheme();
-  const isDark = effectiveTheme === 'dark';
   const insets = useSafeAreaInsets();
+  const isDark = effectiveTheme === 'dark';
 
   // Verificar se é uma subcategoria (equipmentTools.manuals ou equipmentTools.maintenance)
   const isSubCategory = categoryId?.includes('.');
@@ -74,15 +75,44 @@ export default function DocumentsCategoryScreen() {
     },
   ];
 
+  // Subcategorias para Legal Requirements
+  const legalRequirementsSubCategories: SubCategory[] = [
+    {
+      id: 'onboarding',
+      icon: 'person-add',
+      iconColor: '#3b82f6',
+      iconBgColor: '#dbeafe',
+      chevronColor: '#3b82f6',
+    },
+    {
+      id: 'obrigatorios',
+      icon: 'document-check',
+      iconColor: '#10b981',
+      iconBgColor: '#d1fae5',
+      chevronColor: '#10b981',
+    },
+  ];
+
   const isEquipmentTools = baseCategoryId === 'equipmentTools';
+  const isLegalRequirements = baseCategoryId === 'legalRequirements';
   const currentSubCategory = subCategoryId 
-    ? equipmentToolsSubCategories.find(sub => sub.id === subCategoryId)
+    ? (isEquipmentTools 
+        ? equipmentToolsSubCategories.find(sub => sub.id === subCategoryId)
+        : isLegalRequirements
+        ? legalRequirementsSubCategories.find(sub => sub.id === subCategoryId)
+        : null)
     : null;
 
   const handleSubCategoryPress = (subCategoryId: string) => {
     if (subCategoryId === 'maintenance') {
       // Navegar para a lista de manutenções
       router.push('/maintenance-list');
+    } else if (isLegalRequirements) {
+      // Para subcategorias de Legal Requirements, navegar para a tela de documentos
+      router.push({
+        pathname: '/documents-category',
+        params: { categoryId: `legalRequirements.${subCategoryId}` },
+      } as any);
     } else {
       // Para outras subcategorias, navegar para a tela de documentos
       router.push({
@@ -93,20 +123,20 @@ export default function DocumentsCategoryScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenWrapper>
       {/* Custom Header */}
-        <View
-          style={[
-            styles.header,
-            {
-              backgroundColor: colors.background,
-              paddingTop: Platform.OS === 'ios' ? Math.max(insets.top + theme.spacing.md, 60) : theme.spacing.xl + theme.spacing.md,
-              paddingBottom: theme.spacing.md,
-              borderBottomWidth: 1,
-              borderBottomColor: colors.border,
-            },
-          ]}
-        >
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: colors.background,
+            paddingTop: insets.top + theme.spacing.md,
+            paddingBottom: theme.spacing.md,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+          },
+        ]}
+      >
           <View style={styles.headerContent}>
             <TouchableOpacity
               style={styles.backButton}
@@ -127,7 +157,11 @@ export default function DocumentsCategoryScreen() {
                 <Ionicons name={config.icon} size={20} color={config.iconColor} />
               </View>
               <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
-                {t(`documents.categories.${categoryId}.title`)}
+                {isSubCategory && subCategoryId
+                  ? (isLegalRequirements
+                      ? t(`documents.categories.legalRequirements.subCategories.${subCategoryId}.title`)
+                      : t(`documents.categories.equipmentTools.subCategories.${subCategoryId}.title`))
+                  : t(`documents.categories.${baseCategoryId || categoryId}.title`)}
               </Text>
             </View>
           </View>
@@ -143,7 +177,9 @@ export default function DocumentsCategoryScreen() {
           <View style={styles.subtitleContainer}>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               {isSubCategory && subCategoryId
-                ? t(`documents.categories.equipmentTools.subCategories.${subCategoryId}.subtitle`)
+                ? (isLegalRequirements
+                    ? t(`documents.categories.legalRequirements.subCategories.${subCategoryId}.subtitle`)
+                    : t(`documents.categories.equipmentTools.subCategories.${subCategoryId}.subtitle`))
                 : t(`documents.categories.${baseCategoryId || categoryId}.subtitle`)}
             </Text>
           </View>
@@ -190,6 +226,48 @@ export default function DocumentsCategoryScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+          ) : isLegalRequirements && !isSubCategory ? (
+            // Mostrar subcategorias para Legal Requirements
+            <View style={styles.subCategoriesContainer}>
+              {legalRequirementsSubCategories.map((subCategory) => (
+                <TouchableOpacity
+                  key={subCategory.id}
+                  style={[styles.subCategoryCard, { backgroundColor: colors.cardBackground }]}
+                  onPress={() => handleSubCategoryPress(subCategory.id)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.subCategoryContent}>
+                    <View
+                      style={[
+                        styles.subCategoryIconContainer,
+                        {
+                          backgroundColor: isDark
+                            ? `${subCategory.iconBgColor}40`
+                            : subCategory.iconBgColor,
+                        },
+                      ]}
+                    >
+                      <Ionicons name={subCategory.icon} size={24} color={subCategory.iconColor} />
+                    </View>
+                    <View style={styles.subCategoryTextContainer}>
+                      <Text style={[styles.subCategoryTitle, { color: colors.text }]}>
+                        {t(`documents.categories.legalRequirements.subCategories.${subCategory.id}.title`)}
+                      </Text>
+                      <Text style={[styles.subCategorySubtitle, { color: colors.textSecondary }]}>
+                        {t(`documents.categories.legalRequirements.subCategories.${subCategory.id}.subtitle`)}
+                      </Text>
+                    </View>
+                    <View style={[styles.subCategoryChevronContainer, { backgroundColor: colors.backgroundSecondary }]}>
+                      <Ionicons
+                        name="chevron-forward"
+                        size={20}
+                        color={subCategory.chevronColor}
+                      />
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
           ) : (
             // Mostrar estado vazio para subcategorias e outras categorias
             <View style={styles.emptyState}>
@@ -206,15 +284,12 @@ export default function DocumentsCategoryScreen() {
             </View>
           )}
         </View>
-      </ScrollView>
-    </View>
+        </ScrollView>
+    </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   header: {
     paddingHorizontal: theme.spacing.md,
     paddingBottom: theme.spacing.md,

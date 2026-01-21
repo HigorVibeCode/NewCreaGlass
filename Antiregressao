@@ -1,0 +1,7 @@
+GUARDRAILS (obrigatório):
+- Dif mínimo: só mexer no que for necessário para (A) padronizar top safe area/status bar e (B) anexos (download+open-with + camera).
+- Não refatorar arquitetura, não renomear arquivos/rotas, não alterar endpoints, não alterar modelos de dados nem repositórios do Supabase.
+- Não mudar UI/spacing existente além do topo (status bar area).
+- Reutilizar o que já existe: ScreenWrapper.tsx, TopBar.tsx, ThemeProvider.tsx e padrões do Expo Router.
+- Centralizar a nova lógica de anexos em um helper/hook único e reaproveitar nos pontos existentes.
+- Manter fallback: se abrir arquivo falhar, exibir erro e permitir tentar novamente (sem quebrar fluxo).

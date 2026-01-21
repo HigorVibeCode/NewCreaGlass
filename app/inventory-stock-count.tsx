@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useAuth } from '../src/store/auth-store';
@@ -16,6 +17,7 @@ export default function InventoryStockCountScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
   const { itemId } = useLocalSearchParams<{ itemId: string }>();
   
   const [item, setItem] = useState<InventoryItem | null>(null);
@@ -87,7 +89,10 @@ export default function InventoryStockCountScreen() {
   }
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScrollView 
+      style={[styles.container, { backgroundColor: colors.background }]}
+      contentContainerStyle={{ paddingBottom: insets.bottom + theme.spacing.md }}
+    >
       <View style={styles.content}>
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>{item.name}</Text>

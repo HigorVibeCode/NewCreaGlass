@@ -1,11 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { File } from 'expo-file-system';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     Alert,
     Dimensions,
-    Linking,
     Modal,
     Platform,
     ScrollView,
@@ -17,11 +15,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DropdownOption } from '../src/components/shared/Dropdown';
+import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { repos } from '../src/services/container';
 import { useAuth } from '../src/store/auth-store';
 import { theme } from '../src/theme';
+import { downloadAndOpenAttachment } from '../src/utils/attachments';
 import { GlassType, InventoryItem, PaintType, Production, ProductionStatus, ProductionStatusHistory, StructureType, User } from '../src/types';
 
 export default function ProductionDetailScreen() {
@@ -328,75 +328,32 @@ export default function ProductionDetailScreen() {
   };
 
   const handleAttachmentPress = async (attachment: { storagePath: string; mimeType: string; filename: string }) => {
-    try {
-      let fileUri = attachment.storagePath;
-
-      // Verificar se o arquivo existe e obter o URI correto
-      if (fileUri.startsWith('file://') || fileUri.startsWith('content://')) {
-        try {
-          const file = new File(fileUri);
-          const fileInfo = await file.info();
-          if (!fileInfo.exists) {
-            Alert.alert(t('common.error'), t('documents.downloadError'));
-            return;
-          }
-        } catch (fileError) {
-          // Se não conseguir verificar, tentar abrir mesmo assim
-          console.warn('Could not verify file existence:', fileError);
-        }
-      } else if (!fileUri.startsWith('http://') && !fileUri.startsWith('https://')) {
-        // Se não tem protocolo, adicionar file://
-        fileUri = fileUri.startsWith('/') ? `file://${fileUri}` : `file://${fileUri}`;
-      }
-
-      // Para imagens, usar o visualizador nativo do dispositivo
-      if (attachment.mimeType.startsWith('image/')) {
-        try {
-          // Tentar abrir diretamente - o sistema operacional escolherá o visualizador apropriado
-          const supported = await Linking.canOpenURL(fileUri);
-          if (supported) {
-            await Linking.openURL(fileUri);
-          } else {
-            // Mesmo se canOpenURL retornar false, tentar abrir (pode funcionar)
-            await Linking.openURL(fileUri);
-          }
-        } catch (openError) {
-          console.error('Error opening image:', openError);
-          Alert.alert(t('common.error'), t('documents.downloadError'));
-        }
-      } else {
-        // Para PDFs e outros documentos
-        const supported = await Linking.canOpenURL(fileUri);
-        if (supported) {
-          await Linking.openURL(fileUri);
-        } else {
-          Alert.alert(t('common.error'), t('documents.downloadError'));
-        }
-      }
-    } catch (error) {
-      console.error('Error opening attachment:', error);
-      Alert.alert(t('common.error'), t('documents.downloadError'));
-    }
+    await downloadAndOpenAttachment(
+      attachment.storagePath,
+      attachment.filename,
+      attachment.mimeType
+    );
   };
 
   if (isLoading || !production) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScreenWrapper>
         <View style={styles.loadingContainer}>
           <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
             {t('common.loading')}
           </Text>
         </View>
-      </View>
+      </ScreenWrapper>
     );
   }
 
   return (
     <>
-    <ScrollView 
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={{ paddingTop: Platform.OS === 'ios' ? Math.max(insets.top + theme.spacing.md, 60) : theme.spacing.xl + theme.spacing.md }}
-    >
+    <ScreenWrapper>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + theme.spacing.md }]}
+      >
       <View style={styles.content}>
         <View style={[styles.headerCard, { backgroundColor: colors.cardBackground }]}>
           <View style={styles.headerRow}>
@@ -530,11 +487,11 @@ export default function ProductionDetailScreen() {
 
         <View style={styles.buttonContainer}>
           <TouchableOpacity
-            style={[styles.iconButton, { backgroundColor: colors.primary }]}
-            onPress={handleSave}
+            style={[styles.iconButton, { backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border }]}
+            onPress={() => router.back()}
             activeOpacity={0.7}
           >
-            <Ionicons name="checkmark-circle" size={24} color={colors.textInverse} />
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.iconButton, { backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border }]}
@@ -553,7 +510,8 @@ export default function ProductionDetailScreen() {
         </View>
       </View>
 
-    </ScrollView>
+      </ScrollView>
+    </ScreenWrapper>
 
     <Modal
       visible={statusModalVisible}
@@ -694,8 +652,11 @@ export default function ProductionDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scrollView: {
     flex: 1,
+  },
+  scrollContent: {
+    padding: theme.spacing.md,
   },
   content: {
     padding: theme.spacing.lg,

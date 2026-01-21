@@ -63,7 +63,7 @@ export default function WorkOrderDetailScreen() {
       if (status !== 'granted') {
         Alert.alert(
           t('common.error') || 'Error',
-          t('workOrders.locationPermissionRequired') || 'Permissão de localização é necessária para criar o check-in'
+          t('workOrders.locationPermissionRequired')
         );
         setIsProcessing(false);
         return;
@@ -79,7 +79,7 @@ export default function WorkOrderDetailScreen() {
         console.error('Error getting location:', locationError);
         Alert.alert(
           t('common.error') || 'Error',
-          t('workOrders.locationError') || 'Erro ao obter localização. Tentando continuar...'
+          t('workOrders.locationError')
         );
         // Fallback to default coordinates if location fails
         location = {
@@ -127,13 +127,13 @@ export default function WorkOrderDetailScreen() {
 
       Alert.alert(
         t('common.success') || 'Success',
-        t('workOrders.serviceStarted') || 'Serviço iniciado com sucesso'
+        t('workOrders.serviceStarted')
       );
     } catch (error) {
       console.error('Error starting service:', error);
       Alert.alert(
         t('common.error') || 'Error',
-        t('workOrders.startServiceError') || 'Falha ao iniciar serviço'
+        t('workOrders.startServiceError')
       );
     } finally {
       setIsProcessing(false);
@@ -161,7 +161,7 @@ export default function WorkOrderDetailScreen() {
     if (pendingSignature !== null) {
       setPendingSignature(null);
       setIsProcessing(false);
-      Alert.alert(t('common.error') || 'Error', t('workOrders.signatureDrawingRequired') || 'Por favor, desenhe a assinatura');
+      Alert.alert(t('common.error'), t('workOrders.signatureDrawingRequired'));
     }
   };
 
@@ -182,7 +182,7 @@ export default function WorkOrderDetailScreen() {
     if (!clientName || !clientName.trim()) {
       setPendingSignature(null);
       setIsProcessing(false);
-      Alert.alert(t('common.error') || 'Error', t('workOrders.clientNameRequired') || 'Nome do cliente é obrigatório');
+      Alert.alert(t('common.error'), t('workOrders.clientNameRequired'));
       return;
     }
 
@@ -261,13 +261,13 @@ export default function WorkOrderDetailScreen() {
 
       Alert.alert(
         t('common.success') || 'Success',
-        t('workOrders.signatureCreated') || 'Assinatura registrada com sucesso'
+        t('workOrders.signatureCreated')
       );
     } catch (error) {
       console.error('Error creating signature:', error);
       Alert.alert(
         t('common.error') || 'Error',
-        t('workOrders.signatureError') || 'Falha ao registrar assinatura'
+        t('workOrders.signatureError')
       );
     } finally {
       setIsProcessing(false);
@@ -279,7 +279,7 @@ export default function WorkOrderDetailScreen() {
     if (!workOrderId || !user || !workOrder) return;
 
     if (!clientName || !clientName.trim()) {
-      Alert.alert(t('common.error') || 'Error', t('workOrders.clientNameRequired') || 'Nome do cliente é obrigatório');
+      Alert.alert(t('common.error'), t('workOrders.clientNameRequired'));
       return;
     }
 
@@ -300,7 +300,7 @@ export default function WorkOrderDetailScreen() {
     } else {
       setIsProcessing(false);
       setPendingSignature(null);
-      Alert.alert(t('common.error') || 'Error', t('workOrders.signatureDrawingRequired') || 'Por favor, desenhe a assinatura');
+      Alert.alert(t('common.error'), t('workOrders.signatureDrawingRequired'));
     }
   };
 
@@ -311,7 +311,7 @@ export default function WorkOrderDetailScreen() {
     if (!workOrder.signature) {
       Alert.alert(
         t('common.error') || 'Error',
-        t('workOrders.signatureRequired') || 'Assinatura do cliente é obrigatória para finalizar o serviço'
+        t('workOrders.signatureRequired')
       );
       return;
     }
@@ -346,13 +346,13 @@ export default function WorkOrderDetailScreen() {
 
       Alert.alert(
         t('common.success') || 'Success',
-        t('workOrders.serviceCompleted') || 'Serviço finalizado com sucesso'
+        t('workOrders.serviceCompleted')
       );
     } catch (error) {
       console.error('Error finishing service:', error);
       Alert.alert(
         t('common.error') || 'Error',
-        t('workOrders.finishServiceError') || 'Falha ao finalizar serviço'
+        t('workOrders.finishServiceError')
       );
     } finally {
       setIsProcessing(false);
@@ -684,7 +684,7 @@ export default function WorkOrderDetailScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+      <View style={[styles.header, { paddingTop: insets.top + theme.spacing.md, backgroundColor: colors.background }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
@@ -696,7 +696,10 @@ export default function WorkOrderDetailScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView style={[styles.scrollView, { backgroundColor: colors.background }]}>
+      <ScrollView 
+        style={[styles.scrollView, { backgroundColor: colors.background }]}
+        contentContainerStyle={{ paddingBottom: insets.bottom + theme.spacing.md }}
+      >
         <View style={styles.content}>
           <View style={[styles.headerCard, { backgroundColor: colors.cardBackground }]}>
             <View style={styles.headerRow}>
@@ -1080,7 +1083,7 @@ export default function WorkOrderDetailScreen() {
                 >
                   <Ionicons name="create-outline" size={24} color={colors.background} />
                   <Text style={[styles.signatureButtonText, { color: colors.background }]}>
-                    {t('workOrders.requestSignature') || 'Solicitar Assinatura do Cliente'}
+                    {t('workOrders.requestSignature')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1164,7 +1167,7 @@ export default function WorkOrderDetailScreen() {
                 <>
                   <Ionicons name="play-circle" size={20} color={colors.background} />
                   <Text style={[styles.actionButtonText, { color: colors.background }]}>
-                    {t('workOrders.startService') || 'Iniciar Serviço'}
+                    {t('workOrders.startService')}
                   </Text>
                 </>
               )}
@@ -1184,7 +1187,7 @@ export default function WorkOrderDetailScreen() {
                 <>
                   <Ionicons name="checkmark-circle" size={20} color={colors.background} />
                   <Text style={[styles.actionButtonText, { color: colors.background }]}>
-                    {t('workOrders.finishService') || 'Finalizar Serviço'}
+                    {t('workOrders.finishService')}
                   </Text>
                 </>
               )}
@@ -1223,7 +1226,7 @@ export default function WorkOrderDetailScreen() {
           <View style={[styles.modalContent, styles.signatureModalContent, { backgroundColor: colors.background }]}>
             <View style={styles.signatureModalHeader}>
               <Text style={[styles.modalTitle, { color: colors.text }]}>
-                {t('workOrders.clientSignature') || 'Assinatura do Cliente'}
+                {t('workOrders.clientSignature')}
               </Text>
               <TouchableOpacity
                 onPress={() => {
@@ -1238,18 +1241,18 @@ export default function WorkOrderDetailScreen() {
             </View>
 
             <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
-              {t('workOrders.enterClientName') || 'Digite o nome completo do cliente:'}
+              {t('workOrders.enterClientName')}
             </Text>
             <TextInput
               style={[styles.modalInput, { backgroundColor: colors.backgroundSecondary, color: colors.text, borderColor: colors.border }]}
               value={clientName}
               onChangeText={setClientName}
-              placeholder={t('workOrders.clientNamePlaceholder') || 'Nome do cliente'}
+              placeholder={t('workOrders.clientNamePlaceholder')}
               placeholderTextColor={colors.textTertiary}
             />
 
             <Text style={[styles.modalSubtitle, { color: colors.textSecondary, marginTop: theme.spacing.md }]}>
-              {t('workOrders.signatureDrawing') || 'Desenhe a assinatura abaixo:'}
+              {t('workOrders.signatureDrawing')}
             </Text>
             
             <View style={[styles.signatureCanvasContainer, { backgroundColor: '#ffffff', borderColor: colors.border }]}>
@@ -1258,8 +1261,8 @@ export default function WorkOrderDetailScreen() {
                 onOK={handleSignatureOK}
                 onEmpty={handleSignatureEmpty}
                 descriptionText=""
-                clearText={t('workOrders.clearSignature') || 'Limpar'}
-                confirmText={t('workOrders.saveSignature') || 'Salvar'}
+                clearText={t('workOrders.clearSignature')}
+                confirmText={t('workOrders.saveSignature')}
                 penColor="#000000"
                 backgroundColor="#ffffff"
                 minWidth={2}

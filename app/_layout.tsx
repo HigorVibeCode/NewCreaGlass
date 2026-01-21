@@ -87,7 +87,7 @@ export default function RootLayout() {
                     presentation: 'card',
                     title: 'Inventory Group',
                     animation: 'slide_from_right',
-                    headerShown: true,
+                    headerShown: false,
                   }} 
                 />
                 <Stack.Screen 
@@ -96,7 +96,7 @@ export default function RootLayout() {
                     presentation: 'card',
                     title: 'Stock Count',
                     animation: 'slide_from_right',
-                    headerShown: true,
+                    headerShown: false,
                   }} 
                 />
                 <Stack.Screen 
@@ -105,7 +105,7 @@ export default function RootLayout() {
                     presentation: 'modal',
                     title: 'Create Order',
                     animation: 'slide_from_bottom',
-                    headerShown: true,
+                    headerShown: false,
                   }} 
                 />
                 <Stack.Screen 
@@ -136,6 +136,24 @@ export default function RootLayout() {
                   }} 
                 />
                 <Stack.Screen 
+                  name="work-orders-history" 
+                  options={{ 
+                    presentation: 'card',
+                    title: 'History',
+                    animation: 'slide_from_right',
+                    headerShown: false,
+                  }} 
+                />
+                <Stack.Screen 
+                  name="production-orders-history" 
+                  options={{ 
+                    presentation: 'card',
+                    title: 'Production History',
+                    animation: 'slide_from_right',
+                    headerShown: false,
+                  }} 
+                />
+                <Stack.Screen 
                   name="documents-category" 
                   options={{ 
                     presentation: 'card',
@@ -150,7 +168,7 @@ export default function RootLayout() {
                     presentation: 'card',
                     title: 'Maintenance',
                     animation: 'slide_from_right',
-                    headerShown: true,
+                    headerShown: false,
                   }} 
                 />
                 <Stack.Screen 
@@ -159,7 +177,7 @@ export default function RootLayout() {
                     presentation: 'modal',
                     title: 'Create Maintenance',
                     animation: 'slide_from_bottom',
-                    headerShown: true,
+                    headerShown: false,
                   }} 
                 />
                 <Stack.Screen 
@@ -168,7 +186,25 @@ export default function RootLayout() {
                     presentation: 'card',
                     title: 'Maintenance Details',
                     animation: 'slide_from_right',
-                    headerShown: true,
+                    headerShown: false,
+                  }} 
+                />
+                <Stack.Screen 
+                  name="work-order-detail" 
+                  options={{ 
+                    presentation: 'card',
+                    title: 'Work Order Details',
+                    animation: 'slide_from_right',
+                    headerShown: false,
+                  }} 
+                />
+                <Stack.Screen 
+                  name="event-detail" 
+                  options={{ 
+                    presentation: 'card',
+                    title: 'Event Details',
+                    animation: 'slide_from_right',
+                    headerShown: false,
                   }} 
                 />
                 <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />

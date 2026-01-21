@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useAuth } from '../src/store/auth-store';
 import { Button } from '../src/components/shared/Button';
@@ -14,6 +15,7 @@ export default function BloodPriorityCreateScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
   const [newMessageTitle, setNewMessageTitle] = useState('');
   const [newMessageBody, setNewMessageBody] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -43,7 +45,10 @@ export default function BloodPriorityCreateScreen() {
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScrollView 
+      style={[styles.container, { backgroundColor: colors.background }]}
+      contentContainerStyle={{ paddingBottom: insets.bottom + theme.spacing.md }}
+    >
       <View style={styles.content}>
         <Input
           label={t('bloodPriority.messageTitle')}

@@ -22,9 +22,6 @@ export default function EventsScreen() {
   const colors = useThemeColors();
   const [items, setItems] = useState<EventOrWorkOrder[]>([]);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
-  const [historyModalVisible, setHistoryModalVisible] = useState(false);
-  const [historyItems, setHistoryItems] = useState<EventOrWorkOrder[]>([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [selectedType, setSelectedType] = useState<EventType | 'all'>('all');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -36,49 +33,9 @@ export default function EventsScreen() {
     router.push('/event-report-create');
   };
 
-  const handleHistory = async () => {
-    console.log('Opening history modal...');
-    setHistoryModalVisible(true);
-    // Load history with a small delay to ensure modal is visible
-    setTimeout(async () => {
-      await loadHistory();
-    }, 100);
+  const handleHistory = () => {
+    router.push('/work-orders-history');
   };
-
-  const loadHistory = useCallback(async () => {
-    setIsLoadingHistory(true);
-    try {
-      // Load only completed work orders for history
-      const allWorkOrders = await repos.workOrdersRepo.getAllWorkOrders();
-      console.log('All work orders loaded:', allWorkOrders.length);
-      console.log('Work orders statuses:', allWorkOrders.map(wo => ({ id: wo.id, status: wo.status })));
-      
-      const completedWorkOrders = allWorkOrders.filter(wo => wo.status === 'completed');
-      console.log('Completed work orders:', completedWorkOrders.length);
-      console.log('Completed work orders details:', completedWorkOrders.map(wo => ({ id: wo.id, status: wo.status, clientName: wo.clientName })));
-
-      const historyItems: EventOrWorkOrder[] = completedWorkOrders.map(workOrder => ({
-        type: 'workOrder',
-        data: workOrder,
-      }));
-
-      // Sort by completion date (most recent first)
-      historyItems.sort((a, b) => {
-        // Use scheduled date as fallback, but ideally we'd use completion timestamp
-        const dateA = new Date(`${a.data.scheduledDate}T${a.data.scheduledTime || '00:00'}`);
-        const dateB = new Date(`${b.data.scheduledDate}T${b.data.scheduledTime || '00:00'}`);
-        return dateB.getTime() - dateA.getTime(); // Descending (newest first)
-      });
-
-      setHistoryItems(historyItems);
-      console.log('History loaded:', historyItems.length, 'completed work orders');
-    } catch (error) {
-      console.error('Error loading history:', error);
-      setHistoryItems([]);
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  }, []);
 
   const handleFilter = () => {
     setFilterModalVisible(true);
@@ -153,13 +110,6 @@ export default function EventsScreen() {
       loadEventsAndWorkOrders();
     }, [loadEventsAndWorkOrders])
   );
-
-  // Reload history when modal becomes visible
-  useEffect(() => {
-    if (historyModalVisible) {
-      loadHistory();
-    }
-  }, [historyModalVisible, loadHistory]);
 
   const handleFilterSelect = (value: string) => {
     setSelectedType(value as EventType | 'all');
@@ -280,7 +230,7 @@ export default function EventsScreen() {
                 onPress={handleCreateReport}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.buttonText, { color: '#ffffff' }]}>+ Work Order</Text>
+                <Text style={[styles.buttonText, { color: '#ffffff' }]}>{t('events.addWorkOrder')}</Text>
               </TouchableOpacity>
             </PermissionGuard>
 
@@ -290,7 +240,7 @@ export default function EventsScreen() {
                 onPress={handleCreateEvent}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.buttonText, { color: '#ffffff' }]}>+ Event</Text>
+                <Text style={[styles.buttonText, { color: '#ffffff' }]}>{t('events.addEvent')}</Text>
               </TouchableOpacity>
             </PermissionGuard>
           </View>
@@ -349,140 +299,6 @@ export default function EventsScreen() {
             </TouchableWithoutFeedback>
           </Modal>
 
-          {/* History Modal */}
-          <Modal
-            visible={historyModalVisible}
-            transparent
-            animationType="slide"
-            onRequestClose={() => setHistoryModalVisible(false)}
-          >
-            <TouchableWithoutFeedback onPress={() => setHistoryModalVisible(false)}>
-              <View style={[styles.modalOverlay, { backgroundColor: colors.overlay || 'rgba(0, 0, 0, 0.5)' }]}>
-                <TouchableWithoutFeedback>
-                  <View style={[styles.modalContent, styles.historyModalContent, { backgroundColor: colors.background }]}>
-                <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-                  <Text style={[styles.modalTitle, { color: colors.text }]}>
-                    {t('events.history') || 'Histórico'}
-                  </Text>
-                  <TouchableOpacity onPress={() => setHistoryModalVisible(false)}>
-                    <Ionicons name="close" size={24} color={colors.text} />
-                  </TouchableOpacity>
-                </View>
-                <ScrollView 
-                  style={styles.historyScrollView} 
-                  contentContainerStyle={styles.historyListContent}
-                  showsVerticalScrollIndicator={true}
-                  nestedScrollEnabled={true}
-                >
-                  {isLoadingHistory ? (
-                    <View style={styles.emptyHistoryState}>
-                      <ActivityIndicator size="large" color={colors.primary} />
-                      <Text style={[styles.emptyText, { color: colors.textSecondary, marginTop: theme.spacing.md }]}>
-                        {t('common.loading') || 'Carregando...'}
-                      </Text>
-                    </View>
-                  ) : historyItems.length === 0 ? (
-                    <View style={styles.emptyHistoryState}>
-                      <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                        {t('events.noHistory') || 'Nenhuma ordem de serviço completada'}
-                      </Text>
-                    </View>
-                  ) : (
-                    <View style={styles.historyList}>
-                      {historyItems.map((item) => {
-                        if (item.type === 'workOrder') {
-                          const workOrder = item.data;
-                          const workOrderColor = '#059669';
-                          return (
-                            <TouchableOpacity
-                              key={`history-${workOrder.id}`}
-                              style={[styles.eventCard, { backgroundColor: colors.cardBackground }]}
-                              activeOpacity={0.7}
-                              onPress={() => {
-                                setHistoryModalVisible(false);
-                                router.push({
-                                  pathname: '/work-order-detail',
-                                  params: { workOrderId: workOrder.id },
-                                });
-                              }}
-                            >
-                              <View style={[styles.cardIndicator, { backgroundColor: workOrderColor }]} />
-                              <View style={styles.cardContent}>
-                                <View style={styles.cardHeader}>
-                                  <View style={styles.leftHeader}>
-                                    <View style={[styles.typeBadge, { backgroundColor: workOrderColor + '15' }]}>
-                                      <Ionicons name="document-text" size={16} color={workOrderColor} />
-                                      <Text style={[styles.typeLabel, { color: workOrderColor }]}>Work Order</Text>
-                                    </View>
-                                  </View>
-                                </View>
-
-                                <View style={styles.cardBody}>
-                                  <View style={styles.titleRow}>
-                                    <Text style={[styles.eventTitle, { color: colors.text }]} numberOfLines={1}>
-                                      {workOrder.clientName}
-                                    </Text>
-                                    <View style={styles.titleRight}>
-                                      <Text style={[styles.eventType, { color: colors.textSecondary }]}>
-                                        {getServiceTypeLabel(workOrder.serviceType)}
-                                      </Text>
-                                      <View
-                                        style={[
-                                          styles.statusBadge,
-                                          { backgroundColor: getWorkOrderStatusColor(workOrder.status) + '20' },
-                                        ]}
-                                      >
-                                        <Text
-                                          style={[
-                                            styles.statusText,
-                                            { color: getWorkOrderStatusColor(workOrder.status) },
-                                          ]}
-                                        >
-                                          {getWorkOrderStatusLabel(workOrder.status)}
-                                        </Text>
-                                      </View>
-                                    </View>
-                                  </View>
-
-                                  <View style={styles.infoRow}>
-                                    <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
-                                    <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-                                      {formatDateTime(workOrder.scheduledDate, workOrder.scheduledTime)}
-                                    </Text>
-                                  </View>
-
-                                  {workOrder.clientAddress && (
-                                    <View style={styles.infoRow}>
-                                      <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
-                                      <Text style={[styles.infoText, { color: colors.textSecondary }]} numberOfLines={1}>
-                                        {workOrder.clientAddress}
-                                      </Text>
-                                    </View>
-                                  )}
-
-                                  {workOrder.clientContact && (
-                                    <View style={styles.infoRow}>
-                                      <Ionicons name="call-outline" size={14} color={colors.textSecondary} />
-                                      <Text style={[styles.infoText, { color: colors.textSecondary }]} numberOfLines={1}>
-                                        {workOrder.clientContact}
-                                      </Text>
-                                    </View>
-                                  )}
-                                </View>
-                              </View>
-                            </TouchableOpacity>
-                          );
-                        }
-                        return null;
-                      })}
-                    </View>
-                  )}
-                </ScrollView>
-                  </View>
-                </TouchableWithoutFeedback>
-              </View>
-            </TouchableWithoutFeedback>
-          </Modal>
 
           {items.length === 0 ? (
             <View style={styles.emptyState}>
@@ -512,7 +328,7 @@ export default function EventsScreen() {
                           <View style={styles.leftHeader}>
                             <View style={[styles.typeBadge, { backgroundColor: eventColor + '15' }]}>
                               <Ionicons name="calendar" size={16} color={eventColor} />
-                              <Text style={[styles.typeLabel, { color: eventColor }]}>Event</Text>
+                              <Text style={[styles.typeLabel, { color: eventColor }]}>{t('events.eventLabel')}</Text>
                             </View>
                           </View>
                         </View>
@@ -577,7 +393,7 @@ export default function EventsScreen() {
                           <View style={styles.leftHeader}>
                             <View style={[styles.typeBadge, { backgroundColor: workOrderColor + '15' }]}>
                               <Ionicons name="document-text" size={16} color={workOrderColor} />
-                              <Text style={[styles.typeLabel, { color: workOrderColor }]}>Work Order</Text>
+                              <Text style={[styles.typeLabel, { color: workOrderColor }]}>{t('events.workOrderLabel')}</Text>
                             </View>
                           </View>
                         </View>
@@ -882,29 +698,5 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: theme.typography.fontSize.xs,
     fontWeight: theme.typography.fontWeight.semibold,
-  },
-  historyModalContent: {
-    width: '100%',
-    maxWidth: 600,
-    maxHeight: '90%',
-    borderRadius: theme.borderRadius.lg,
-  },
-  historyScrollView: {
-    flex: 1,
-    maxHeight: 600,
-  },
-  historyListContent: {
-    padding: theme.spacing.md,
-    gap: theme.spacing.md,
-  },
-  historyList: {
-    gap: theme.spacing.md,
-  },
-  emptyHistoryState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: 200,
-    padding: theme.spacing.xl,
   },
 });

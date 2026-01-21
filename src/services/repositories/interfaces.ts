@@ -98,6 +98,7 @@ export interface EventsRepository {
   getAllEvents(): Promise<Event[]>;
   getEventById(eventId: string): Promise<Event | null>;
   createEvent(event: Omit<Event, 'id' | 'createdAt'>): Promise<Event>;
+  updateEvent(eventId: string, updates: Partial<Event>): Promise<Event>;
 }
 
 // Production Repository

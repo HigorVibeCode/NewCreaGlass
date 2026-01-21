@@ -11,11 +11,12 @@ import {
   Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Button } from '../src/components/shared/Button';
 import { Input } from '../src/components/shared/Input';
+import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { useAppTheme } from '../src/hooks/use-app-theme';
@@ -39,9 +40,9 @@ export default function MaintenanceCreateScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
   const { effectiveTheme } = useAppTheme();
   const isDark = effectiveTheme === 'dark';
-  const insets = useSafeAreaInsets();
   const { recordId } = useLocalSearchParams<{ recordId: string }>();
 
   const [title, setTitle] = useState('');
@@ -327,14 +328,14 @@ export default function MaintenanceCreateScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <SafeAreaView edges={['top']} style={styles.safeArea}>
+    <ScreenWrapper>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.contentContainer}
+          contentContainerStyle={[styles.contentContainer, { paddingBottom: insets.bottom + theme.spacing.md }]}
           showsVerticalScrollIndicator={false}
         >
           {/* Basic Info */}
@@ -458,16 +459,13 @@ export default function MaintenanceCreateScreen() {
             style={styles.saveButton}
           />
         </ScrollView>
-      </SafeAreaView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
-  safeArea: {
     flex: 1,
   },
   scrollView: {

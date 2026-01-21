@@ -10,19 +10,20 @@ import {
   Dimensions,
   Modal,
   Image,
+  Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { useAppTheme } from '../src/hooks/use-app-theme';
 import { Button } from '../src/components/shared/Button';
+import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { repos } from '../src/services/container';
 import { useAuth } from '../src/store/auth-store';
 import { MaintenanceRecord } from '../src/types';
 import { theme } from '../src/theme';
-import { Platform } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -32,8 +33,8 @@ export default function MaintenanceDetailScreen() {
   const { user } = useAuth();
   const colors = useThemeColors();
   const { effectiveTheme } = useAppTheme();
-  const isDark = effectiveTheme === 'dark';
   const insets = useSafeAreaInsets();
+  const isDark = effectiveTheme === 'dark';
   const { recordId } = useLocalSearchParams<{ recordId: string }>();
 
   const [record, setRecord] = useState<MaintenanceRecord | null>(null);
@@ -133,20 +134,19 @@ export default function MaintenanceDetailScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SafeAreaView edges={['top']} style={styles.safeArea}>
-        {/* Custom Header */}
-        <View
-          style={[
-            styles.header,
-            {
-              backgroundColor: colors.background,
-              paddingTop: Platform.OS === 'ios' ? Math.max(insets.top, theme.spacing.sm) : theme.spacing.md,
-              borderBottomWidth: 1,
-              borderBottomColor: colors.border,
-            },
-          ]}
-        >
+    <ScreenWrapper>
+      {/* Custom Header */}
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: colors.background,
+            paddingTop: insets.top + theme.spacing.md,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+          },
+        ]}
+      >
           <View style={styles.headerContent}>
             <TouchableOpacity
               style={styles.backButton}
@@ -162,7 +162,6 @@ export default function MaintenanceDetailScreen() {
             </View>
           </View>
         </View>
-      </SafeAreaView>
 
       <ScrollView
         style={styles.scrollView}
@@ -298,17 +297,11 @@ export default function MaintenanceDetailScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
-    </View>
+    </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  safeArea: {
-    zIndex: 10,
-  },
   header: {
     paddingHorizontal: theme.spacing.md,
     paddingBottom: theme.spacing.md,

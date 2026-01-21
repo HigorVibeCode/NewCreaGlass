@@ -68,10 +68,8 @@ export const TopBar: React.FC<TopBarProps> = () => {
 
   const username = user?.username || 'User';
 
-  const topPadding = Math.max(insets.top + theme.spacing.sm, Platform.OS === 'ios' ? 16 : 20);
-
   return (
-    <View style={[styles.container, { paddingTop: topPadding, backgroundColor: colors.background, borderBottomColor: colors.borderLight }]}>
+    <View style={[styles.container, { paddingTop: insets.top + theme.spacing.md, backgroundColor: colors.background, borderBottomColor: colors.borderLight }]}>
       <View style={[
         styles.contentWrapper,
         Platform.OS === 'web' && {

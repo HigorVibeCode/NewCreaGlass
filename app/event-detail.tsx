@@ -127,7 +127,7 @@ export default function EventDetailScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+      <View style={[styles.header, { paddingTop: insets.top + theme.spacing.md, backgroundColor: colors.background }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
