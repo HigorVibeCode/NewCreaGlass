@@ -58,12 +58,13 @@ export default function ProductionScreen() {
     { label: t('production.status.authorized'), value: 'authorized' },
     { label: t('production.status.cutting'), value: 'cutting' },
     { label: t('production.status.polishing'), value: 'polishing' },
+    { label: t('production.status.on_paint_cabin'), value: 'on_paint_cabin' },
+    { label: t('production.status.on_laminating_machine'), value: 'on_laminating_machine' },
+    { label: t('production.status.on_schmelz_oven'), value: 'on_schmelz_oven' },
     { label: t('production.status.waiting_for_tempering'), value: 'waiting_for_tempering' },
-    { label: t('production.status.on_oven'), value: 'on_oven' },
+    { label: t('production.status.waiting_for_schmelz'), value: 'waiting_for_schmelz' },
+    { label: t('production.status.tempering_in_progress'), value: 'tempering_in_progress' },
     { label: t('production.status.tempered'), value: 'tempered' },
-    { label: t('production.status.on_cabin'), value: 'on_cabin' },
-    { label: t('production.status.laminating'), value: 'laminating' },
-    { label: t('production.status.laminated'), value: 'laminated' },
     { label: t('production.status.waiting_for_packing'), value: 'waiting_for_packing' },
     { label: t('production.status.packed'), value: 'packed' },
     { label: t('production.status.ready_for_dispatch'), value: 'ready_for_dispatch' },
@@ -74,35 +75,46 @@ export default function ProductionScreen() {
   const getStatusColor = (status: ProductionStatus): string => {
     switch (status) {
       case 'not_authorized':
-        return colors.error;
+        return colors.error; // vermelho
       case 'authorized':
-        return colors.success; // Green (most important phase)
+        return colors.success; // verde
       case 'cutting':
-        return colors.info;
+        return colors.info; // azul
       case 'polishing':
-        return '#06b6d4'; // Cyan
+        return colors.info; // azul
+      case 'on_paint_cabin':
+        return '#f97316'; // laranja
+      case 'on_laminating_machine':
+        return '#f97316'; // laranja
+      case 'on_schmelz_oven':
+        return '#f97316'; // laranja
       case 'waiting_for_tempering':
-        return colors.warning;
-      case 'on_oven':
-        return '#f59e0b'; // Amber
+        return colors.warning; // Amarelo
+      case 'waiting_for_schmelz':
+        return colors.warning; // Amarelo
+      case 'tempering_in_progress':
+        return '#8b5cf6'; // Roxo
       case 'tempered':
-        return '#8b5cf6'; // Purple
-      case 'on_cabin':
-        return colors.info;
-      case 'laminating':
-        return '#06b6d4'; // Cyan
-      case 'laminated':
-        return '#3b82f6'; // Blue
+        return '#8b5cf6'; // Roxo
       case 'waiting_for_packing':
-        return colors.warning;
+        return colors.warning; // Amarelo
       case 'packed':
-        return '#06b6d4'; // Cyan
+        return colors.info; // azul
       case 'ready_for_dispatch':
-        return '#f59e0b'; // Amber
+        return '#34d399'; // verde claro
       case 'delivered':
-        return colors.success;
+        return '#059669'; // verde escuro
       case 'completed':
-        return colors.success;
+        return '#059669'; // verde escuro
+      // Compatibilidade com status antigos
+      case 'on_cabin':
+        return '#f97316'; // laranja (mapeado para on_paint_cabin)
+      case 'laminating':
+        return '#f97316'; // laranja (mapeado para on_laminating_machine)
+      case 'laminated':
+        return colors.info; // azul (mantido para compatibilidade)
+      case 'on_oven':
+        return '#f97316'; // laranja (mapeado para on_schmelz_oven)
       default:
         return colors.textSecondary;
     }
@@ -118,18 +130,20 @@ export default function ProductionScreen() {
         return t('production.status.cutting');
       case 'polishing':
         return t('production.status.polishing');
+      case 'on_paint_cabin':
+        return t('production.status.on_paint_cabin');
+      case 'on_laminating_machine':
+        return t('production.status.on_laminating_machine');
+      case 'on_schmelz_oven':
+        return t('production.status.on_schmelz_oven');
       case 'waiting_for_tempering':
         return t('production.status.waiting_for_tempering');
-      case 'on_oven':
-        return t('production.status.on_oven');
+      case 'waiting_for_schmelz':
+        return t('production.status.waiting_for_schmelz');
+      case 'tempering_in_progress':
+        return t('production.status.tempering_in_progress');
       case 'tempered':
         return t('production.status.tempered');
-      case 'on_cabin':
-        return t('production.status.on_cabin');
-      case 'laminating':
-        return t('production.status.laminating');
-      case 'laminated':
-        return t('production.status.laminated');
       case 'waiting_for_packing':
         return t('production.status.waiting_for_packing');
       case 'packed':
@@ -140,6 +154,15 @@ export default function ProductionScreen() {
         return t('production.status.delivered');
       case 'completed':
         return t('production.status.completed');
+      // Compatibilidade com status antigos
+      case 'on_cabin':
+        return t('production.status.on_paint_cabin');
+      case 'laminating':
+        return t('production.status.on_laminating_machine');
+      case 'laminated':
+        return t('production.status.laminated') || 'Laminated';
+      case 'on_oven':
+        return t('production.status.on_schmelz_oven');
       default:
         return status;
     }
