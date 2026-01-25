@@ -29,14 +29,14 @@ export const TopBar: React.FC<TopBarProps> = () => {
   const blinkAnimation = useRef(new Animated.Value(1)).current;
 
   const loadBloodPriorityCount = React.useCallback(async () => {
-    if (!user || !hasPermission('bloodPriority.view')) return;
+    if (!user) return;
     try {
       const unreadMessages = await repos.bloodPriorityRepo.getUnreadMessages(user.id);
       setBloodPriorityUnread(unreadMessages.length);
     } catch (error) {
       console.error('Error loading blood priority count:', error);
     }
-  }, [user, hasPermission]);
+  }, [user]);
 
   React.useEffect(() => {
     loadBloodPriorityCount();
@@ -82,23 +82,22 @@ export const TopBar: React.FC<TopBarProps> = () => {
           <Text style={[styles.greeting, { color: colors.text }]}>{t('common.hello')}, {username}</Text>
         </View>
         <View style={styles.rightSection}>
-        {hasPermission('bloodPriority.view') && (
-          <TouchableOpacity
-            style={styles.iconContainer}
-            onPress={() => router.push('/blood-priority')}
-            activeOpacity={0.7}
+        {/* Blood Priority icon - visible to all users */}
+        <TouchableOpacity
+          style={styles.iconContainer}
+          onPress={() => router.push('/blood-priority')}
+          activeOpacity={0.7}
+        >
+          <Animated.View
+            style={[
+              styles.circularIcon,
+              styles.bloodPriorityIcon,
+              { opacity: blinkAnimation },
+            ]}
           >
-            <Animated.View
-              style={[
-                styles.circularIcon,
-                styles.bloodPriorityIcon,
-                { opacity: blinkAnimation },
-              ]}
-            >
-              <Ionicons name="water" size={16} color="#ffffff" />
-            </Animated.View>
-          </TouchableOpacity>
-        )}
+            <Ionicons name="water" size={16} color="#ffffff" />
+          </Animated.View>
+        </TouchableOpacity>
         {hasPermission('notifications.view') && (
           <TouchableOpacity
             style={styles.iconContainer}

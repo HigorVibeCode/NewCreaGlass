@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DropdownOption } from '../src/components/shared/Dropdown';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
+import { PermissionGuard } from '../src/components/shared/PermissionGuard';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { repos } from '../src/services/container';
@@ -529,20 +530,24 @@ export default function ProductionDetailScreen() {
           >
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.iconButton, { backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border }]}
-            onPress={handleEdit}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="create-outline" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.iconButton, { backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.error }]}
-            onPress={handleDelete}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="trash-outline" size={24} color={colors.error} />
-          </TouchableOpacity>
+          <PermissionGuard permission="production.update">
+            <TouchableOpacity
+              style={[styles.iconButton, { backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border }]}
+              onPress={handleEdit}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="create-outline" size={24} color={colors.text} />
+            </TouchableOpacity>
+          </PermissionGuard>
+          <PermissionGuard permission="production.delete">
+            <TouchableOpacity
+              style={[styles.iconButton, { backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.error }]}
+              onPress={handleDelete}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="trash-outline" size={24} color={colors.error} />
+            </TouchableOpacity>
+          </PermissionGuard>
         </View>
       </View>
 

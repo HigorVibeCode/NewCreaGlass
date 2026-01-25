@@ -16,6 +16,11 @@ import {
     ProductionStatus,
     ProductionStatusHistory,
     Session,
+    Training,
+    TrainingCategory,
+    TrainingCompletion,
+    TrainingSignature,
+    TrainingWithCompletion,
     User,
 } from '../../types';
 
@@ -124,4 +129,28 @@ export interface MaintenanceRepository {
   addMaintenanceInfoImage(infoId: string, image: Omit<MaintenanceInfoImage, 'id' | 'createdAt'>): Promise<MaintenanceInfoImage>;
   deleteMaintenanceInfoImage(imageId: string, changedBy?: string): Promise<void>;
   getMaintenanceHistory(recordId: string): Promise<MaintenanceHistory[]>;
+}
+
+// Training Repository
+export interface TrainingRepository {
+  getAllTrainings(category?: TrainingCategory): Promise<Training[]>;
+  getTrainingById(trainingId: string): Promise<Training | null>;
+  createTraining(training: Omit<Training, 'id' | 'createdAt' | 'updatedAt' | 'attachments'>): Promise<Training>;
+  updateTraining(trainingId: string, updates: Partial<Training>): Promise<Training>;
+  deleteTraining(trainingId: string): Promise<void>;
+  
+  // Training attachments
+  addTrainingAttachment(trainingId: string, file: File | { uri: string; name: string; type: string }): Promise<import('../../types').TrainingAttachment>;
+  deleteTrainingAttachment(attachmentId: string): Promise<void>;
+  getTrainingAttachmentUrl(attachmentId: string): Promise<string>;
+  
+  // Training completions
+  startTraining(trainingId: string, userId: string): Promise<TrainingCompletion>;
+  updateTrainingTime(trainingId: string, userId: string, timeSpentSeconds: number): Promise<TrainingCompletion>;
+  completeTraining(trainingId: string, userId: string, signatureData: string, fullName: string, latitude: number, longitude: number): Promise<TrainingCompletion>;
+  getTrainingCompletion(trainingId: string, userId: string): Promise<TrainingCompletion | null>;
+  
+  // History
+  getCompletedTrainings(userId?: string): Promise<TrainingWithCompletion[]>; // If userId is provided, get user's completions; if not and user is Master, get all
+  getTrainingHistory(trainingId: string, userId?: string): Promise<TrainingWithCompletion[]>; // Get all completions for a specific training
 }

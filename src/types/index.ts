@@ -229,3 +229,57 @@ export interface MaintenanceRecord {
   updatedAt: string;
   createdBy: string;
 }
+
+// Training types
+export type TrainingCategory = 'mandatory' | 'professional' | 'onboarding';
+
+export interface Training {
+  id: string;
+  title: string;
+  description?: string;
+  category: TrainingCategory;
+  content?: string;
+  durationMinutes?: number;
+  isActive: boolean;
+  attachments?: TrainingAttachment[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrainingCompletion {
+  id: string;
+  trainingId: string;
+  userId: string;
+  startedAt: string;
+  completedAt?: string;
+  timeSpentSeconds: number;
+  createdAt: string;
+}
+
+export interface TrainingSignature {
+  id: string;
+  trainingCompletionId: string;
+  signaturePath: string;
+  fullName: string;
+  timestamp: string;
+  latitude: number;
+  longitude: number;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface TrainingAttachment {
+  id: string;
+  trainingId: string;
+  filename: string;
+  mimeType: string;
+  storagePath: string;
+  createdAt: string;
+}
+
+export interface TrainingWithCompletion extends Training {
+  completion?: TrainingCompletion;
+  signature?: TrainingSignature;
+  attachments?: TrainingAttachment[];
+}

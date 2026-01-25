@@ -173,6 +173,8 @@
     "isActive": "Aktiv",
     "activate": "Aktivieren",
     "deactivate": "Deaktivieren",
+    "deactivateUser": "Benutzer deaktivieren",
+    "deactivateUserConfirm": "Sind Sie sicher, dass Sie den Benutzer {{username}} deaktivieren möchten? Der Benutzer kann nicht mehr auf das System zugreifen.",
     "createUser": "Benutzer erstellen",
     "editUser": "Benutzer bearbeiten",
     "newPassword": "Neues Passwort",
@@ -458,8 +460,13 @@
   },
   "permissions": {
     "documents.upload": "Dokumente hochladen",
+    "documents.create": "Dokumente erstellen",
     "documents.view": "Dokumente anzeigen",
     "documents.download": "Dokumente herunterladen",
+    "documents.delete": "Dokumente löschen",
+    "inventory.create": "Inventar erstellen",
+    "inventory.update": "Inventar aktualisieren",
+    "inventory.delete": "Inventar löschen",
     "inventory.group.create": "Inventargruppen erstellen",
     "inventory.item.create": "Inventarartikel erstellen",
     "inventory.item.update": "Inventarartikel aktualisieren",
@@ -477,6 +484,18 @@
     "users.create": "Benutzer erstellen",
     "qr.scan": "QR-Codes scannen",
     "nfc.read": "NFC-Tags lesen",
-    "production.create": "Produktionsaufträge erstellen"
+    "production.create": "Produktionsaufträge erstellen",
+    "production.update": "Produktionsaufträge aktualisieren",
+    "production.delete": "Produktionsaufträge löschen",
+    "events.view": "Ereignisse anzeigen",
+    "events.create": "Ereignisse erstellen",
+    "events.update": "Ereignisse aktualisieren",
+    "events.delete": "Ereignisse löschen",
+    "events.history": "Ereignisverlauf anzeigen",
+    "events.report.create": "Ereignisberichte erstellen",
+    "workOrders.create": "Arbeitsaufträge erstellen",
+    "workOrders.view": "Arbeitsaufträge anzeigen",
+    "workOrders.update": "Arbeitsaufträge aktualisieren",
+    "workOrders.delete": "Arbeitsaufträge löschen"
   }
 }

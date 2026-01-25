@@ -176,6 +176,8 @@
     "isActive": "Active",
     "activate": "Activate",
     "deactivate": "Deactivate",
+    "deactivateUser": "Deactivate User",
+    "deactivateUserConfirm": "Are you sure you want to deactivate user {{username}}? The user will no longer be able to access the system.",
     "createUser": "Create User",
     "editUser": "Edit User",
     "newPassword": "New Password",
@@ -461,8 +463,13 @@
   },
   "permissions": {
     "documents.upload": "Upload Documents",
+    "documents.create": "Create Documents",
     "documents.view": "View Documents",
     "documents.download": "Download Documents",
+    "documents.delete": "Delete Documents",
+    "inventory.create": "Create Inventory",
+    "inventory.update": "Update Inventory",
+    "inventory.delete": "Delete Inventory",
     "inventory.group.create": "Create Inventory Groups",
     "inventory.item.create": "Create Inventory Items",
     "inventory.item.update": "Update Inventory Items",
@@ -480,6 +487,18 @@
     "users.create": "Create Users",
     "qr.scan": "Scan QR Codes",
     "nfc.read": "Read NFC Tags",
-    "production.create": "Create Production Orders"
+    "production.create": "Create Production Orders",
+    "production.update": "Update Production Orders",
+    "production.delete": "Delete Production Orders",
+    "events.view": "View Events",
+    "events.create": "Create Events",
+    "events.update": "Update Events",
+    "events.delete": "Delete Events",
+    "events.history": "View Event History",
+    "events.report.create": "Create Event Reports",
+    "workOrders.create": "Create Work Orders",
+    "workOrders.view": "View Work Orders",
+    "workOrders.update": "Update Work Orders",
+    "workOrders.delete": "Delete Work Orders"
   }
 }

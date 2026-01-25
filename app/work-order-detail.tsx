@@ -24,6 +24,7 @@ import { supabase } from '../src/services/supabase';
 import { WorkOrder, User, TimeStatus, ServiceLog, Evidence, ChecklistItem } from '../src/types';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { confirmDelete } from '../src/utils/confirm-dialog';
 
 export default function WorkOrderDetailScreen() {
   const { t } = useI18n();
@@ -360,28 +361,20 @@ export default function WorkOrderDetailScreen() {
   };
 
   const handleDelete = () => {
-    Alert.alert(
-      t('common.delete') || 'Delete',
-      'Are you sure you want to delete this work order?',
-      [
-        { text: t('common.cancel') || 'Cancel', style: 'cancel' },
-        {
-          text: t('common.delete') || 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (!workOrderId) return;
-            try {
-              await repos.workOrdersRepo.deleteWorkOrder(workOrderId);
-              Alert.alert(t('common.success') || 'Success', 'Work order deleted successfully', [
-                { text: t('common.confirm') || 'OK', onPress: () => router.back() },
-              ]);
-            } catch (error) {
-              console.error('Error deleting work order:', error);
-              Alert.alert(t('common.error') || 'Error', 'Failed to delete work order');
-            }
-          },
-        },
-      ]
+    if (!workOrderId) return;
+    
+    confirmDelete(
+      t('common.delete') || 'Excluir',
+      'Tem certeza que deseja excluir esta ordem de serviço?',
+      async () => {
+        await repos.workOrdersRepo.deleteWorkOrder(workOrderId);
+        router.back();
+      },
+      undefined,
+      t('common.delete') || 'Excluir',
+      t('common.cancel') || 'Cancelar',
+      'Ordem de serviço excluída com sucesso',
+      'Falha ao excluir ordem de serviço'
     );
   };
 

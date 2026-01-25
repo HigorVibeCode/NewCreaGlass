@@ -14,12 +14,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useAuth } from '../src/store/auth-store';
+import { usePermissions } from '../src/hooks/use-permissions';
 import { Button } from '../src/components/shared/Button';
 import { Input } from '../src/components/shared/Input';
 import { Dropdown, DropdownOption } from '../src/components/shared/Dropdown';
 import { DatePicker } from '../src/components/shared/DatePicker';
 import { TimePicker } from '../src/components/shared/TimePicker';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
+import { PermissionGuard } from '../src/components/shared/PermissionGuard';
 import { repos } from '../src/services/container';
 import { WorkOrder, WorkOrderServiceType } from '../src/types';
 import { theme } from '../src/theme';
@@ -29,6 +31,7 @@ export default function WorkOrderCreateScreen() {
   const { t } = useI18n();
   const { user } = useAuth();
   const router = useRouter();
+  const { hasPermission } = usePermissions();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { workOrderId } = useLocalSearchParams<{ workOrderId: string }>();
@@ -140,6 +143,16 @@ export default function WorkOrderCreateScreen() {
   const handleSaveWorkOrder = async () => {
     if (!user) return;
 
+    // Verificar permissão antes de criar/editar
+    if (isEditMode && !hasPermission('workOrders.update')) {
+      Alert.alert(t('common.error'), 'Você não tem permissão para editar ordens de serviço');
+      return;
+    }
+    if (!isEditMode && !hasPermission('workOrders.create')) {
+      Alert.alert(t('common.error'), 'Você não tem permissão para criar ordens de serviço');
+      return;
+    }
+
     if (!validateForm()) return;
 
     setIsCreating(true);
@@ -234,6 +247,28 @@ export default function WorkOrderCreateScreen() {
       setIsCreating(false);
     }
   };
+
+  // Verificar permissão ao montar o componente
+  useEffect(() => {
+    if (!user) return;
+    
+    if (isEditMode && !hasPermission('workOrders.update')) {
+      Alert.alert(t('common.error'), 'Você não tem permissão para editar ordens de serviço', [
+        { text: t('common.confirm'), onPress: () => router.back() },
+      ]);
+      return;
+    }
+    if (!isEditMode && !hasPermission('workOrders.create')) {
+      Alert.alert(t('common.error'), 'Você não tem permissão para criar ordens de serviço', [
+        { text: t('common.confirm'), onPress: () => router.back() },
+      ]);
+      return;
+    }
+  }, [user, isEditMode, hasPermission]);
+
+  if (!user || (isEditMode && !hasPermission('workOrders.update')) || (!isEditMode && !hasPermission('workOrders.create'))) {
+    return null; // Não renderizar se não tiver permissão
+  }
 
   return (
     <ScreenWrapper>

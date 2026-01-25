@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, Alert, Switch, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useAuth } from '../src/store/auth-store';
@@ -12,6 +12,7 @@ import { repos } from '../src/services/container';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { User, UserType } from '../src/types';
+import { confirmDialog } from '../src/utils/confirm-dialog';
 
 export default function AccessControlsScreen() {
   const { t } = useI18n();
@@ -102,13 +103,34 @@ export default function AccessControlsScreen() {
 
   const handleToggleUserActive = (userToToggle: User) => {
     if (userToToggle.userType === 'Master') {
-      Alert.alert(t('common.error'), 'Cannot deactivate Master user');
+      Alert.alert(t('common.error'), t('accessControls.onlyMasterCanManage'));
       return;
     }
-    toggleUserActiveMutation.mutate({
-      userId: userToToggle.id,
-      isActive: !userToToggle.isActive,
-    });
+    
+    const isActivating = !userToToggle.isActive;
+    
+    if (isActivating) {
+      // Ativar usuário - sem confirmação necessária
+      toggleUserActiveMutation.mutate({
+        userId: userToToggle.id,
+        isActive: true,
+      });
+    } else {
+      // Desativar usuário - pedir confirmação
+      confirmDialog(
+        t('accessControls.deactivateUser'),
+        t('accessControls.deactivateUserConfirm', { username: userToToggle.username }),
+        () => {
+          toggleUserActiveMutation.mutate({
+            userId: userToToggle.id,
+            isActive: false,
+          });
+        },
+        undefined,
+        t('accessControls.deactivate'),
+        t('common.cancel')
+      );
+    }
   };
 
   const handleChangePassword = () => {
@@ -170,20 +192,24 @@ export default function AccessControlsScreen() {
               {allPermissions.map((permission) => {
                 const isAssigned = userPermissions.includes(permission.id);
                 return (
-                  <TouchableOpacity
+                  <View
                     key={permission.id}
                     style={[
                       styles.permissionItem,
                       { borderBottomColor: colors.borderLight },
                       isAssigned && { backgroundColor: colors.primary + '10' },
                     ]}
-                    onPress={() => togglePermission(permission.id)}
                   >
                     <Text style={[styles.permissionText, { color: colors.text }]}>
                       {t(permission.descriptionI18nKey)}
                     </Text>
-                    {isAssigned && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
-                  </TouchableOpacity>
+                    <Switch
+                      value={isAssigned}
+                      onValueChange={() => togglePermission(permission.id)}
+                      trackColor={{ false: colors.border, true: colors.primary }}
+                      thumbColor={Platform.OS === 'android' ? colors.background : undefined}
+                    />
+                  </View>
                 );
               })}
             </ScrollView>

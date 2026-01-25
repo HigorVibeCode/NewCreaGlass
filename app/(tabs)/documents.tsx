@@ -55,10 +55,18 @@ export default function DocumentsScreen() {
   ];
 
   const handleCategoryPress = (categoryId: string) => {
-    router.push({
-      pathname: '/documents-category',
-      params: { categoryId },
-    } as any);
+    // Professional Training vai direto para a lista de treinamentos
+    if (categoryId === 'professionalTraining') {
+      router.push({
+        pathname: '/trainings-list',
+        params: { category: 'professional' },
+      } as any);
+    } else {
+      router.push({
+        pathname: '/documents-category',
+        params: { categoryId },
+      } as any);
+    }
   };
 
   return (

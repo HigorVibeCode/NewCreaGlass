@@ -248,6 +248,26 @@ export class SupabaseProductionRepository implements ProductionRepository {
           new_status: updates.status,
           changed_by: changedBy,
         });
+
+      // Create notification when status changes to 'authorized'
+      if (updates.status === 'authorized' && previousStatus !== 'authorized') {
+        try {
+          const { repos } = await import('../../services/container');
+          await repos.notificationsRepo.createNotification({
+            type: 'production.authorized',
+            payloadJson: {
+              clientName: data.client_name || '',
+              orderType: data.order_type || '',
+              orderNumber: data.order_number || '',
+              productionId: productionId,
+            },
+            createdBySystem: true,
+          });
+        } catch (notifError) {
+          console.error('Error creating authorized notification:', notifError);
+          // Don't throw - notification is secondary, status update was successful
+        }
+      }
     }
 
     return await this.loadProductionWithRelations(data);

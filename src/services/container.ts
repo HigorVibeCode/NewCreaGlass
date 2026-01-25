@@ -8,6 +8,7 @@ import {
   NotificationsRepository,
   PermissionsRepository,
   ProductionRepository,
+  TrainingRepository,
   UsersRepository,
   WorkOrdersRepository,
 } from './repositories/interfaces';
@@ -24,6 +25,7 @@ import { SupabaseEventsRepository } from '../repositories/supabase/SupabaseEvent
 import { SupabaseProductionRepository } from '../repositories/supabase/SupabaseProductionRepository';
 import { SupabaseWorkOrdersRepository } from '../repositories/supabase/SupabaseWorkOrdersRepository';
 import { SupabaseMaintenanceRepository } from '../repositories/supabase/SupabaseMaintenanceRepository';
+import { SupabaseTrainingRepository } from '../repositories/supabase/SupabaseTrainingRepository';
 
 // Import Mock repositories (for fallback or development)
 import { MockAuthRepository } from '../repositories/mock/MockAuthRepository';
@@ -55,4 +57,5 @@ export const repos = {
   productionRepo: (USE_MOCK_REPOSITORIES ? new MockProductionRepository() : new SupabaseProductionRepository()) as ProductionRepository,
   maintenanceRepo: (USE_MOCK_REPOSITORIES ? new MockMaintenanceRepository() : new SupabaseMaintenanceRepository()) as MaintenanceRepository,
   workOrdersRepo: new SupabaseWorkOrdersRepository() as WorkOrdersRepository, // Always use Supabase for work orders
+  trainingRepo: new SupabaseTrainingRepository() as TrainingRepository, // Always use Supabase for trainings
 };

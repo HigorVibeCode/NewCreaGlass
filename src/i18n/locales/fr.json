@@ -173,6 +173,8 @@
     "isActive": "Actif",
     "activate": "Activer",
     "deactivate": "Désactiver",
+    "deactivateUser": "Désactiver l'utilisateur",
+    "deactivateUserConfirm": "Êtes-vous sûr de vouloir désactiver l'utilisateur {{username}}? L'utilisateur ne pourra plus accéder au système.",
     "createUser": "Créer un utilisateur",
     "editUser": "Modifier l'utilisateur",
     "newPassword": "Nouveau mot de passe",
@@ -458,8 +460,13 @@
   },
   "permissions": {
     "documents.upload": "Télécharger des documents",
+    "documents.create": "Créer des documents",
     "documents.view": "Voir les documents",
     "documents.download": "Télécharger des documents",
+    "documents.delete": "Supprimer des documents",
+    "inventory.create": "Créer un inventaire",
+    "inventory.update": "Mettre à jour l'inventaire",
+    "inventory.delete": "Supprimer l'inventaire",
     "inventory.group.create": "Créer des groupes d'inventaire",
     "inventory.item.create": "Créer des articles d'inventaire",
     "inventory.item.update": "Mettre à jour les articles d'inventaire",
@@ -477,6 +484,18 @@
     "users.create": "Créer des utilisateurs",
     "qr.scan": "Scanner les codes QR",
     "nfc.read": "Lire les tags NFC",
-    "production.create": "Créer des Commandes de Production"
+    "production.create": "Créer des Commandes de Production",
+    "production.update": "Mettre à jour les Commandes de Production",
+    "production.delete": "Supprimer les Commandes de Production",
+    "events.view": "Voir les événements",
+    "events.create": "Créer des événements",
+    "events.update": "Mettre à jour les événements",
+    "events.delete": "Supprimer les événements",
+    "events.history": "Voir l'historique des événements",
+    "events.report.create": "Créer des rapports d'événements",
+    "workOrders.create": "Créer des Ordres de Travail",
+    "workOrders.view": "Voir les Ordres de Travail",
+    "workOrders.update": "Mettre à jour les Ordres de Travail",
+    "workOrders.delete": "Supprimer les Ordres de Travail"
   }
 }
