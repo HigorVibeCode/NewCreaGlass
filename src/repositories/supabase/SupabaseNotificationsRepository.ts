@@ -145,6 +145,15 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
   ): Promise<Notification> {
     // RLS policy requires: created_by_system = true
     // Make sure we're creating system notifications
+    
+    // Log payload for debugging
+    if (__DEV__) {
+      console.log('[createNotification] Creating notification:', {
+        type: notification.type,
+        payloadJson: notification.payloadJson,
+      });
+    }
+    
     const { data, error } = await supabase
       .from('notifications')
       .insert({
@@ -165,16 +174,30 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
     }
 
     const createdNotification = this.mapToNotification(data);
+    
+    // Log created notification for debugging
+    if (__DEV__) {
+      console.log('[createNotification] Notification created:', {
+        id: createdNotification.id,
+        type: createdNotification.type,
+        payloadJson: createdNotification.payloadJson,
+      });
+    }
 
     // Trigger vibration and sound alert with message (não aguardamos o som terminar)
     let alertMessage: string | undefined;
     if (notification.type === 'inventory.lowStock' && notification.payloadJson) {
       alertMessage = `Estoque baixo: ${notification.payloadJson.itemName || 'Item'} (${notification.payloadJson.stock || 0} unidades)`;
     } else if (notification.type === 'production.authorized' && notification.payloadJson) {
-      const clientName = notification.payloadJson.clientName || '';
+      const clientName = notification.payloadJson.clientName || 'Cliente';
       const orderType = notification.payloadJson.orderType || '';
       const orderNumber = notification.payloadJson.orderNumber || '';
       alertMessage = `${clientName} | ${orderType} | ${orderNumber} - Autorizado`;
+    } else if (notification.type === 'production.tempered' && notification.payloadJson) {
+      const clientName = notification.payloadJson.clientName || 'Cliente';
+      const orderType = notification.payloadJson.orderType || '';
+      const orderNumber = notification.payloadJson.orderNumber || '';
+      alertMessage = `${clientName} | ${orderType} | ${orderNumber} - Entrou na fase de temperamento`;
     }
     triggerNotificationAlert(notification.type, alertMessage).catch(err => {
       console.warn('Failed to trigger notification alert:', err);
@@ -312,7 +335,10 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
       }
 
       if (targetUserIds.length === 0) {
-        console.log('[dispatchPushNotifications] No target users found');
+        // No target users - this is expected for notifications with specific target_user_id that doesn't exist
+        if (__DEV__) {
+          console.log('[dispatchPushNotifications] No target users found');
+        }
         return;
       }
 
@@ -343,7 +369,10 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
           // Check if user should receive push
           const shouldSend = await pushNotificationService.shouldSendPush(userId, notification.type);
           if (!shouldSend) {
-            console.log(`[dispatchPushNotifications] User ${userId} has push disabled for type ${notification.type}`);
+            // User has push notifications disabled for this type - this is expected behavior
+            if (__DEV__) {
+              console.log(`[dispatchPushNotifications] User ${userId} has push disabled for type ${notification.type}`);
+            }
             continue;
           }
 
@@ -351,7 +380,11 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
           const deviceTokens = await repos.deviceTokensRepo.getActiveDeviceTokensByUserId(userId);
           
           if (deviceTokens.length === 0) {
-            console.log(`[dispatchPushNotifications] No active device tokens for user ${userId}`);
+            // This is expected if user hasn't logged in on any device yet or hasn't granted notification permissions
+            // Only log in debug mode to reduce console noise
+            if (__DEV__) {
+              console.log(`[dispatchPushNotifications] No active device tokens for user ${userId} - user may not have logged in on any device or granted notification permissions`);
+            }
             continue;
           }
 
@@ -391,10 +424,38 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
   }
 
   private mapToNotification(data: any): Notification {
+    // Parse payload_json if it's a string, otherwise use as-is
+    let payloadJson: Record<string, any> = {};
+    if (data.payload_json) {
+      if (typeof data.payload_json === 'string') {
+        try {
+          payloadJson = JSON.parse(data.payload_json);
+        } catch (error) {
+          console.warn('[mapToNotification] Error parsing payload_json:', error);
+          payloadJson = {};
+        }
+      } else if (typeof data.payload_json === 'object') {
+        payloadJson = data.payload_json;
+      }
+    }
+
+    // Debug log in development for specific notification types
+    if (__DEV__ && (data.type === 'production.tempered' || data.type === 'workOrder.created' || data.type === 'event.created')) {
+      console.log('[mapToNotification] Parsed notification:', {
+        type: data.type,
+        payloadJson,
+        payload_json_type: typeof data.payload_json,
+        scheduledDate: payloadJson?.scheduledDate,
+        scheduledTime: payloadJson?.scheduledTime,
+        startDate: payloadJson?.startDate,
+        startTime: payloadJson?.startTime,
+      });
+    }
+
     return {
       id: data.id,
       type: data.type,
-      payloadJson: data.payload_json || {},
+      payloadJson,
       createdAt: data.created_at,
       createdBySystem: data.created_by_system ?? false,
       targetUserId: data.target_user_id || undefined,

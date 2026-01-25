@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../store/auth-store';
 import { DevicePlatform } from '../types';
 import Constants from 'expo-constants';
+import { webPushService } from '../services/web-push';
 
 // Lazy import expo-notifications to handle Expo Go limitations gracefully
 let Notifications: typeof import('expo-notifications') | null = null;
@@ -29,10 +30,18 @@ const loadNotifications = async () => {
     return null;
   }
 
+  // Web push notifications use Web Push API instead of expo-notifications
+  // We handle web separately using WebPushService
+  if (Platform.OS === 'web') {
+    console.log('[usePushNotifications] Web platform detected - using Web Push API');
+    // Web is handled separately in the hook
+    return null;
+  }
+
   if (!Notifications) {
     try {
       Notifications = await import('expo-notifications');
-      // Configure notification handler
+      // Configure notification handler for iOS and Android
       Notifications.setNotificationHandler({
         handleNotification: async () => ({
           shouldShowAlert: true,
@@ -40,6 +49,26 @@ const loadNotifications = async () => {
           shouldSetBadge: true,
         }),
       });
+
+      // Configure Android notification channel (required for Android 8.0+)
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'Notificações Crea Glass',
+          description: 'Notificações gerais do aplicativo Crea Glass',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#E6F4FE',
+          sound: 'default',
+          enableVibrate: true,
+          showBadge: true,
+        });
+        console.log('[usePushNotifications] Android notification channel configured');
+      }
+
+      // iOS doesn't require channel setup, but we log for confirmation
+      if (Platform.OS === 'ios') {
+        console.log('[usePushNotifications] iOS push notifications configured');
+      }
     } catch (error) {
       console.warn('[usePushNotifications] expo-notifications not available:', error);
     }
@@ -61,6 +90,12 @@ export const usePushNotifications = () => {
     // Skip if Expo Go
     if (checkIfExpoGo()) {
       console.log('[usePushNotifications] Skipping push notification setup - Expo Go detected');
+      return;
+    }
+
+    // Handle web push notifications separately
+    if (Platform.OS === 'web') {
+      initializeWebPushNotifications();
       return;
     }
 
@@ -174,6 +209,89 @@ export const usePushNotifications = () => {
     }
   };
 
+  /**
+   * Inicializar Web Push Notifications para web
+   */
+  const initializeWebPushNotifications = async () => {
+    if (Platform.OS !== 'web') return;
+
+    try {
+      // Verificar suporte
+      if (!webPushService.isSupported()) {
+        console.warn('[usePushNotifications] Web Push não é suportado neste navegador');
+        return;
+      }
+
+      // Inicializar serviço
+      const initialized = await webPushService.initialize();
+      if (!initialized) {
+        console.warn('[usePushNotifications] Falha ao inicializar Web Push Service');
+        return;
+      }
+
+      // Verificar permissão
+      let permission = await webPushService.getPermissionStatus();
+      setNotificationPermission(permission === 'granted');
+
+      if (permission === 'default') {
+        // Solicitar permissão automaticamente
+        permission = await webPushService.requestPermission();
+        setNotificationPermission(permission === 'granted');
+      }
+
+      if (permission !== 'granted') {
+        console.warn('[usePushNotifications] Permissão de notificação não concedida');
+        return;
+      }
+
+      // Criar subscription
+      const subscription = await webPushService.subscribe();
+      if (subscription) {
+        const token = webPushService.subscriptionToToken(subscription);
+        setExpoPushToken(token);
+        registerDeviceToken(token);
+        console.log('[usePushNotifications] Web Push subscription criada');
+      }
+
+      // Listener para notificações recebidas (via Service Worker message)
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.addEventListener('message', (event) => {
+          console.log('[usePushNotifications] Message from Service Worker:', event.data);
+          if (event.data && event.data.type === 'NOTIFICATION_CLICK') {
+            handleWebNotificationClick(event.data);
+          }
+        });
+      }
+    } catch (error) {
+      console.error('[usePushNotifications] Erro ao inicializar Web Push:', error);
+    }
+  };
+
+  /**
+   * Lidar com clique em notificação web
+   */
+  const handleWebNotificationClick = (data: any) => {
+    if (data?.deepLink) {
+      const deepLink = data.deepLink.startsWith('/') ? data.deepLink : `/${data.deepLink}`;
+      setTimeout(() => {
+        try {
+          router.push(deepLink as any);
+        } catch (error) {
+          console.error('[usePushNotifications] Erro ao navegar para deep link:', error);
+        }
+      }, 100);
+    } else if (data?.notificationId && user) {
+      import('../services/container').then(({ repos }) => {
+        repos.notificationsRepo.markAsRead(data.notificationId, user.id).catch(err => {
+          console.error('[usePushNotifications] Erro ao marcar notificação como lida:', err);
+        });
+      });
+      setTimeout(() => {
+        router.push('/notifications' as any);
+      }, 100);
+    }
+  };
+
   return {
     expoPushToken,
     notificationPermission,
@@ -191,13 +309,55 @@ async function registerForPushNotificationsAsync(
     let finalStatus = existingStatus;
 
     if (existingStatus !== 'granted') {
-      const { status } = await NotificationsModule.requestPermissionsAsync();
+      // Request permissions with platform-specific options
+      const permissionOptions: any = {
+        android: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+        },
+      };
+
+      // iOS-specific permission options
+      if (Platform.OS === 'ios') {
+        permissionOptions.ios = {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+          allowAnnouncements: false,
+        };
+      }
+
+      const { status } = await NotificationsModule.requestPermissionsAsync(permissionOptions);
       finalStatus = status;
     }
 
     if (finalStatus !== 'granted') {
       console.warn('[registerForPushNotificationsAsync] Permission not granted');
       return null;
+    }
+
+    // Ensure Android notification channel is set up
+    if (Platform.OS === 'android') {
+      try {
+        const channelId = 'default';
+        const existingChannel = await NotificationsModule.getNotificationChannelAsync(channelId);
+        if (!existingChannel) {
+          await NotificationsModule.setNotificationChannelAsync(channelId, {
+            name: 'Notificações Crea Glass',
+            description: 'Notificações gerais do aplicativo Crea Glass',
+            importance: NotificationsModule.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#E6F4FE',
+            sound: 'default',
+            enableVibrate: true,
+            showBadge: true,
+          });
+          console.log('[registerForPushNotificationsAsync] Android notification channel created');
+        }
+      } catch (channelError) {
+        console.warn('[registerForPushNotificationsAsync] Error setting up notification channel:', channelError);
+      }
     }
 
     // Get Expo push token

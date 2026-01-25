@@ -50,7 +50,10 @@
     "unread": "Unread",
     "lowStockMessage": "Low stock",
     "clearAll": "Clear All",
-    "clearAllConfirm": "Are you sure you want to clear all notifications?"
+    "clearAllConfirm": "Are you sure you want to clear all notifications?",
+    "workOrderCreated": "New Work Order created",
+    "workOrderUpdated": "Work Order Updated",
+    "eventCreated": "New Event created"
   },
   "bloodPriority": {
     "title": "Blood Priority",

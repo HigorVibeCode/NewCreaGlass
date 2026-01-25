@@ -93,7 +93,43 @@ export class SupabaseEventsRepository implements EventsRepository {
     }
 
     // Load the complete event with relations
-    return this.loadEventWithRelations(eventData);
+    const createdEvent = await this.loadEventWithRelations(eventData);
+
+    // Create notification for new event
+    try {
+      const { repos } = await import('../../services/container');
+      const payload = {
+        eventId: createdEvent.id,
+        title: createdEvent.title,
+        type: createdEvent.type,
+        startDate: createdEvent.startDate,
+        startTime: createdEvent.startTime,
+        location: createdEvent.location,
+      };
+      
+      if (__DEV__) {
+        console.log('[SupabaseEventsRepository] Creating event.created notification with payload:', {
+          startDate: payload.startDate,
+          startTime: payload.startTime,
+          startDateType: typeof payload.startDate,
+          startTimeType: typeof payload.startTime,
+          fullPayload: payload,
+        });
+      }
+      
+      await repos.notificationsRepo.createNotification({
+        type: 'event.created',
+        payloadJson: payload,
+        createdBySystem: true,
+        targetUserId: null, // Global notification
+      });
+      console.log('[SupabaseEventsRepository] Notification created for new event');
+    } catch (error) {
+      console.error('[SupabaseEventsRepository] Error creating notification:', error);
+      // Don't fail event creation if notification fails
+    }
+
+    return createdEvent;
   }
 
   async updateEvent(eventId: string, updates: Partial<Event>): Promise<Event> {

@@ -60,3 +60,18 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     },
   },
 });
+
+// Listen for auth state changes and handle refresh token errors
+supabase.auth.onAuthStateChange(async (event, session) => {
+  // Handle token refresh errors
+  if (event === 'TOKEN_REFRESHED' && !session) {
+    // Token refresh failed - session is invalid
+    console.warn('[Supabase] Token refresh failed, session cleared');
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      // Ignore errors during signout
+      console.warn('[Supabase] Error during signout after token refresh failure:', error);
+    }
+  }
+});

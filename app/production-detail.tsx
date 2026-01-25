@@ -183,7 +183,7 @@ export default function ProductionDetailScreen() {
 
   const statusOptions: DropdownOption[] = [
     { label: t('production.status.not_authorized'), value: 'not_authorized' },
-    { label: t('production.status.authorized'), value: 'authorized' },
+    { label: `${t('production.status.authorized')} 🔔`, value: 'authorized' },
     { label: t('production.status.cutting'), value: 'cutting' },
     { label: t('production.status.polishing'), value: 'polishing' },
     { label: t('production.status.on_paint_cabin'), value: 'on_paint_cabin' },
@@ -192,7 +192,7 @@ export default function ProductionDetailScreen() {
     { label: t('production.status.waiting_for_tempering'), value: 'waiting_for_tempering' },
     { label: t('production.status.waiting_for_schmelz'), value: 'waiting_for_schmelz' },
     { label: t('production.status.tempering_in_progress'), value: 'tempering_in_progress' },
-    { label: t('production.status.tempered'), value: 'tempered' },
+    { label: `${t('production.status.tempered')} 🔔`, value: 'tempered' },
     { label: t('production.status.waiting_for_packing'), value: 'waiting_for_packing' },
     { label: t('production.status.packed'), value: 'packed' },
     { label: t('production.status.ready_for_dispatch'), value: 'ready_for_dispatch' },

@@ -10,6 +10,7 @@ import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { useNotificationsQuery } from '../src/services/queries';
 import { Notification } from '../src/types';
 import { triggerNotificationAlert } from '../src/utils/notification-alert';
+import { formatNotificationText } from '../src/utils/notification-formatter';
 
 export default function NotificationsScreen() {
   const { t } = useI18n();
@@ -195,11 +196,7 @@ export default function NotificationsScreen() {
                 onPress={() => handleMarkAsRead(notification.id)}
               >
                 <Text style={[styles.notificationType, { color: colors.text }]}>
-                  {notification.type === 'inventory.lowStock' 
-                    ? `${notification.payloadJson?.itemName || ''} - ${t('notifications.lowStockMessage')}`
-                    : notification.type === 'production.authorized'
-                    ? `${notification.payloadJson?.clientName || ''} | ${notification.payloadJson?.orderType || ''} | ${notification.payloadJson?.orderNumber || ''} - ${t('production.status.authorized')}`
-                    : notification.type}
+                  {formatNotificationText(notification, t)}
                 </Text>
                 <Text style={[styles.notificationDate, { color: colors.textSecondary }]}>
                   {new Date(notification.createdAt).toLocaleString()}

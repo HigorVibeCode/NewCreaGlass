@@ -108,7 +108,42 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
       }
     }
 
-    return this.loadWorkOrderWithRelations(woData);
+    const createdWorkOrder = await this.loadWorkOrderWithRelations(woData);
+
+    // Create notification for new work order
+    try {
+      const { repos } = await import('../../services/container');
+      const payload = {
+        workOrderId: createdWorkOrder.id,
+        clientName: createdWorkOrder.clientName,
+        serviceType: createdWorkOrder.serviceType,
+        scheduledDate: createdWorkOrder.scheduledDate,
+        scheduledTime: createdWorkOrder.scheduledTime,
+      };
+      
+      if (__DEV__) {
+        console.log('[SupabaseWorkOrdersRepository] Creating workOrder.created notification with payload:', {
+          scheduledDate: payload.scheduledDate,
+          scheduledTime: payload.scheduledTime,
+          scheduledDateType: typeof payload.scheduledDate,
+          scheduledTimeType: typeof payload.scheduledTime,
+          fullPayload: payload,
+        });
+      }
+      
+      await repos.notificationsRepo.createNotification({
+        type: 'workOrder.created',
+        payloadJson: payload,
+        createdBySystem: true,
+        targetUserId: null, // Global notification
+      });
+      console.log('[SupabaseWorkOrdersRepository] Notification created for new work order');
+    } catch (error) {
+      console.error('[SupabaseWorkOrdersRepository] Error creating notification:', error);
+      // Don't fail work order creation if notification fails
+    }
+
+    return createdWorkOrder;
   }
 
   async updateWorkOrder(workOrderId: string, updates: Partial<WorkOrder>): Promise<WorkOrder> {

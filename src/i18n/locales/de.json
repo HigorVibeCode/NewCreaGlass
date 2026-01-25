@@ -47,7 +47,10 @@
     "unread": "Ungelesen",
     "lowStockMessage": "Niedriger Bestand",
     "clearAll": "Alle Löschen",
-    "clearAllConfirm": "Sind Sie sicher, dass Sie alle Benachrichtigungen löschen möchten?"
+    "clearAllConfirm": "Sind Sie sicher, dass Sie alle Benachrichtigungen löschen möchten?",
+    "workOrderCreated": "Neue Serviceauftrag erstellt",
+    "workOrderUpdated": "Serviceauftrag Aktualisiert",
+    "eventCreated": "Neues Ereignis erstellt"
   },
   "bloodPriority": {
     "title": "Blood Priority",

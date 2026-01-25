@@ -238,6 +238,9 @@ export class SupabaseProductionRepository implements ProductionRepository {
       }
     }
 
+    // Load complete production data (will be used for return and notifications)
+    const updatedProduction = await this.loadProductionWithRelations(data);
+
     // Create status history entry if status changed
     if (updates.status && updates.status !== previousStatus && changedBy) {
       await supabase
@@ -256,9 +259,9 @@ export class SupabaseProductionRepository implements ProductionRepository {
           await repos.notificationsRepo.createNotification({
             type: 'production.authorized',
             payloadJson: {
-              clientName: data.client_name || '',
-              orderType: data.order_type || '',
-              orderNumber: data.order_number || '',
+              clientName: updatedProduction.clientName || '',
+              orderType: updatedProduction.orderType || '',
+              orderNumber: updatedProduction.orderNumber || '',
               productionId: productionId,
             },
             createdBySystem: true,
@@ -268,9 +271,35 @@ export class SupabaseProductionRepository implements ProductionRepository {
           // Don't throw - notification is secondary, status update was successful
         }
       }
+
+      // Create notification when status changes to 'tempered'
+      if (updates.status === 'tempered' && previousStatus !== 'tempered') {
+        try {
+          const { repos } = await import('../../services/container');
+          
+          const notificationPayload = {
+            clientName: updatedProduction.clientName || '',
+            orderType: updatedProduction.orderType || '',
+            orderNumber: updatedProduction.orderNumber || '',
+            productionId: productionId,
+          };
+          
+          console.log('[SupabaseProductionRepository] Creating tempered notification with payload:', notificationPayload);
+          
+          await repos.notificationsRepo.createNotification({
+            type: 'production.tempered',
+            payloadJson: notificationPayload,
+            createdBySystem: true,
+          });
+          console.log('[SupabaseProductionRepository] Notification created for tempered status');
+        } catch (notifError) {
+          console.error('Error creating tempered notification:', notifError);
+          // Don't throw - notification is secondary, status update was successful
+        }
+      }
     }
 
-    return await this.loadProductionWithRelations(data);
+    return updatedProduction;
   }
 
   async deleteProduction(productionId: string): Promise<void> {

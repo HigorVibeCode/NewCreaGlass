@@ -41,6 +41,17 @@
           }
         }
       ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/android-icon-foreground.png",
+          "color": "#E6F4FE",
+          "sounds": [],
+          "mode": "production",
+          "iosDisplayInForeground": true,
+          "androidMode": "default"
+        }
+      ],
       "@react-native-community/datetimepicker",
       [
         "expo-location",

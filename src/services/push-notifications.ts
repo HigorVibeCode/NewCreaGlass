@@ -1,4 +1,5 @@
 import { DeviceToken, Notification, NotificationPreferences, PushDeliveryStatus } from '../types';
+import { webPushService, WebPushSubscription } from './web-push';
 
 /**
  * Push Notification Payload structure
@@ -24,17 +25,23 @@ export class PushNotificationService {
   private expoPushUrl = 'https://exp.host/--/api/v2/push/send';
 
   /**
-   * Send push notification to a single device token (Expo Push Token)
-   * Expo Push Tokens are platform-agnostic and Expo handles FCM/APNs internally
+   * Send push notification to a single device token
+   * Supports Expo Push (iOS/Android) and Web Push (web)
    */
   async sendToToken(
     token: string,
     platform: DeviceToken['platform'],
     payload: PushNotificationPayload
   ): Promise<{ success: boolean; error?: string }> {
+    // Web Push requires different handling
+    if (platform === 'web') {
+      return this.sendToWebToken(token, payload);
+    }
+
+    // iOS and Android use Expo Push Service
     try {
       // Expo Push Notification payload
-      const expoPayload = {
+      const expoPayload: any = {
         to: token,
         sound: 'default',
         title: payload.title,
@@ -43,6 +50,12 @@ export class PushNotificationService {
         priority: 'high',
         badge: 1,
       };
+
+      // Android-specific: Set notification channel (required for Android 8.0+)
+      // iOS doesn't require channelId - Expo Push Service handles APNs automatically
+      if (platform === 'android') {
+        expoPayload.channelId = 'default';
+      }
 
       const response = await fetch(this.expoPushUrl, {
         method: 'POST',
@@ -82,6 +95,56 @@ export class PushNotificationService {
   }
 
   /**
+   * Send push notification to web token using Web Push API
+   * Requires a backend endpoint that has the VAPID private key
+   */
+  private async sendToWebToken(
+    token: string,
+    payload: PushNotificationPayload
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Parse web push subscription from token
+      const subscriptionData = webPushService.tokenToSubscriptionData(token);
+      if (!subscriptionData) {
+        return { success: false, error: 'Invalid web push subscription token' };
+      }
+
+      // Send to backend endpoint that will use Web Push API
+      // The backend needs to have the VAPID private key
+      const backendUrl = process.env.EXPO_PUBLIC_WEB_PUSH_ENDPOINT || '/api/web-push/send';
+      
+      const response = await fetch(backendUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          subscription: subscriptionData,
+          payload: {
+            title: payload.title,
+            body: payload.body,
+            icon: '/assets/images/icon.png',
+            badge: '/assets/images/icon.png',
+            data: payload.data,
+            tag: 'crea-glass-notification',
+            requireInteraction: false,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return { success: false, error: `Backend error: ${errorText}` };
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('[PushNotificationService] Error sending web push:', error);
+      return { success: false, error: error.message || 'Failed to send web push notification' };
+    }
+  }
+
+  /**
    * Send push notification to multiple device tokens
    * Expo supports batch sending for better performance
    */
@@ -94,16 +157,43 @@ export class PushNotificationService {
     }
 
     try {
+      // Separate web tokens from mobile tokens
+      const webTokens = tokens.filter(t => t.platform === 'web');
+      const mobileTokens = tokens.filter(t => t.platform !== 'web');
+
+      // Send web pushes separately (they require different API)
+      const webResults = await Promise.all(
+        webTokens.map(async ({ token, deviceTokenId }) => {
+          const result = await this.sendToWebToken(token, payload);
+          return { token, deviceTokenId, ...result };
+        })
+      );
+
+      // Send mobile pushes via Expo (batch)
+      if (mobileTokens.length === 0) {
+        return webResults;
+      }
+
       // Expo supports batch sending - more efficient
-      const expoMessages = tokens.map(({ token }) => ({
-        to: token,
-        sound: 'default',
-        title: payload.title,
-        body: payload.body,
-        data: payload.data,
-        priority: 'high',
-        badge: 1,
-      }));
+      const expoMessages = mobileTokens.map(({ token, platform }) => {
+        const message: any = {
+          to: token,
+          sound: 'default',
+          title: payload.title,
+          body: payload.body,
+          data: payload.data,
+          priority: 'high',
+          badge: 1,
+        };
+
+        // Android-specific: Set notification channel (required for Android 8.0+)
+        // iOS doesn't require channelId - Expo Push Service handles APNs automatically
+        if (platform === 'android') {
+          message.channelId = 'default';
+        }
+
+        return message;
+      });
 
       const response = await fetch(this.expoPushUrl, {
         method: 'POST',
@@ -117,8 +207,8 @@ export class PushNotificationService {
 
       const result = await response.json();
 
-      // Map results back to tokens
-      return tokens.map(({ token, deviceTokenId, platform }, index) => {
+      // Map results back to mobile tokens
+      const mobileResults = mobileTokens.map(({ token, deviceTokenId, platform }, index) => {
         const pushResult = result.data?.[index];
         
         if (pushResult?.status === 'ok') {
@@ -136,6 +226,9 @@ export class PushNotificationService {
           return { token, deviceTokenId, success: false, error };
         }
       });
+
+      // Combine web and mobile results
+      return [...webResults, ...mobileResults];
     } catch (error: any) {
       console.error('[PushNotificationService] Error sending batch push notifications:', error);
       // Fallback: send individually
@@ -181,6 +274,10 @@ export class PushNotificationService {
       return `/production-detail?productionId=${payloadJson.productionId}`;
     }
     
+    if (type === 'production.tempered' && payloadJson.productionId) {
+      return `/production-detail?productionId=${payloadJson.productionId}`;
+    }
+    
     if (type === 'workOrder.created' && payloadJson.workOrderId) {
       return `/work-order-detail?workOrderId=${payloadJson.workOrderId}`;
     }
@@ -219,16 +316,80 @@ export class PushNotificationService {
         };
       
       case 'production.authorized':
-        return {
-          title: 'Ordem Autorizada',
-          body: `${payloadJson.clientName || 'Cliente'} | ${payloadJson.orderType || ''} | ${payloadJson.orderNumber || ''} - Autorizado`,
-        };
+        {
+          const clientName = payloadJson.clientName || 'Cliente';
+          const orderType = payloadJson.orderType || '';
+          const orderNumber = payloadJson.orderNumber || '';
+          return {
+            title: 'Ordem Autorizada',
+            body: `${clientName} | ${orderType} | ${orderNumber} - Autorizado`,
+          };
+        }
       
-      case 'workOrder.created':
+      case 'production.tempered':
+        {
+          const clientName = payloadJson.clientName || 'Cliente';
+          const orderType = payloadJson.orderType || '';
+          const orderNumber = payloadJson.orderNumber || '';
+          return {
+            title: 'Pedido Temperado',
+            body: `${clientName} | ${orderType} | ${orderNumber} - Entrou na fase de temperamento`,
+          };
+        }
+      
+      case 'workOrder.created': {
+        const scheduledDate = payloadJson.scheduledDate || '';
+        const scheduledTime = payloadJson.scheduledTime || '';
+        
+        let dateText = '';
+        if (scheduledDate) {
+          try {
+            // Handle different date formats
+            let date: Date;
+            if (typeof scheduledDate === 'string') {
+              if (scheduledDate.includes('T')) {
+                date = new Date(scheduledDate);
+              } else {
+                date = new Date(scheduledDate + 'T00:00:00');
+              }
+            } else if (scheduledDate instanceof Date) {
+              date = scheduledDate;
+            } else {
+              date = new Date(scheduledDate);
+            }
+            
+            if (!isNaN(date.getTime())) {
+              dateText = date.toLocaleDateString('pt-BR', { 
+                day: '2-digit', 
+                month: '2-digit', 
+                year: 'numeric' 
+              });
+              
+              // Add time if available (format: HH:MM or HH:MM:SS)
+              if (scheduledTime) {
+                const timeStr = String(scheduledTime).split(':').slice(0, 2).join(':');
+                dateText += ` às ${timeStr}`;
+              }
+            } else {
+              dateText = String(scheduledDate);
+              if (scheduledTime) {
+                const timeStr = String(scheduledTime).split(':').slice(0, 2).join(':');
+                dateText += ` às ${timeStr}`;
+              }
+            }
+          } catch (e) {
+            dateText = String(scheduledDate);
+            if (scheduledTime) {
+              dateText += ` às ${scheduledTime}`;
+            }
+          }
+        }
+        
         return {
           title: 'Nova Ordem de Serviço',
-          body: `Ordem de serviço criada para ${payloadJson.clientName || 'cliente'}`,
+          body: `Nova ordem de serviço criada${dateText ? ` - ${dateText}` : ''}`,
         };
+      }
       
       case 'workOrder.updated':
         return {
@@ -248,11 +409,59 @@ export class PushNotificationService {
           body: payloadJson.title || 'Nova mensagem urgente',
         };
       
-      case 'event.created':
+      case 'event.created': {
+        const startDate = payloadJson.startDate || '';
+        const startTime = payloadJson.startTime || '';
+        
+        let dateText = '';
+        if (startDate) {
+          try {
+            // Handle different date formats
+            let date: Date;
+            if (typeof startDate === 'string') {
+              if (startDate.includes('T')) {
+                date = new Date(startDate);
+              } else {
+                date = new Date(startDate + 'T00:00:00');
+              }
+            } else if (startDate instanceof Date) {
+              date = startDate;
+            } else {
+              date = new Date(startDate);
+            }
+            
+            if (!isNaN(date.getTime())) {
+              dateText = date.toLocaleDateString('pt-BR', { 
+                day: '2-digit', 
+                month: '2-digit', 
+                year: 'numeric' 
+              });
+              
+              // Add time if available (format: HH:MM or HH:MM:SS)
+              if (startTime) {
+                const timeStr = String(startTime).split(':').slice(0, 2).join(':');
+                dateText += ` às ${timeStr}`;
+              }
+            } else {
+              dateText = String(startDate);
+              if (startTime) {
+                const timeStr = String(startTime).split(':').slice(0, 2).join(':');
+                dateText += ` às ${timeStr}`;
+              }
+            }
+          } catch (e) {
+            dateText = String(startDate);
+            if (startTime) {
+              dateText += ` às ${startTime}`;
+            }
+          }
+        }
+        
         return {
           title: 'Novo Evento',
-          body: payloadJson.title || 'Novo evento criado',
+          body: `Novo evento criado${dateText ? ` - ${dateText}` : ''}`,
         };
+      }
       
       default:
         return {

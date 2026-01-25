@@ -50,7 +50,10 @@
     "unread": "No leído",
     "lowStockMessage": "Stock bajo",
     "clearAll": "Limpiar Todo",
-    "clearAllConfirm": "¿Está seguro de que desea limpiar todas las notificaciones?"
+    "clearAllConfirm": "¿Está seguro de que desea limpiar todas las notificaciones?",
+    "workOrderCreated": "Nueva Orden de Servicio creada",
+    "workOrderUpdated": "Orden de Servicio Actualizada",
+    "eventCreated": "Nuevo Evento creado"
   },
   "bloodPriority": {
     "title": "Blood Priority",

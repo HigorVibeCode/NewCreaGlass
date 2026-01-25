@@ -232,9 +232,27 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
             isProcessingRef.current = false;
             return;
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error validating session:', error);
-          await repos.authRepo.logout();
+          
+          // Check if error is related to invalid refresh token
+          const isRefreshTokenError = error?.message?.includes('Refresh Token') || 
+                                      error?.message?.includes('invalid_grant') ||
+                                      error?.message?.includes('Invalid Refresh Token') ||
+                                      error?.code === 'invalid_grant';
+          
+          if (isRefreshTokenError) {
+            console.warn('[AuthGuard] Invalid refresh token detected, clearing session');
+          }
+          
+          // Clear session and logout
+          try {
+            await repos.authRepo.logout();
+          } catch (logoutError) {
+            // Ignore errors during logout
+            console.warn('[AuthGuard] Error during logout:', logoutError);
+          }
+          
           setSession(null);
           setIsChecking(false);
           if (!isMounted) {
@@ -266,8 +284,27 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
           setIsChecking(false);
         }
         isProcessingRef.current = false;
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error in checkAuth:', error);
+        
+        // Check if error is related to invalid refresh token
+        const isRefreshTokenError = error?.message?.includes('Refresh Token') || 
+                                    error?.message?.includes('invalid_grant') ||
+                                    error?.message?.includes('Invalid Refresh Token') ||
+                                    error?.code === 'invalid_grant';
+        
+        if (isRefreshTokenError) {
+          console.warn('[AuthGuard] Invalid refresh token detected in checkAuth, clearing session');
+          // Clear session
+          try {
+            await repos.authRepo.logout();
+            setSession(null);
+          } catch (logoutError) {
+            // Ignore errors during logout
+            console.warn('[AuthGuard] Error during logout:', logoutError);
+          }
+        }
+        
         if (isMounted) {
           setIsChecking(false);
           if (segments && segments.length > 0) {

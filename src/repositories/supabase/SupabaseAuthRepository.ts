@@ -102,7 +102,26 @@ export class SupabaseAuthRepository implements AuthRepository {
     try {
       const { data: { session: supabaseSession }, error } = await this.supabase.auth.getSession();
       
-      if (error || !supabaseSession) {
+      // Handle refresh token errors
+      if (error) {
+        // Check if error is related to invalid refresh token
+        if (error.message?.includes('Refresh Token') || 
+            error.message?.includes('invalid_grant') ||
+            error.message?.includes('Invalid Refresh Token')) {
+          console.warn('[SupabaseAuthRepository] Invalid refresh token detected, clearing session');
+          // Clear invalid session
+          try {
+            await this.supabase.auth.signOut();
+          } catch (signOutError) {
+            // Ignore errors during signout
+            console.warn('[SupabaseAuthRepository] Error during signout:', signOutError);
+          }
+          return null;
+        }
+        return null;
+      }
+      
+      if (!supabaseSession) {
         return null;
       }
 
@@ -145,8 +164,26 @@ export class SupabaseAuthRepository implements AuthRepository {
       // Get current Supabase session
       const { data: { session: supabaseSession }, error: sessionError } = await this.supabase.auth.getSession();
       
-      if (sessionError || !supabaseSession) {
+      // Handle refresh token errors
+      if (sessionError) {
+        // Check if error is related to invalid refresh token
+        if (sessionError.message?.includes('Refresh Token') || 
+            sessionError.message?.includes('invalid_grant') ||
+            sessionError.message?.includes('Invalid Refresh Token')) {
+          console.warn('[SupabaseAuthRepository] Invalid refresh token during validation, clearing session');
+          // Clear invalid session
+          try {
+            await this.supabase.auth.signOut();
+          } catch (signOutError) {
+            // Ignore errors during signout
+            console.warn('[SupabaseAuthRepository] Error during signout:', signOutError);
+          }
+        }
         console.log('No Supabase session found:', sessionError?.message);
+        return false;
+      }
+      
+      if (!supabaseSession) {
         return false;
       }
 
