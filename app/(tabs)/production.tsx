@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback } from 'react-native';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,7 +8,7 @@ import { ScreenWrapper } from '../../src/components/shared/ScreenWrapper';
 import { DropdownOption } from '../../src/components/shared/Dropdown';
 import { PermissionGuard } from '../../src/components/shared/PermissionGuard';
 import { repos } from '../../src/services/container';
-import { Production, ProductionStatus } from '../../src/types';
+import { Production, ProductionStatus, InventoryItem } from '../../src/types';
 import { theme } from '../../src/theme';
 import { useThemeColors } from '../../src/hooks/use-theme-colors';
 import { useAuth } from '../../src/store/auth-store';
@@ -19,18 +19,44 @@ export default function ProductionScreen() {
   const colors = useThemeColors();
   const { user } = useAuth();
   const [productions, setProductions] = useState<Production[]>([]);
+  const [allProductions, setAllProductions] = useState<Production[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<ProductionStatus | 'all'>('all');
   const [isLoading, setIsLoading] = useState(false);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [glassItems, setGlassItems] = useState<Map<string, InventoryItem>>(new Map());
 
   const loadProductions = useCallback(async () => {
     setIsLoading(true);
     try {
       const status = selectedStatus === 'all' ? undefined : selectedStatus;
-      const allProductions = await repos.productionRepo.getAllProductions(status);
+      const fetchedProductions = await repos.productionRepo.getAllProductions(status);
       // Filter out completed productions - they go to history only
-      const activeProductions = allProductions.filter(p => p.status !== 'completed');
-      setProductions(activeProductions);
+      const activeProductions = fetchedProductions.filter(p => p.status !== 'completed');
+      setAllProductions(activeProductions);
+      
+      // Load glass items for all productions
+      const glassIds = new Set<string>();
+      activeProductions.forEach(prod => {
+        prod.items.forEach(item => {
+          if (item.glassId) {
+            glassIds.add(item.glassId);
+          }
+        });
+      });
+      
+      const glassMap = new Map<string, InventoryItem>();
+      for (const glassId of glassIds) {
+        try {
+          const glassItem = await repos.inventoryRepo.getItemById(glassId);
+          if (glassItem) {
+            glassMap.set(glassId, glassItem);
+          }
+        } catch (error) {
+          console.error(`Error loading glass item ${glassId}:`, error);
+        }
+      }
+      setGlassItems(glassMap);
     } catch (error) {
       console.error('Error loading productions:', error);
     } finally {
@@ -172,16 +198,122 @@ export default function ProductionScreen() {
     return orderType || '';
   };
 
+  const getGlassNames = (production: Production): string => {
+    if (!production.items || production.items.length === 0) {
+      return '-';
+    }
+    
+    const glassNames = production.items
+      .map(item => {
+        if (!item.glassId) return null;
+        const glassItem = glassItems.get(item.glassId);
+        return glassItem?.name || null;
+      })
+      .filter((name): name is string => name !== null);
+    
+    if (glassNames.length === 0) {
+      return '-';
+    }
+    
+    // Se houver múltiplos vidros, mostra os primeiros e indica se há mais
+    if (glassNames.length === 1) {
+      return glassNames[0];
+    } else if (glassNames.length <= 3) {
+      return glassNames.join(', ');
+    } else {
+      return `${glassNames.slice(0, 2).join(', ')} +${glassNames.length - 2}`;
+    }
+  };
+
   const handleFilterSelect = (value: string) => {
     setSelectedStatus(value as ProductionStatus | 'all');
     setFilterModalVisible(false);
   };
+
+  // Filter and sort productions based on search term and due date
+  const filteredProductions = useMemo(() => {
+    let filtered = allProductions;
+    
+    // Apply search filter if there's a search term
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase().trim();
+      
+      filtered = allProductions.filter(production => {
+        // Search in client name
+        if (production.clientName?.toLowerCase().includes(searchLower)) {
+          return true;
+        }
+        
+        // Search in order number
+        if (production.orderNumber?.toLowerCase().includes(searchLower)) {
+          return true;
+        }
+        
+        // Search in order type
+        if (production.orderType?.toLowerCase().includes(searchLower)) {
+          return true;
+        }
+        
+        // Search in glass items names
+        if (production.items && production.items.length > 0) {
+          const hasMatchingItem = production.items.some(item => {
+            if (!item.glassId) return false;
+            const glassItem = glassItems.get(item.glassId);
+            if (glassItem?.name?.toLowerCase().includes(searchLower)) {
+              return true;
+            }
+            return false;
+          });
+          
+          if (hasMatchingItem) {
+            return true;
+          }
+        }
+        
+        return false;
+      });
+    }
+    
+    // Sort by due date (ascending - closest dates first)
+    return filtered.sort((a, b) => {
+      const dateA = new Date(a.dueDate).getTime();
+      const dateB = new Date(b.dueDate).getTime();
+      return dateA - dateB;
+    });
+  }, [allProductions, searchTerm, glassItems]);
+
+  // Update productions when filtered list changes
+  useEffect(() => {
+    setProductions(filteredProductions);
+  }, [filteredProductions]);
 
   return (
     <ScreenWrapper>
       <ScrollView style={styles.scrollView}>
         <View style={styles.content}>
           <View style={styles.topBar}>
+            {/* Search Bar */}
+            <View style={[styles.searchContainer, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+              <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
+              <TextInput
+                style={[styles.searchInput, { color: colors.text }]}
+                placeholder={t('production.searchPlaceholder') || 'Buscar por cliente, número, tipo ou item...'}
+                placeholderTextColor={colors.textTertiary}
+                value={searchTerm}
+                onChangeText={setSearchTerm}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {searchTerm.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setSearchTerm('')}
+                  style={styles.clearButton}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
             <TouchableOpacity
               style={[styles.historyButton, { backgroundColor: colors.backgroundSecondary }]}
               onPress={() => router.push('/production-orders-history')}
@@ -290,6 +422,9 @@ export default function ProductionScreen() {
                       <Text style={[styles.orderType, { color: colors.textSecondary }]}>
                         {getOrderTypeLabel(production.orderType)}
                       </Text>
+                      <Text style={[styles.glassName, { color: colors.textSecondary }]}>
+                        {getGlassNames(production)}
+                      </Text>
                     </View>
                     <View style={styles.statusColumn}>
                       <View
@@ -329,12 +464,35 @@ const styles = StyleSheet.create({
   content: {
     padding: theme.spacing.md,
   },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing.md,
+    borderWidth: 1,
+    flex: 1,
+    marginRight: theme.spacing.sm,
+    minWidth: 0,
+  },
+  searchIcon: {
+    marginRight: theme.spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: theme.typography.fontSize.md,
+    paddingVertical: theme.spacing.sm,
+    minWidth: 0,
+  },
+  clearButton: {
+    marginLeft: theme.spacing.xs,
+    padding: theme.spacing.xs,
+  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
     gap: theme.spacing.sm,
     marginBottom: theme.spacing.md,
+    width: '100%',
   },
   historyButton: {
     width: 36,
@@ -438,12 +596,16 @@ const styles = StyleSheet.create({
     marginRight: theme.spacing.xs,
   },
   separator: {
-    fontSize: theme.typography.fontSize.lg,
+    fontSize: theme.typography.fontSize.md,
     marginHorizontal: theme.spacing.xs,
   },
   orderNumber: {
     fontSize: theme.typography.fontSize.lg,
     fontWeight: theme.typography.fontWeight.medium,
+  },
+  glassName: {
+    fontSize: theme.typography.fontSize.sm,
+    marginTop: theme.spacing.xs,
   },
   orderType: {
     fontSize: theme.typography.fontSize.sm,

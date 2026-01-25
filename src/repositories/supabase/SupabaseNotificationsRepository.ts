@@ -164,6 +164,8 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
       throw new Error(`Failed to create notification: ${error.message || 'Unknown error'}`);
     }
 
+    const createdNotification = this.mapToNotification(data);
+
     // Trigger vibration and sound alert with message (não aguardamos o som terminar)
     let alertMessage: string | undefined;
     if (notification.type === 'inventory.lowStock' && notification.payloadJson) {
@@ -178,7 +180,13 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
       console.warn('Failed to trigger notification alert:', err);
     });
 
-    return this.mapToNotification(data);
+    // Dispatch push notifications asynchronously (não bloqueia a criação)
+    this.dispatchPushNotifications(createdNotification).catch(err => {
+      console.error('[SupabaseNotificationsRepository] Error dispatching push notifications:', err);
+      // Não propagar erro - push é secundário à criação da notificação
+    });
+
+    return createdNotification;
   }
 
   async clearUserNotifications(userId: string): Promise<void> {
@@ -269,6 +277,116 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
     } catch (error: any) {
       console.error('Error in clearUserNotifications:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Dispatch push notifications for a created notification
+   * Runs asynchronously and doesn't block notification creation
+   * Uses lazy imports to avoid require cycles
+   */
+  private async dispatchPushNotifications(notification: Notification): Promise<void> {
+    try {
+      // Lazy import to avoid require cycle
+      const { pushNotificationService } = await import('../../services/push-notifications');
+      const { repos } = await import('../../services/container');
+
+      // Determine target users
+      let targetUserIds: string[] = [];
+
+      if (notification.targetUserId) {
+        // Specific user target
+        targetUserIds = [notification.targetUserId];
+      } else {
+        // Global notification - get all active users with push enabled
+        // For now, we'll need to fetch users separately
+        // In a production system, this could be optimized with a database function
+        const { data: users } = await supabase
+          .from('users')
+          .select('id')
+          .eq('is_active', true);
+
+        if (users) {
+          targetUserIds = users.map(u => u.id);
+        }
+      }
+
+      if (targetUserIds.length === 0) {
+        console.log('[dispatchPushNotifications] No target users found');
+        return;
+      }
+
+      // Generate push notification content
+      const { title, body } = pushNotificationService.generateNotificationContent(notification);
+      const deepLink = pushNotificationService.generateDeepLink(notification);
+
+      const payload = {
+        title,
+        body,
+        data: {
+          notificationId: notification.id,
+          type: notification.type,
+          entityId: notification.payloadJson?.itemId || 
+                   notification.payloadJson?.productionId || 
+                   notification.payloadJson?.workOrderId || 
+                   notification.payloadJson?.trainingId || 
+                   notification.payloadJson?.messageId || 
+                   notification.payloadJson?.eventId,
+          deepLink,
+          ...notification.payloadJson,
+        },
+      };
+
+      // Process each target user
+      for (const userId of targetUserIds) {
+        try {
+          // Check if user should receive push
+          const shouldSend = await pushNotificationService.shouldSendPush(userId, notification.type);
+          if (!shouldSend) {
+            console.log(`[dispatchPushNotifications] User ${userId} has push disabled for type ${notification.type}`);
+            continue;
+          }
+
+          // Get active device tokens for user
+          const deviceTokens = await repos.deviceTokensRepo.getActiveDeviceTokensByUserId(userId);
+          
+          if (deviceTokens.length === 0) {
+            console.log(`[dispatchPushNotifications] No active device tokens for user ${userId}`);
+            continue;
+          }
+
+          // Send push to all user's devices
+          const tokens = deviceTokens.map(dt => ({
+            token: dt.token,
+            platform: dt.platform,
+            deviceTokenId: dt.id,
+          }));
+
+          const results = await pushNotificationService.sendToTokens(tokens, payload);
+
+          // Log delivery attempts
+          for (let i = 0; i < results.length; i++) {
+            const result = results[i];
+            const deviceToken = deviceTokens[i];
+
+            await repos.pushDeliveryLogsRepo.createLog({
+              notificationId: notification.id,
+              userId,
+              deviceTokenId: deviceToken.id,
+              token: deviceToken.token,
+              status: result.success ? 'sent' : 'failed',
+              errorMessage: result.error,
+              sentAt: result.success ? new Date().toISOString() : undefined,
+            });
+          }
+        } catch (userError: any) {
+          console.error(`[dispatchPushNotifications] Error processing user ${userId}:`, userError);
+          // Continue with next user
+        }
+      }
+    } catch (error: any) {
+      console.error('[dispatchPushNotifications] Error:', error);
+      // Don't throw - push is secondary to notification creation
     }
   }
 

@@ -215,6 +215,7 @@
     "createOrder": "Créer une Commande",
     "noOrders": "Aucune commande de production",
     "filterByStatus": "Filtrer par Statut",
+    "searchPlaceholder": "Rechercher par client, numéro, type ou article...",
     "orderNumber": "Numéro de Commande",
     "orderNumberPlaceholder": "Entrez le numéro de commande",
     "clientNamePlaceholder": "Entrez le nom du client",

@@ -215,6 +215,7 @@
     "createOrder": "Auftrag erstellen",
     "noOrders": "Keine Produktionsaufträge",
     "filterByStatus": "Nach Status filtern",
+    "searchPlaceholder": "Suche nach Kunde, Nummer, Typ oder Artikel...",
     "orderNumber": "Auftragsnummer",
     "orderNumberPlaceholder": "Auftragsnummer eingeben",
     "clientNamePlaceholder": "Kundenname eingeben",

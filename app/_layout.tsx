@@ -6,11 +6,17 @@ import { AuthGuard } from '@/src/components/shared/AuthGuard';
 import { I18nProvider } from '@/src/providers/I18nProvider';
 import { QueryProvider } from '@/src/providers/QueryProvider';
 import { ThemeProvider } from '@/src/providers/ThemeProvider';
+import { usePushNotifications } from '@/src/hooks/use-push-notifications';
 
 // Remove anchor to let AuthGuard control initial navigation
 // export const unstable_settings = {
 //   anchor: '(tabs)',
 // };
+
+function PushNotificationsInitializer() {
+  usePushNotifications();
+  return null;
+}
 
 export default function RootLayout() {
   return (
@@ -19,6 +25,7 @@ export default function RootLayout() {
         <QueryProvider>
           <ThemeProvider>
             <AuthGuard>
+              <PushNotificationsInitializer />
               <Stack
                 screenOptions={{
                   animation: 'slide_from_right',

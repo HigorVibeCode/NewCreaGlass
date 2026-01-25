@@ -1,6 +1,7 @@
 import {
     BloodPriorityMessage,
     BloodPriorityRead,
+    DeviceToken,
     Document,
     Event,
     InventoryGroup,
@@ -11,10 +12,12 @@ import {
     MaintenanceInfoImage,
     MaintenanceRecord,
     Notification,
+    NotificationPreferences,
     Permission,
     Production,
     ProductionStatus,
     ProductionStatusHistory,
+    PushDeliveryLog,
     Session,
     Training,
     TrainingCategory,
@@ -153,4 +156,31 @@ export interface TrainingRepository {
   // History
   getCompletedTrainings(userId?: string): Promise<TrainingWithCompletion[]>; // If userId is provided, get user's completions; if not and user is Master, get all
   getTrainingHistory(trainingId: string, userId?: string): Promise<TrainingWithCompletion[]>; // Get all completions for a specific training
+}
+
+// Device Tokens Repository
+export interface DeviceTokensRepository {
+  registerDeviceToken(token: Omit<DeviceToken, 'id' | 'createdAt' | 'updatedAt' | 'lastSeenAt'>): Promise<DeviceToken>;
+  updateDeviceToken(tokenId: string, updates: Partial<DeviceToken>): Promise<DeviceToken>;
+  getDeviceTokensByUserId(userId: string): Promise<DeviceToken[]>;
+  getActiveDeviceTokensByUserId(userId: string): Promise<DeviceToken[]>;
+  deactivateDeviceToken(tokenId: string): Promise<void>;
+  deactivateDeviceTokenByToken(token: string, platform: string): Promise<void>;
+  deleteDeviceToken(tokenId: string): Promise<void>;
+}
+
+// Notification Preferences Repository
+export interface NotificationPreferencesRepository {
+  getPreferencesByUserId(userId: string): Promise<NotificationPreferences | null>;
+  createPreferences(preferences: Omit<NotificationPreferences, 'id' | 'createdAt' | 'updatedAt'>): Promise<NotificationPreferences>;
+  updatePreferences(userId: string, updates: Partial<NotificationPreferences>): Promise<NotificationPreferences>;
+  getOrCreatePreferences(userId: string): Promise<NotificationPreferences>;
+}
+
+// Push Delivery Logs Repository
+export interface PushDeliveryLogsRepository {
+  createLog(log: Omit<PushDeliveryLog, 'id' | 'createdAt'>): Promise<PushDeliveryLog>;
+  updateLogStatus(logId: string, status: PushDeliveryLog['status'], errorMessage?: string, deliveredAt?: string): Promise<void>;
+  getLogsByNotificationId(notificationId: string): Promise<PushDeliveryLog[]>;
+  getLogsByUserId(userId: string, limit?: number): Promise<PushDeliveryLog[]>;
 }

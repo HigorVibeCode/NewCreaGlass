@@ -218,6 +218,7 @@
     "createOrder": "Create Order",
     "noOrders": "No production orders",
     "filterByStatus": "Filter by Status",
+    "searchPlaceholder": "Search by client, number, type or item...",
     "orderNumber": "Order Number",
     "orderNumberPlaceholder": "Enter order number",
     "clientNamePlaceholder": "Enter client name",

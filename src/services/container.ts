@@ -1,13 +1,16 @@
 import {
   AuthRepository,
   BloodPriorityRepository,
+  DeviceTokensRepository,
   DocumentsRepository,
   EventsRepository,
   InventoryRepository,
   MaintenanceRepository,
+  NotificationPreferencesRepository,
   NotificationsRepository,
   PermissionsRepository,
   ProductionRepository,
+  PushDeliveryLogsRepository,
   TrainingRepository,
   UsersRepository,
   WorkOrdersRepository,
@@ -26,6 +29,9 @@ import { SupabaseProductionRepository } from '../repositories/supabase/SupabaseP
 import { SupabaseWorkOrdersRepository } from '../repositories/supabase/SupabaseWorkOrdersRepository';
 import { SupabaseMaintenanceRepository } from '../repositories/supabase/SupabaseMaintenanceRepository';
 import { SupabaseTrainingRepository } from '../repositories/supabase/SupabaseTrainingRepository';
+import { SupabaseDeviceTokensRepository } from '../repositories/supabase/SupabaseDeviceTokensRepository';
+import { SupabaseNotificationPreferencesRepository } from '../repositories/supabase/SupabaseNotificationPreferencesRepository';
+import { SupabasePushDeliveryLogsRepository } from '../repositories/supabase/SupabasePushDeliveryLogsRepository';
 
 // Import Mock repositories (for fallback or development)
 import { MockAuthRepository } from '../repositories/mock/MockAuthRepository';
@@ -58,4 +64,7 @@ export const repos = {
   maintenanceRepo: (USE_MOCK_REPOSITORIES ? new MockMaintenanceRepository() : new SupabaseMaintenanceRepository()) as MaintenanceRepository,
   workOrdersRepo: new SupabaseWorkOrdersRepository() as WorkOrdersRepository, // Always use Supabase for work orders
   trainingRepo: new SupabaseTrainingRepository() as TrainingRepository, // Always use Supabase for trainings
+  deviceTokensRepo: new SupabaseDeviceTokensRepository() as DeviceTokensRepository,
+  notificationPreferencesRepo: new SupabaseNotificationPreferencesRepository() as NotificationPreferencesRepository,
+  pushDeliveryLogsRepo: new SupabasePushDeliveryLogsRepository() as PushDeliveryLogsRepository,
 };

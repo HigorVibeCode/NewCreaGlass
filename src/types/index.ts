@@ -85,6 +85,51 @@ export interface Notification {
   readAt?: string;
 }
 
+// Push Notification types
+export type DevicePlatform = 'ios' | 'android' | 'web';
+
+export interface DeviceToken {
+  id: string;
+  userId: string;
+  platform: DevicePlatform;
+  token: string;
+  deviceId?: string;
+  appVersion?: string;
+  isActive: boolean;
+  lastSeenAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotificationPreferences {
+  id: string;
+  userId: string;
+  pushEnabled: boolean;
+  workOrdersEnabled: boolean;
+  inventoryEnabled: boolean;
+  trainingEnabled: boolean;
+  bloodPriorityEnabled: boolean;
+  productionEnabled: boolean;
+  eventsEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PushDeliveryStatus = 'queued' | 'sent' | 'failed' | 'delivered';
+
+export interface PushDeliveryLog {
+  id: string;
+  notificationId: string;
+  userId: string;
+  deviceTokenId?: string;
+  token: string;
+  status: PushDeliveryStatus;
+  errorMessage?: string;
+  sentAt?: string;
+  deliveredAt?: string;
+  createdAt: string;
+}
+
 // Blood Priority types
 export interface BloodPriorityMessage {
   id: string;
