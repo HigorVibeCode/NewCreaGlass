@@ -146,6 +146,7 @@ export default function WorkOrdersHistoryScreen() {
             style={styles.backButton}
             onPress={() => router.back()}
             activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
@@ -266,6 +267,11 @@ const styles = StyleSheet.create({
   backButton: {
     padding: theme.spacing.xs,
     marginLeft: -theme.spacing.xs,
+    zIndex: 10,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
     flex: 1,

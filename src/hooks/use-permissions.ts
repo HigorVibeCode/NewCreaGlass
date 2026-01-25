@@ -9,15 +9,24 @@ export const usePermissions = () => {
   
   const hasPermission = (permissionKey: PermissionKey): boolean => {
     // Always return false if no user
-    if (!user) return false;
+    if (!user) {
+      return false;
+    }
     
     // Master user has ALL permissions - check this FIRST before anything else
     if (user.userType === 'Master') {
       return true;
     }
     
-    // For non-Master users, check permissions
-    return can(user, permissionKey, permissions);
+    // For non-Master users, check permissions from the database
+    const result = can(user, permissionKey, permissions);
+    
+    // Debug log (can be removed later)
+    if (__DEV__) {
+      console.log(`[Permission Check] User: ${user.username}, Permission: ${permissionKey}, Has: ${result}, Total permissions: ${permissions.length}`);
+    }
+    
+    return result;
   };
   
   const permissionsList = useMemo(() => {
@@ -26,6 +35,7 @@ export const usePermissions = () => {
       // Return all possible permission keys for Master
       return [
         'documents.upload',
+        'documents.create',
         'documents.view',
         'documents.download',
         'documents.delete',
@@ -58,6 +68,10 @@ export const usePermissions = () => {
         'events.delete',
         'events.history',
         'events.report.create',
+        'workOrders.create',
+        'workOrders.view',
+        'workOrders.update',
+        'workOrders.delete',
       ] as PermissionKey[];
     }
     return permissions.map(p => p.key as PermissionKey);

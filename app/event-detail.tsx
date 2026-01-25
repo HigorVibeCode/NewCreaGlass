@@ -16,6 +16,7 @@ import { repos } from '../src/services/container';
 import { Event, EventType } from '../src/types';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { confirmDelete } from '../src/utils/confirm-dialog';
 
 export default function EventDetailScreen() {
   const { t } = useI18n();
@@ -36,28 +37,20 @@ export default function EventDetailScreen() {
   };
 
   const handleDelete = () => {
-    Alert.alert(
-      t('common.delete') || 'Delete',
-      'Are you sure you want to delete this event?',
-      [
-        { text: t('common.cancel') || 'Cancel', style: 'cancel' },
-        {
-          text: t('common.delete') || 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (!eventId) return;
-            try {
-              await repos.eventsRepo.deleteEvent(eventId);
-              Alert.alert(t('common.success') || 'Success', 'Event deleted successfully', [
-                { text: t('common.confirm') || 'OK', onPress: () => router.back() },
-              ]);
-            } catch (error) {
-              console.error('Error deleting event:', error);
-              Alert.alert(t('common.error') || 'Error', 'Failed to delete event');
-            }
-          },
-        },
-      ]
+    if (!eventId) return;
+    
+    confirmDelete(
+      t('common.delete') || 'Excluir',
+      'Tem certeza que deseja excluir este evento?',
+      async () => {
+        await repos.eventsRepo.deleteEvent(eventId);
+        router.back();
+      },
+      undefined,
+      t('common.delete') || 'Excluir',
+      t('common.cancel') || 'Cancelar',
+      'Evento excluído com sucesso',
+      'Falha ao excluir evento'
     );
   };
 

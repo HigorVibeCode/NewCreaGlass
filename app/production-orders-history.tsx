@@ -61,8 +61,47 @@ export default function ProductionOrdersHistoryScreen() {
 
   const getStatusColor = (status: ProductionStatus): string => {
     switch (status) {
+      case 'not_authorized':
+        return colors.error; // vermelho
+      case 'authorized':
+        return colors.success; // verde
+      case 'cutting':
+        return colors.info; // azul
+      case 'polishing':
+        return colors.info; // azul
+      case 'on_paint_cabin':
+        return '#f97316'; // laranja
+      case 'on_laminating_machine':
+        return '#f97316'; // laranja
+      case 'on_schmelz_oven':
+        return '#f97316'; // laranja
+      case 'waiting_for_tempering':
+        return colors.warning; // Amarelo
+      case 'waiting_for_schmelz':
+        return colors.warning; // Amarelo
+      case 'tempering_in_progress':
+        return '#8b5cf6'; // Roxo
+      case 'tempered':
+        return '#8b5cf6'; // Roxo
+      case 'waiting_for_packing':
+        return colors.warning; // Amarelo
+      case 'packed':
+        return colors.info; // azul
+      case 'ready_for_dispatch':
+        return '#34d399'; // verde claro
+      case 'delivered':
+        return '#059669'; // verde escuro
       case 'completed':
-        return colors.success;
+        return '#059669'; // verde escuro
+      // Compatibilidade com status antigos
+      case 'on_cabin':
+        return '#f97316'; // laranja
+      case 'laminating':
+        return '#f97316'; // laranja
+      case 'laminated':
+        return colors.info; // azul
+      case 'on_oven':
+        return '#f97316'; // laranja
       default:
         return colors.textSecondary;
     }
@@ -70,8 +109,47 @@ export default function ProductionOrdersHistoryScreen() {
 
   const getStatusLabel = (status: ProductionStatus): string => {
     switch (status) {
+      case 'not_authorized':
+        return t('production.status.not_authorized');
+      case 'authorized':
+        return t('production.status.authorized');
+      case 'cutting':
+        return t('production.status.cutting');
+      case 'polishing':
+        return t('production.status.polishing');
+      case 'on_paint_cabin':
+        return t('production.status.on_paint_cabin');
+      case 'on_laminating_machine':
+        return t('production.status.on_laminating_machine');
+      case 'on_schmelz_oven':
+        return t('production.status.on_schmelz_oven');
+      case 'waiting_for_tempering':
+        return t('production.status.waiting_for_tempering');
+      case 'waiting_for_schmelz':
+        return t('production.status.waiting_for_schmelz');
+      case 'tempering_in_progress':
+        return t('production.status.tempering_in_progress');
+      case 'tempered':
+        return t('production.status.tempered');
+      case 'waiting_for_packing':
+        return t('production.status.waiting_for_packing');
+      case 'packed':
+        return t('production.status.packed');
+      case 'ready_for_dispatch':
+        return t('production.status.ready_for_dispatch');
+      case 'delivered':
+        return t('production.status.delivered');
       case 'completed':
         return t('production.status.completed');
+      // Compatibilidade com status antigos
+      case 'on_cabin':
+        return t('production.status.on_paint_cabin');
+      case 'laminating':
+        return t('production.status.on_laminating_machine');
+      case 'laminated':
+        return t('production.status.laminated') || 'Laminated';
+      case 'on_oven':
+        return t('production.status.on_schmelz_oven');
       default:
         return status;
     }
@@ -101,6 +179,7 @@ export default function ProductionOrdersHistoryScreen() {
             style={styles.backButton}
             onPress={() => router.back()}
             activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
@@ -213,6 +292,11 @@ const styles = StyleSheet.create({
   backButton: {
     padding: theme.spacing.xs,
     marginLeft: -theme.spacing.xs,
+    zIndex: 10,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
     flex: 1,

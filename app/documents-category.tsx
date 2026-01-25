@@ -86,7 +86,7 @@ export default function DocumentsCategoryScreen() {
     },
     {
       id: 'obrigatorios',
-      icon: 'document-check',
+      icon: 'document-text',
       iconColor: '#10b981',
       iconBgColor: '#d1fae5',
       chevronColor: '#10b981',
@@ -107,6 +107,24 @@ export default function DocumentsCategoryScreen() {
     if (subCategoryId === 'maintenance') {
       // Navegar para a lista de manutenções
       router.push('/maintenance-list');
+    } else if (subCategoryId === 'obrigatorios') {
+      // Navegar para a lista de treinamentos obrigatórios
+      router.push({
+        pathname: '/trainings-list',
+        params: { category: 'mandatory' },
+      } as any);
+    } else if (subCategoryId === 'onboarding') {
+      // Navegar para a lista de treinamentos de onboarding
+      router.push({
+        pathname: '/trainings-list',
+        params: { category: 'onboarding' },
+      } as any);
+    } else if (baseCategoryId === 'professionalTraining') {
+      // Navegar para a lista de treinamentos profissionais
+      router.push({
+        pathname: '/trainings-list',
+        params: { category: 'professional' },
+      } as any);
     } else if (isLegalRequirements) {
       // Para subcategorias de Legal Requirements, navegar para a tela de documentos
       router.push({
@@ -123,20 +141,21 @@ export default function DocumentsCategoryScreen() {
   };
 
   return (
-    <ScreenWrapper>
-      {/* Custom Header */}
-      <View
-        style={[
-          styles.header,
-          {
-            backgroundColor: colors.background,
-            paddingTop: insets.top + theme.spacing.md,
-            paddingBottom: theme.spacing.md,
-            borderBottomWidth: 1,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScreenWrapper>
+        {/* Custom Header */}
+        <View
+          style={[
+            styles.header,
+            {
+              backgroundColor: colors.background,
+              paddingTop: insets.top + theme.spacing.md,
+              paddingBottom: theme.spacing.md,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border,
+            },
+          ]}
+        >
           <View style={styles.headerContent}>
             <TouchableOpacity
               style={styles.backButton}
@@ -164,6 +183,28 @@ export default function DocumentsCategoryScreen() {
                   : t(`documents.categories.${baseCategoryId || categoryId}.title`)}
               </Text>
             </View>
+            {(subCategoryId === 'obrigatorios' || subCategoryId === 'onboarding' || baseCategoryId === 'professionalTraining') && (
+              <TouchableOpacity
+                style={styles.historyButton}
+                onPress={() => {
+                  let category: 'mandatory' | 'professional' | 'onboarding' = 'mandatory';
+                  if (subCategoryId === 'obrigatorios') {
+                    category = 'mandatory';
+                  } else if (subCategoryId === 'onboarding') {
+                    category = 'onboarding';
+                  } else if (baseCategoryId === 'professionalTraining') {
+                    category = 'professional';
+                  }
+                  router.push({
+                    pathname: '/trainings-history',
+                    params: { category },
+                  } as any);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="time-outline" size={24} color={colors.text} />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -226,6 +267,29 @@ export default function DocumentsCategoryScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+          ) : baseCategoryId === 'professionalTraining' && !isSubCategory ? (
+            // Navegar diretamente para a lista de treinamentos profissionais
+            <View style={styles.emptyState}>
+              <TouchableOpacity
+                style={[styles.emptyIconContainer, { backgroundColor: colors.backgroundSecondary }]}
+                onPress={() => {
+                  router.push({
+                    pathname: '/trainings-list',
+                    params: { category: 'professional' },
+                  } as any);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons 
+                  name="school" 
+                  size={48} 
+                  color={config.iconColor} 
+                />
+              </TouchableOpacity>
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                Clique para ver treinamentos profissionais
+              </Text>
+            </View>
           ) : isLegalRequirements && !isSubCategory ? (
             // Mostrar subcategorias para Legal Requirements
             <View style={styles.subCategoriesContainer}>
@@ -268,6 +332,29 @@ export default function DocumentsCategoryScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+          ) : baseCategoryId === 'professionalTraining' ? (
+            // Navegar diretamente para a lista de treinamentos profissionais
+            <View style={styles.emptyState}>
+              <TouchableOpacity
+                style={[styles.emptyIconContainer, { backgroundColor: colors.backgroundSecondary }]}
+                onPress={() => {
+                  router.push({
+                    pathname: '/trainings-list',
+                    params: { category: 'professional' },
+                  } as any);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons 
+                  name="school" 
+                  size={48} 
+                  color={config.iconColor} 
+                />
+              </TouchableOpacity>
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                {t('documents.noDocuments')}
+              </Text>
+            </View>
           ) : (
             // Mostrar estado vazio para subcategorias e outras categorias
             <View style={styles.emptyState}>
@@ -285,11 +372,15 @@ export default function DocumentsCategoryScreen() {
           )}
         </View>
         </ScrollView>
-    </ScreenWrapper>
+      </ScreenWrapper>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   header: {
     paddingHorizontal: theme.spacing.md,
     paddingBottom: theme.spacing.md,
@@ -325,6 +416,13 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.lg,
     fontWeight: theme.typography.fontWeight.bold,
     flex: 1,
+  },
+  historyButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scrollView: {
     flex: 1,

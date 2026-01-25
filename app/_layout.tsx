@@ -207,6 +207,42 @@ export default function RootLayout() {
                     headerShown: false,
                   }} 
                 />
+                <Stack.Screen 
+                  name="trainings-list" 
+                  options={{ 
+                    presentation: 'card',
+                    title: 'Trainings',
+                    animation: 'slide_from_right',
+                    headerShown: false,
+                  }} 
+                />
+                <Stack.Screen 
+                  name="training-create" 
+                  options={{ 
+                    presentation: 'modal',
+                    title: 'Create Training',
+                    animation: 'slide_from_bottom',
+                    headerShown: false,
+                  }} 
+                />
+                <Stack.Screen 
+                  name="training-detail" 
+                  options={{ 
+                    presentation: 'card',
+                    title: 'Training Details',
+                    animation: 'slide_from_right',
+                    headerShown: false,
+                  }} 
+                />
+                <Stack.Screen 
+                  name="trainings-history" 
+                  options={{ 
+                    presentation: 'card',
+                    title: 'Training History',
+                    animation: 'slide_from_right',
+                    headerShown: false,
+                  }} 
+                />
                 <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
               </Stack>
             </AuthGuard>

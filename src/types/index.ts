@@ -117,17 +117,23 @@ export type ProductionStatus =
   | 'authorized'
   | 'cutting'
   | 'polishing'
+  | 'on_paint_cabin'
+  | 'on_laminating_machine'
+  | 'on_schmelz_oven'
   | 'waiting_for_tempering'
-  | 'on_oven'
+  | 'waiting_for_schmelz'
+  | 'tempering_in_progress'
   | 'tempered'
-  | 'on_cabin'
-  | 'laminating'
-  | 'laminated'
   | 'waiting_for_packing'
   | 'packed'
   | 'ready_for_dispatch'
   | 'delivered'
-  | 'completed';
+  | 'completed'
+  // Status antigos mantidos para compatibilidade com dados existentes
+  | 'on_cabin'
+  | 'laminating'
+  | 'laminated'
+  | 'on_oven';
 export type OrderType = 'standard' | 'urgent' | 'custom';
 export type GlassType = 'tempered' | 'strengthened' | 'float' | 'laminated' | 'textured' | 'sandblasted' | 'cuted' | 'insulated';
 export type StructureType = 'none' | 'linear' | 'abstract' | 'organic' | 'check_project';
@@ -222,4 +228,58 @@ export interface MaintenanceRecord {
   createdAt: string;
   updatedAt: string;
   createdBy: string;
+}
+
+// Training types
+export type TrainingCategory = 'mandatory' | 'professional' | 'onboarding';
+
+export interface Training {
+  id: string;
+  title: string;
+  description?: string;
+  category: TrainingCategory;
+  content?: string;
+  durationMinutes?: number;
+  isActive: boolean;
+  attachments?: TrainingAttachment[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrainingCompletion {
+  id: string;
+  trainingId: string;
+  userId: string;
+  startedAt: string;
+  completedAt?: string;
+  timeSpentSeconds: number;
+  createdAt: string;
+}
+
+export interface TrainingSignature {
+  id: string;
+  trainingCompletionId: string;
+  signaturePath: string;
+  fullName: string;
+  timestamp: string;
+  latitude: number;
+  longitude: number;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface TrainingAttachment {
+  id: string;
+  trainingId: string;
+  filename: string;
+  mimeType: string;
+  storagePath: string;
+  createdAt: string;
+}
+
+export interface TrainingWithCompletion extends Training {
+  completion?: TrainingCompletion;
+  signature?: TrainingSignature;
+  attachments?: TrainingAttachment[];
 }

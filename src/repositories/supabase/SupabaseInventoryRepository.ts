@@ -159,6 +159,15 @@ export class SupabaseInventoryRepository implements InventoryRepository {
   }
 
   async updateItem(itemId: string, updates: Partial<InventoryItem>): Promise<InventoryItem> {
+    // Get current item to check for stock threshold changes
+    const currentItem = await this.getItemById(itemId);
+    if (!currentItem) {
+      throw new Error('Item not found');
+    }
+
+    const previousStock = currentItem.stock;
+    const previousThreshold = currentItem.lowStockThreshold;
+
     const updateData: any = {};
     
     if (updates.name !== undefined) updateData.name = updates.name;
@@ -184,7 +193,41 @@ export class SupabaseInventoryRepository implements InventoryRepository {
       throw new Error('Failed to update inventory item');
     }
 
-    return this.mapToItem(data);
+    const updatedItem = this.mapToItem(data);
+    const newStock = updatedItem.stock;
+    const newThreshold = updatedItem.lowStockThreshold;
+
+    // Check if stock reached minimum level and create notification
+    // Only notify if stock just reached or went below threshold
+    const stockChanged = updates.stock !== undefined && updates.stock !== previousStock;
+    const thresholdChanged = updates.lowStockThreshold !== undefined && updates.lowStockThreshold !== previousThreshold;
+
+    // Notify if:
+    // 1. Stock was reduced and now is at or below threshold (and wasn't before)
+    // 2. Threshold was lowered and stock is now at or below it (and wasn't before)
+    const shouldNotify = (stockChanged && newStock <= newThreshold && previousStock > previousThreshold) ||
+                         (thresholdChanged && newStock <= newThreshold && previousStock > previousThreshold);
+
+    if (shouldNotify) {
+      try {
+        const { repos } = await import('../../services/container');
+        await repos.notificationsRepo.createNotification({
+          type: 'inventory.lowStock',
+          payloadJson: {
+            itemName: updatedItem.name,
+            itemId: updatedItem.id,
+            stock: newStock,
+            threshold: newThreshold,
+          },
+          createdBySystem: true,
+        });
+      } catch (notifError) {
+        console.error('Error creating low stock notification:', notifError);
+        // Don't throw - notification is secondary, update was successful
+      }
+    }
+
+    return updatedItem;
   }
 
   async deleteItem(itemId: string): Promise<void> {
