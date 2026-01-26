@@ -131,30 +131,63 @@ export class SupabaseInventoryRepository implements InventoryRepository {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
 
-    const { data, error } = await supabase
+    const insertData: any = {
+      group_id: item.groupId,
+      name: item.name,
+      unit: item.unit,
+      stock: item.stock,
+      low_stock_threshold: item.lowStockThreshold,
+      created_by: user.id,
+      height: item.height,
+      width: item.width,
+      thickness: item.thickness,
+      total_m2: item.totalM2,
+      ideal_stock: item.idealStock,
+      location: item.location,
+    };
+
+    // Only include supplier and reference_number if they have values
+    if (item.supplier) {
+      insertData.supplier = item.supplier;
+    }
+    if (item.referenceNumber) {
+      insertData.reference_number = item.referenceNumber;
+    }
+
+    console.log('Inserting inventory item with data:', insertData);
+
+    let { data, error } = await supabase
       .from('inventory_items')
-      .insert({
-        group_id: item.groupId,
-        name: item.name,
-        unit: item.unit,
-        stock: item.stock,
-        low_stock_threshold: item.lowStockThreshold,
-        created_by: user.id,
-        height: item.height,
-        width: item.width,
-        thickness: item.thickness,
-        total_m2: item.totalM2,
-        ideal_stock: item.idealStock,
-        location: item.location,
-      })
+      .insert(insertData)
       .select()
       .single();
 
-    if (error) {
-      console.error('Error creating inventory item:', error);
-      throw new Error('Failed to create inventory item');
+    // If error is about missing columns, remove them and retry
+    if (error && error.code === 'PGRST204' && (
+      error.message?.includes('supplier') || 
+      error.message?.includes('reference_number')
+    )) {
+      console.warn('Columns supplier/reference_number may not exist. Removing from insert and retrying...');
+      const { supplier, reference_number, ...insertDataWithoutNewColumns } = insertData;
+      
+      ({ data, error } = await supabase
+        .from('inventory_items')
+        .insert(insertDataWithoutNewColumns)
+        .select()
+        .single());
+      
+      if (!error) {
+        console.warn('Insert succeeded without supplier/reference_number. Please apply migration to enable these fields.');
+      }
     }
 
+    if (error) {
+      console.error('Error creating inventory item:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      throw new Error(`Failed to create inventory item: ${error.message}`);
+    }
+
+    console.log('Item created, response data:', data);
     return this.mapToItem(data);
   }
 
@@ -180,18 +213,54 @@ export class SupabaseInventoryRepository implements InventoryRepository {
     if (updates.totalM2 !== undefined) updateData.total_m2 = updates.totalM2;
     if (updates.idealStock !== undefined) updateData.ideal_stock = updates.idealStock;
     if (updates.location !== undefined) updateData.location = updates.location;
+    // Handle supplier - set to NULL if undefined or empty string
+    // Note: Only include if columns exist in database (migration must be applied)
+    if (updates.supplier !== undefined) {
+      updateData.supplier = updates.supplier && updates.supplier.trim() ? updates.supplier.trim() : null;
+    }
+    // Handle referenceNumber - set to NULL if undefined or empty string
+    // Note: Only include if columns exist in database (migration must be applied)
+    if (updates.referenceNumber !== undefined) {
+      updateData.reference_number = updates.referenceNumber && updates.referenceNumber.trim() ? updates.referenceNumber.trim() : null;
+    }
 
-    const { data, error } = await supabase
+    console.log('Updating inventory item with data:', updateData);
+
+    // If error mentions missing columns, remove them from updateData and retry
+    let { data, error } = await supabase
       .from('inventory_items')
       .update(updateData)
       .eq('id', itemId)
       .select()
       .single();
 
+    // If error is about missing columns, remove them and retry
+    if (error && error.code === 'PGRST204' && (
+      error.message?.includes('supplier') || 
+      error.message?.includes('reference_number')
+    )) {
+      console.warn('Columns supplier/reference_number may not exist. Removing from update and retrying...');
+      const { supplier, reference_number, ...updateDataWithoutNewColumns } = updateData;
+      
+      ({ data, error } = await supabase
+        .from('inventory_items')
+        .update(updateDataWithoutNewColumns)
+        .eq('id', itemId)
+        .select()
+        .single());
+      
+      if (!error) {
+        console.warn('Update succeeded without supplier/reference_number. Please apply migration to enable these fields.');
+      }
+    }
+
     if (error) {
       console.error('Error updating inventory item:', error);
-      throw new Error('Failed to update inventory item');
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      throw new Error(`Failed to update inventory item: ${error.message}`);
     }
+
+    console.log('Item updated, response data:', data);
 
     const updatedItem = this.mapToItem(data);
     const newStock = updatedItem.stock;
@@ -335,6 +404,8 @@ export class SupabaseInventoryRepository implements InventoryRepository {
       totalM2: data.total_m2,
       idealStock: data.ideal_stock,
       location: data.location,
+      supplier: data.supplier,
+      referenceNumber: data.reference_number,
     };
   }
 

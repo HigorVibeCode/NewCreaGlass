@@ -10,6 +10,7 @@ import { usePermissions } from '../src/hooks/use-permissions';
 import { PermissionGuard } from '../src/components/shared/PermissionGuard';
 import { Button } from '../src/components/shared/Button';
 import { Input } from '../src/components/shared/Input';
+import { Dropdown } from '../src/components/shared/Dropdown';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { repos } from '../src/services/container';
 import { InventoryGroup, InventoryItem } from '../src/types';
@@ -38,6 +39,8 @@ export default function InventoryGroupScreen() {
   const [minimumStock, setMinimumStock] = useState('');
   const [idealStock, setIdealStock] = useState('');
   const [location, setLocation] = useState('');
+  const [supplier, setSupplier] = useState('');
+  const [referenceNumber, setReferenceNumber] = useState('');
   
   // Other groups fields
   const [itemName, setItemName] = useState('');
@@ -111,6 +114,8 @@ export default function InventoryGroupScreen() {
         totalM2: calculatedM2,
         idealStock: parseFloat(idealStock) || undefined,
         location: location.trim() || undefined,
+        supplier: supplier || undefined,
+        referenceNumber: referenceNumber.trim() || undefined,
       });
       
       // Reset form
@@ -163,6 +168,8 @@ export default function InventoryGroupScreen() {
       setMinimumStock(item.lowStockThreshold?.toString() || '');
       setIdealStock(item.idealStock?.toString() || '');
       setLocation(item.location || '');
+      setSupplier(item.supplier || '');
+      setReferenceNumber(item.referenceNumber || '');
     } else {
       setItemName(item.name);
       setItemUnit(item.unit);
@@ -186,7 +193,7 @@ export default function InventoryGroupScreen() {
     const calculatedM2 = (heightNum * widthNum) / 1000000; // Convert mm² to m²
 
     try {
-      await repos.inventoryRepo.updateItem(editingItem.id, {
+      const updateData = {
         name: glassName.trim(),
         height: heightNum,
         width: widthNum,
@@ -195,7 +202,13 @@ export default function InventoryGroupScreen() {
         lowStockThreshold: parseFloat(minimumStock) || 0,
         idealStock: parseFloat(idealStock) || undefined,
         location: location.trim() || undefined,
-      });
+        supplier: supplier && supplier.trim() ? supplier.trim() : undefined,
+        referenceNumber: referenceNumber && referenceNumber.trim() ? referenceNumber.trim() : undefined,
+      };
+      
+      console.log('Updating item with data:', updateData);
+      const updatedItem = await repos.inventoryRepo.updateItem(editingItem.id, updateData);
+      console.log('Item updated successfully:', updatedItem);
       
       // Reset form
       resetForm();
@@ -262,6 +275,8 @@ export default function InventoryGroupScreen() {
     setMinimumStock('');
     setIdealStock('');
     setLocation('');
+    setSupplier('');
+    setReferenceNumber('');
     setItemName('');
     setItemUnit('');
     setItemStock('');
@@ -489,6 +504,21 @@ export default function InventoryGroupScreen() {
                         value={location}
                         onChangeText={setLocation}
                         placeholder={t('inventory.locationPlaceholder')}
+                      />
+                      <Dropdown
+                        label={t('inventory.supplier')}
+                        value={supplier}
+                        options={[
+                          { label: '3S', value: '3S' },
+                          { label: 'Crea Glass', value: 'Crea Glass' },
+                        ]}
+                        onSelect={setSupplier}
+                      />
+                      <Input
+                        label={t('inventory.referenceNumber')}
+                        value={referenceNumber}
+                        onChangeText={setReferenceNumber}
+                        placeholder={t('inventory.referenceNumberPlaceholder')}
                       />
                     </>
                   ) : (

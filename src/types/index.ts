@@ -61,6 +61,8 @@ export interface InventoryItem {
   totalM2?: number;
   idealStock?: number;
   location?: string;
+  supplier?: string; // '3S' or 'Crea Glass'
+  referenceNumber?: string;
 }
 
 export interface InventoryHistory {
