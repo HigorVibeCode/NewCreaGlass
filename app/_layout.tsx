@@ -250,6 +250,24 @@ export default function RootLayout() {
                     headerShown: false,
                   }} 
                 />
+                <Stack.Screen 
+                  name="manuals-list" 
+                  options={{ 
+                    presentation: 'card',
+                    title: 'Manuals',
+                    animation: 'slide_from_right',
+                    headerShown: false,
+                  }} 
+                />
+                <Stack.Screen 
+                  name="manual-create" 
+                  options={{ 
+                    presentation: 'modal',
+                    title: 'Create Manual',
+                    animation: 'slide_from_bottom',
+                    headerShown: false,
+                  }} 
+                />
                 <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
               </Stack>
             </AuthGuard>

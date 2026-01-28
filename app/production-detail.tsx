@@ -23,6 +23,7 @@ import { repos } from '../src/services/container';
 import { useAuth } from '../src/store/auth-store';
 import { theme } from '../src/theme';
 import { downloadAndOpenAttachment } from '../src/utils/attachments';
+import { confirmDelete } from '../src/utils/confirm-dialog';
 import { GlassType, InventoryItem, PaintType, Production, ProductionStatus, ProductionStatusHistory, StructureType, User } from '../src/types';
 
 export default function ProductionDetailScreen() {
@@ -330,28 +331,19 @@ export default function ProductionDetailScreen() {
   };
 
   const handleDelete = () => {
-    Alert.alert(
+    if (!productionId) return;
+    confirmDelete(
       t('common.delete'),
       t('production.deleteOrderConfirm'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('common.delete'),
-          style: 'destructive',
-          onPress: async () => {
-            if (!productionId) return;
-            try {
-              await repos.productionRepo.deleteProduction(productionId);
-              Alert.alert(t('common.success'), t('production.orderDeleted'), [
-                { text: t('common.confirm'), onPress: () => router.back() },
-              ]);
-            } catch (error) {
-              console.error('Error deleting production:', error);
-              Alert.alert(t('common.error'), t('production.deleteOrderError'));
-            }
-          },
-        },
-      ]
+      async () => {
+        await repos.productionRepo.deleteProduction(productionId);
+        router.back();
+      },
+      undefined,
+      t('common.delete'),
+      t('common.cancel'),
+      t('production.orderDeleted'),
+      t('production.deleteOrderError')
     );
   };
 

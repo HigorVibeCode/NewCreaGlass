@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { Platform, Linking } from 'react-native';
+import { AppState, AppStateStatus, Platform, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../store/auth-store';
 import { DevicePlatform } from '../types';
 import Constants from 'expo-constants';
 import { webPushService } from '../services/web-push';
+
+/** EAS Project ID (app.json extra.eas.projectId). Fallback quando Constants.expoConfig não expõe no build standalone. */
+const EAS_PROJECT_ID = 'b9318a96-8f54-4026-af36-7fe80a52e80a';
 
 // Lazy import expo-notifications to handle Expo Go limitations gracefully
 let Notifications: typeof import('expo-notifications') | null = null;
@@ -83,6 +86,8 @@ export const usePushNotifications = () => {
   const [notificationPermission, setNotificationPermission] = useState<boolean>(false);
   const notificationListener = useRef<any>();
   const responseListener = useRef<any>();
+  const tokenRef = useRef<string | null>(null);
+  tokenRef.current = expoPushToken;
 
   useEffect(() => {
     if (!user) return;
@@ -99,23 +104,30 @@ export const usePushNotifications = () => {
       return;
     }
 
-    // Load notifications module and initialize
-    loadNotifications().then(NotificationsModule => {
-      if (!NotificationsModule) {
-        return;
-      }
+    let mounted = true;
 
-      // Register for push notifications
+    const setupPush = (NotificationsModule: typeof import('expo-notifications')) => {
+      if (!mounted) return;
       registerForPushNotificationsAsync(NotificationsModule)
         .then(token => {
-          if (token) {
+          if (mounted && token) {
             setExpoPushToken(token);
+            tokenRef.current = token;
             registerDeviceToken(token);
+          } else if (mounted && !token) {
+            console.warn('[usePushNotifications] Push token is null (permission denied or getExpoPushTokenAsync failed). Check logs above.');
           }
         })
         .catch(error => {
           console.error('[usePushNotifications] Error registering for push:', error);
         });
+    };
+
+    // Load notifications module and initialize
+    loadNotifications().then(NotificationsModule => {
+      if (!NotificationsModule) return;
+
+      setupPush(NotificationsModule);
 
       // Listen for notifications received while app is foregrounded
       notificationListener.current = NotificationsModule.addNotificationReceivedListener(notification => {
@@ -129,7 +141,20 @@ export const usePushNotifications = () => {
       });
     });
 
+    // Retry token registration when app comes to foreground if we still don't have a token (e.g. permission granted later, or standalone config loaded)
+    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      if (nextState !== 'active') return;
+      if (tokenRef.current) return; // já temos token
+      loadNotifications().then(NotificationsModule => {
+        if (!NotificationsModule || !mounted) return;
+        if (tokenRef.current) return;
+        setupPush(NotificationsModule);
+      });
+    });
+
     return () => {
+      mounted = false;
+      subscription?.remove();
       if (notificationListener.current && Notifications) {
         Notifications.removeNotificationSubscription(notificationListener.current);
       }
@@ -318,7 +343,6 @@ async function registerForPushNotificationsAsync(
         },
       };
 
-      // iOS-specific permission options
       if (Platform.OS === 'ios') {
         permissionOptions.ios = {
           allowAlert: true,
@@ -333,7 +357,7 @@ async function registerForPushNotificationsAsync(
     }
 
     if (finalStatus !== 'granted') {
-      console.warn('[registerForPushNotificationsAsync] Permission not granted');
+      console.warn('[registerForPushNotificationsAsync] Permission not granted. User must enable notifications in device settings.');
       return null;
     }
 
@@ -360,14 +384,31 @@ async function registerForPushNotificationsAsync(
       }
     }
 
-    // Get Expo push token
+    // projectId obrigatório para Expo Push em build standalone; no build às vezes Constants.expoConfig.extra não está disponível
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? EAS_PROJECT_ID;
+    if (!projectId) {
+      console.error('[registerForPushNotificationsAsync] projectId is missing. Add extra.eas.projectId in app.json and ensure it is embedded in the build.');
+      return null;
+    }
+    if (projectId === EAS_PROJECT_ID && !Constants.expoConfig?.extra?.eas?.projectId) {
+      console.log('[registerForPushNotificationsAsync] Using fallback EAS projectId (standalone build may not expose extra.eas in Constants)');
+    }
+
     token = (await NotificationsModule.getExpoPushTokenAsync({
-      projectId: Constants.expoConfig?.extra?.eas?.projectId,
+      projectId,
     })).data;
 
-    console.log('[registerForPushNotificationsAsync] Expo push token:', token);
-  } catch (error) {
-    console.error('[registerForPushNotificationsAsync] Error:', error);
+    if (token) {
+      console.log('[registerForPushNotificationsAsync] Expo push token obtained successfully');
+    } else {
+      console.warn('[registerForPushNotificationsAsync] getExpoPushTokenAsync returned null');
+    }
+  } catch (error: any) {
+    console.error('[registerForPushNotificationsAsync] Error:', error?.message ?? error);
+    // Erros comuns: credenciais FCM/APNs não configuradas no EAS, ou projectId incorreto
+    if (error?.message?.includes('projectId') || error?.message?.includes('credentials')) {
+      console.warn('[registerForPushNotificationsAsync] Dica: no build standalone, configure FCM (Android) e/ou APNs (iOS) no EAS (eas credentials).');
+    }
   }
 
   return token;

@@ -30,6 +30,10 @@ function inferMimeType(filename: string): string {
     png: 'image/png',
     gif: 'image/gif',
     webp: 'image/webp',
+    mp4: 'video/mp4',
+    mov: 'video/quicktime',
+    avi: 'video/x-msvideo',
+    webm: 'video/webm',
     txt: 'text/plain',
     doc: 'application/msword',
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -379,17 +383,31 @@ export async function downloadAndOpenAttachment(
       localUri = remoteUrl;
     } else if (remoteUrl.startsWith('http://') || remoteUrl.startsWith('https://')) {
       // É uma URL remota - baixar o arquivo
-      
+      // No mobile, URLs assinadas do Supabase podem retornar 400 com File.downloadFileAsync.
+      // Gerar sempre uma URL assinada nova antes do download usando o path do storage.
+      let urlToDownload = remoteUrl;
+      const signMatch = remoteUrl.match(/\/object\/sign\/[^/]+\/([^/?]+)(\?|$)/);
+      if (signMatch && signMatch[1]) {
+        try {
+          const freshUrl = await getSignedUrlFromStorage(signMatch[1], filename || sanitizedFilename);
+          if (freshUrl && (freshUrl.startsWith('http://') || freshUrl.startsWith('https://'))) {
+            urlToDownload = freshUrl;
+          }
+        } catch (e) {
+          console.warn('Could not get fresh signed URL, using original:', e);
+        }
+      }
+
       // Criar diretório de anexos se não existir
       const attachmentsDir = new Directory(Paths.document, 'attachments');
       const dirInfo = await attachmentsDir.info();
       if (!dirInfo.exists) {
         await attachmentsDir.create();
       }
-      
+
       // Criar referência ao arquivo local
       const localFile = new File(attachmentsDir, sanitizedFilename);
-      
+
       // Verificar se o arquivo já existe localmente
       const fileInfo = await localFile.info();
       if (fileInfo.exists) {
@@ -397,7 +415,7 @@ export async function downloadAndOpenAttachment(
         localUri = localFile.uri;
       } else {
         // Baixar o arquivo usando a nova API
-        await File.downloadFileAsync(remoteUrl, localFile, { idempotent: true });
+        await File.downloadFileAsync(urlToDownload, localFile, { idempotent: true });
         localUri = localFile.uri;
       }
     } else {

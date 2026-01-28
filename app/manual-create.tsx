@@ -21,150 +21,137 @@ import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { useAppTheme } from '../src/hooks/use-app-theme';
 import { repos } from '../src/services/container';
-import { Training, TrainingCategory, TrainingAttachment } from '../src/types';
+import { confirmDelete } from '../src/utils/confirm-dialog';
 import { theme } from '../src/theme';
 
-const MAX_ATTACHMENTS = 5;
+const MAX_PDFS = 3;
 
-export default function TrainingCreateScreen() {
+type AttachmentItem = {
+  id: string;
+  filename: string;
+  mimeType: string;
+  uri: string;
+  isNew?: boolean;
+  attachmentId?: string;
+};
+
+export default function ManualCreateScreen() {
   const { t } = useI18n();
   const router = useRouter();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { effectiveTheme } = useAppTheme();
-  const isDark = effectiveTheme === 'dark';
-  const { trainingId, category } = useLocalSearchParams<{ trainingId?: string; category: TrainingCategory }>();
-  const trainingCategory = category || 'mandatory';
+  const { manualId } = useLocalSearchParams<{ manualId?: string }>();
 
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [content, setContent] = useState('');
-  const [attachments, setAttachments] = useState<Array<{ id: string; filename: string; mimeType: string; uri: string; isNew?: boolean; attachmentId?: string }>>([]);
-  const [isCreating, setIsCreating] = useState(false);
+  const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [uploadingAttachments, setUploadingAttachments] = useState<Set<string>>(new Set());
 
-  const isEditing = !!trainingId;
+  const isEditing = !!manualId;
 
   useEffect(() => {
-    if (trainingId) {
-      loadTraining();
-    }
-  }, [trainingId]);
+    if (manualId) loadManual();
+  }, [manualId]);
 
-  const loadTraining = async () => {
-    if (!trainingId) return;
+  const loadManual = async () => {
+    if (!manualId) return;
     setIsLoading(true);
     try {
-      const training = await repos.trainingRepo.getTrainingById(trainingId);
-      if (training) {
-        setTitle(training.title);
-        setDescription(training.description || '');
-        setContent(training.content || '');
-        
-        // Load attachments
-        if (training.attachments) {
-          setAttachments(training.attachments.map(att => ({
-            id: att.id,
-            filename: att.filename,
-            mimeType: att.mimeType,
-            uri: att.storagePath,
-            isNew: false,
-            attachmentId: att.id,
-          })));
+      const manual = await repos.manualsRepo.getManualById(manualId);
+      if (manual) {
+        setTitle(manual.title);
+        if (manual.attachments?.length) {
+          setAttachments(
+            manual.attachments.map((att) => ({
+              id: att.id,
+              filename: att.filename,
+              mimeType: att.mimeType,
+              uri: att.storagePath,
+              isNew: false,
+              attachmentId: att.id,
+            }))
+          );
         }
       } else {
-        Alert.alert(t('common.error'), t('training.trainingNotFound'), [
+        Alert.alert(t('common.error'), t('manuals.manualNotFound'), [
           { text: t('common.ok') || t('common.confirm'), onPress: () => router.back() },
         ]);
       }
     } catch (error) {
-      console.error('Error loading training:', error);
-      Alert.alert(t('common.error'), t('training.loadError'));
+      console.error('Error loading manual:', error);
+      Alert.alert(t('common.error'), t('manuals.loadError'));
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleChooseDocument = async () => {
-    if (attachments.length >= MAX_ATTACHMENTS) {
-        Alert.alert(t('common.error'), t('training.maxAttachments', { count: MAX_ATTACHMENTS }));
+  const handleChoosePdf = async () => {
+    if (attachments.length >= MAX_PDFS) {
+      Alert.alert(t('common.error'), t('manuals.maxPdfsReached', { count: MAX_PDFS }));
       return;
     }
-
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          'application/pdf',
-          'video/mp4',
-          'video/quicktime',
-          'video/x-msvideo',
-          'video/webm',
-        ],
+        type: 'application/pdf',
         copyToCacheDirectory: true,
         multiple: false,
       });
-
       if (result.canceled) return;
-
       const file = result.assets[0];
-      const fileMimeType = file.mimeType || 'application/pdf';
-      const isPDF = fileMimeType === 'application/pdf';
-      const isVideo = fileMimeType.startsWith('video/');
-
-      if (!isPDF && !isVideo) {
-        Alert.alert(t('common.error'), t('training.onlyPdfVideoAllowed'));
+      const mimeType = file.mimeType || 'application/pdf';
+      if (mimeType !== 'application/pdf') {
+        Alert.alert(t('common.error'), t('manuals.onlyPdfAllowed'));
         return;
       }
-
-      const newAttachment = {
-        id: 'attach-' + Date.now(),
-        filename: file.name,
-        mimeType: fileMimeType,
-        uri: file.uri,
-        isNew: true,
-      };
-
-      setAttachments([...attachments, newAttachment]);
+      setAttachments((prev) => [
+        ...prev,
+        {
+          id: 'attach-' + Date.now(),
+          filename: file.name,
+          mimeType,
+          uri: file.uri,
+          isNew: true,
+        },
+      ]);
     } catch (error) {
-      console.error('Error picking document:', error);
-      Alert.alert(t('common.error'), t('training.selectDocumentError'));
+      console.error('Error picking PDF:', error);
+      Alert.alert(t('common.error'), t('manuals.selectPdfError'));
     }
   };
 
   const handleRemoveAttachment = (id: string) => {
-    const attachment = attachments.find(att => att.id === id);
+    const attachment = attachments.find((a) => a.id === id);
     if (attachment && !attachment.isNew && attachment.attachmentId) {
-      // Se é um anexo existente, confirmar exclusão
       Alert.alert(
         t('common.confirm'),
-        t('training.removeAttachmentConfirm'),
+        t('manuals.removePdfConfirm'),
         [
-          { text: t('common.cancel') || 'Cancelar', style: 'cancel' },
+          { text: t('common.cancel'), style: 'cancel' },
           {
-            text: t('common.delete') || 'Excluir',
+            text: t('common.delete'),
             style: 'destructive',
             onPress: async () => {
               try {
-                await repos.trainingRepo.deleteTrainingAttachment(attachment.attachmentId!);
-                setAttachments(attachments.filter(att => att.id !== id));
+                await repos.manualsRepo.deleteManualAttachment(attachment.attachmentId!);
+                setAttachments((prev) => prev.filter((a) => a.id !== id));
               } catch (error) {
                 console.error('Error deleting attachment:', error);
-                Alert.alert(t('common.error'), t('training.removeAttachmentError'));
+                Alert.alert(t('common.error'), t('manuals.removeAttachmentError'));
               }
             },
           },
         ]
       );
     } else {
-      // Se é um anexo novo, apenas remover da lista
-      setAttachments(attachments.filter(att => att.id !== id));
+      setAttachments((prev) => prev.filter((a) => a.id !== id));
     }
   };
 
   const validateForm = (): boolean => {
     if (!title.trim()) {
-      Alert.alert(t('common.error'), t('training.titleRequired'));
+      Alert.alert(t('common.error'), t('manuals.titleRequired'));
       return false;
     }
     return true;
@@ -172,44 +159,31 @@ export default function TrainingCreateScreen() {
 
   const handleSave = async () => {
     if (!validateForm()) return;
-
-    setIsCreating(true);
+    setIsSaving(true);
     try {
-      const trainingData: Omit<Training, 'id' | 'createdAt' | 'updatedAt' | 'attachments'> = {
-        title: title.trim(),
-        description: description.trim() || undefined,
-        category: trainingCategory,
-        content: content.trim() || undefined,
-        durationMinutes: undefined,
-        isActive: true,
-        createdBy: '', // Será preenchido pelo repository
-      };
-
-      let savedTrainingId: string;
-
-      if (isEditing && trainingId) {
-        await repos.trainingRepo.updateTraining(trainingId, trainingData);
-        savedTrainingId = trainingId;
+      let savedManualId: string;
+      if (isEditing && manualId) {
+        await repos.manualsRepo.updateManual(manualId, { title: title.trim() });
+        savedManualId = manualId;
       } else {
-        const newTraining = await repos.trainingRepo.createTraining(trainingData);
-        savedTrainingId = newTraining.id;
+        const manual = await repos.manualsRepo.createManual({ title: title.trim() });
+        savedManualId = manual.id;
       }
 
-      // Upload new attachments
-      const newAttachments = attachments.filter(att => att.isNew);
+      const newAttachments = attachments.filter((a) => a.isNew);
       if (newAttachments.length > 0) {
-        setUploadingAttachments(new Set(newAttachments.map(att => att.id)));
+        setUploadingAttachments(new Set(newAttachments.map((a) => a.id)));
         try {
-          for (const attachment of newAttachments) {
-            await repos.trainingRepo.addTrainingAttachment(savedTrainingId, {
-              uri: attachment.uri,
-              name: attachment.filename,
-              type: attachment.mimeType,
+          for (const att of newAttachments) {
+            await repos.manualsRepo.addManualAttachment(savedManualId, {
+              uri: att.uri,
+              name: att.filename,
+              type: att.mimeType,
             });
           }
         } catch (error) {
-          console.error('Error uploading attachments:', error);
-          Alert.alert(t('common.error'), t('training.uploadAttachmentsError'));
+          console.error('Error uploading PDFs:', error);
+          Alert.alert(t('common.error'), t('manuals.uploadPdfsError'));
         } finally {
           setUploadingAttachments(new Set());
         }
@@ -217,27 +191,32 @@ export default function TrainingCreateScreen() {
 
       Alert.alert(
         t('common.success'),
-        isEditing ? t('training.trainingUpdated') : t('training.trainingCreated'),
-        [
-          { text: t('common.ok') || t('common.confirm'), onPress: () => router.back() },
-        ]
+        isEditing ? t('manuals.manualUpdated') : t('manuals.manualCreated'),
+        [{ text: t('common.ok') || t('common.confirm'), onPress: () => router.back() }]
       );
     } catch (error) {
-      console.error('Error saving training:', error);
-      Alert.alert(t('common.error'), t('training.saveError'));
+      console.error('Error saving manual:', error);
+      Alert.alert(t('common.error'), t('manuals.saveError'));
     } finally {
-      setIsCreating(false);
+      setIsSaving(false);
     }
   };
 
-  const getCategoryTitle = () => {
-    if (trainingCategory === 'mandatory') {
-      return t('training.category.mandatory');
-    }
-    if (trainingCategory === 'onboarding') {
-      return t('training.category.onboarding');
-    }
-    return t('training.category.professional');
+  const handleDeleteManual = () => {
+    if (!manualId) return;
+    confirmDelete(
+      t('common.delete'),
+      t('manuals.deleteConfirm', { title: title || '' }),
+      async () => {
+        await repos.manualsRepo.deleteManual(manualId);
+        router.back();
+      },
+      undefined,
+      t('common.delete'),
+      t('common.cancel'),
+      t('manuals.manualDeleted'),
+      t('manuals.deleteError')
+    );
   };
 
   if (isLoading) {
@@ -251,7 +230,6 @@ export default function TrainingCreateScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScreenWrapper>
-        {/* Custom Header */}
         <View
           style={[
             styles.header,
@@ -264,15 +242,11 @@ export default function TrainingCreateScreen() {
           ]}
         >
           <View style={styles.headerContent}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.back()}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.7}>
               <Ionicons name="arrow-back" size={24} color={colors.text} />
             </TouchableOpacity>
             <Text style={[styles.headerTitle, { color: colors.text }]}>
-              {isEditing ? t('training.editTraining') : t('training.newTraining')}
+              {isEditing ? t('manuals.editManual') : t('manuals.newManual')}
             </Text>
             <View style={styles.headerSpacer} />
           </View>
@@ -288,44 +262,18 @@ export default function TrainingCreateScreen() {
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                {getCategoryTitle()}
-              </Text>
-              
               <Input
-                label={`${t('training.titleLabel')} *`}
+                label={`${t('manuals.manualTitle')} *`}
                 value={title}
                 onChangeText={setTitle}
-                placeholder={t('training.titlePlaceholder')}
+                placeholder={t('manuals.titlePlaceholder')}
               />
-
-              <Input
-                label={t('training.descriptionLabel')}
-                value={description}
-                onChangeText={setDescription}
-                placeholder={t('training.descriptionPlaceholder')}
-                multiline
-                numberOfLines={3}
-              />
-
-              <Input
-                label={t('training.contentLabel')}
-                value={content}
-                onChangeText={setContent}
-                placeholder={t('training.contentPlaceholder')}
-                multiline
-                numberOfLines={10}
-              />
-
             </View>
 
-            {/* Attachments Section */}
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                {t('training.mediaLabel')}
-              </Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('manuals.attachPdf')}</Text>
               <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
-                {t('training.mediaSubtitle', { count: MAX_ATTACHMENTS })}
+                {t('manuals.maxPdfs', { count: MAX_PDFS })}
               </Text>
 
               {attachments.length > 0 && (
@@ -344,10 +292,7 @@ export default function TrainingCreateScreen() {
                       {uploadingAttachments.has(attachment.id) ? (
                         <ActivityIndicator size="small" color={colors.primary} />
                       ) : (
-                        <TouchableOpacity
-                          onPress={() => handleRemoveAttachment(attachment.id)}
-                          style={styles.removeButton}
-                        >
+                        <TouchableOpacity onPress={() => handleRemoveAttachment(attachment.id)} style={styles.removeButton}>
                           <Ionicons name="close-circle" size={24} color={colors.error} />
                         </TouchableOpacity>
                       )}
@@ -356,16 +301,14 @@ export default function TrainingCreateScreen() {
                 </View>
               )}
 
-              {attachments.length < MAX_ATTACHMENTS && (
+              {attachments.length < MAX_PDFS && (
                 <TouchableOpacity
                   style={[styles.addAttachmentButton, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
-                  onPress={handleChooseDocument}
+                  onPress={handleChoosePdf}
                   activeOpacity={0.7}
                 >
                   <Ionicons name="add-circle-outline" size={24} color={colors.primary} />
-                  <Text style={[styles.addAttachmentText, { color: colors.primary }]}>
-                    Adicionar mídia
-                  </Text>
+                  <Text style={[styles.addAttachmentText, { color: colors.primary }]}>{t('manuals.addPdf')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -374,9 +317,21 @@ export default function TrainingCreateScreen() {
               <Button
                 title={isEditing ? (t('common.save') || 'Salvar') : (t('common.create') || 'Criar')}
                 onPress={handleSave}
-                loading={isCreating}
-                disabled={isCreating}
+                loading={isSaving}
+                disabled={isSaving}
               />
+              {isEditing && (
+                <TouchableOpacity
+                  style={[styles.deleteButton, { backgroundColor: colors.error }]}
+                  onPress={handleDeleteManual}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="trash-outline" size={20} color="#fff" />
+                  <Text style={styles.deleteButtonText}>
+                    {t('common.delete') || 'Excluir'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -408,9 +363,9 @@ const styles = StyleSheet.create({
     marginLeft: -theme.spacing.xs,
   },
   headerTitle: {
-    flex: 1,
     fontSize: theme.typography.fontSize.lg,
     fontWeight: theme.typography.fontWeight.bold,
+    flex: 1,
   },
   headerSpacer: {
     width: 40,
@@ -425,32 +380,27 @@ const styles = StyleSheet.create({
     padding: theme.spacing.lg,
   },
   section: {
-    gap: theme.spacing.md,
     marginBottom: theme.spacing.lg,
   },
   sectionTitle: {
     fontSize: theme.typography.fontSize.md,
-    fontWeight: theme.typography.fontWeight.semibold,
-    marginBottom: theme.spacing.sm,
-  },
-  buttonContainer: {
-    marginTop: theme.spacing.md,
+    fontWeight: theme.typography.fontWeight.bold,
+    marginBottom: theme.spacing.xs,
   },
   sectionSubtitle: {
     fontSize: theme.typography.fontSize.sm,
-    marginBottom: theme.spacing.md,
-    lineHeight: theme.typography.lineHeight.sm * 1.2,
+    marginBottom: theme.spacing.sm,
   },
   attachmentsList: {
     gap: theme.spacing.sm,
-    marginBottom: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
   },
   attachmentItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: theme.spacing.sm,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.sm,
     borderWidth: 1,
   },
   attachmentInfo: {
@@ -472,12 +422,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: theme.spacing.sm,
     padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.sm,
     borderWidth: 1,
     borderStyle: 'dashed',
   },
   addAttachmentText: {
     fontSize: theme.typography.fontSize.md,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontWeight: '500',
+  },
+  buttonContainer: {
+    marginTop: theme.spacing.md,
+    gap: theme.spacing.sm,
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.borderRadius.md,
+    marginTop: theme.spacing.sm,
+  },
+  deleteButtonText: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.bold,
+    color: '#fff',
   },
 });

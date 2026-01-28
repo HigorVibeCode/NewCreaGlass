@@ -321,6 +321,21 @@ export class SupabaseTrainingRepository implements TrainingRepository {
     return data ? this.mapToTrainingCompletion(data) : null;
   }
 
+  async getSignatureByCompletionId(completionId: string): Promise<TrainingSignature | null> {
+    const { data, error } = await supabase
+      .from('training_signatures')
+      .select('*')
+      .eq('training_completion_id', completionId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error fetching signature by completion:', error);
+      return null;
+    }
+
+    return data ? this.mapToTrainingSignature(data) : null;
+  }
+
   async getCompletedTrainings(userId?: string): Promise<TrainingWithCompletion[]> {
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (!authUser) {

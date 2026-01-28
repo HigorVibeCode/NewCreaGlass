@@ -102,13 +102,9 @@
           }
         }
       },
-      "proceduresManuals": {
-        "title": "Procédures & Manuels",
-        "subtitle": "Documentation des procédures"
-      },
-      "professionalTraining": {
-        "title": "Formation Professionnelle",
-        "subtitle": "Matériel de formation"
+      "proceduresInstructionsTrainings": {
+        "title": "Procédures, instructions et formations",
+        "subtitle": "Accéder aux procédures, instructions et formations"
       }
     }
   },
@@ -263,7 +259,7 @@
     "takePhoto": "Prendre une Photo",
     "chooseFromLibrary": "Galerie",
     "chooseDocument": "PDF",
-    "maxAttachments": "Maximum 3 pièces jointes autorisées",
+    "maxAttachments": "Maximum 10 pièces jointes autorisées",
     "cameraPermissionDenied": "Autorisation de caméra refusée",
     "mediaPermissionDenied": "Autorisation de galerie refusée",
     "fillRequiredFields": "Veuillez remplir tous les champs obligatoires",
@@ -352,7 +348,7 @@
     "takePhoto": "Prendre une Photo",
     "chooseFromLibrary": "Galerie",
     "chooseDocument": "PDF",
-    "maxAttachments": "Maximum 3 pièces jointes autorisées",
+    "maxAttachments": "Maximum 10 pièces jointes autorisées",
     "addAttachmentError": "Échec de l'ajout de la pièce jointe",
     "cameraPermissionDenied": "Autorisation de caméra refusée",
     "mediaPermissionDenied": "Autorisation de galerie refusée",

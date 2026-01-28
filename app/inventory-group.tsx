@@ -16,6 +16,7 @@ import { repos } from '../src/services/container';
 import { InventoryGroup, InventoryItem } from '../src/types';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { confirmDelete } from '../src/utils/confirm-dialog';
 
 export default function InventoryGroupScreen() {
   const { t } = useI18n();
@@ -245,25 +246,18 @@ export default function InventoryGroupScreen() {
   };
 
   const handleDeleteItem = (item: InventoryItem) => {
-    Alert.alert(
+    confirmDelete(
       t('inventory.deleteItem'),
       `${t('inventory.deleteItemConfirm')} "${item.name}"?`,
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('common.delete'),
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await repos.inventoryRepo.deleteItem(item.id);
-              await loadItems();
-            } catch (error) {
-              console.error('Error deleting item:', error);
-              Alert.alert(t('common.error'), t('inventory.deleteItemError'));
-            }
-          },
-        },
-      ]
+      async () => {
+        await repos.inventoryRepo.deleteItem(item.id);
+        await loadItems();
+      },
+      undefined,
+      t('common.delete'),
+      t('common.cancel'),
+      undefined,
+      t('inventory.deleteItemError')
     );
   };
 

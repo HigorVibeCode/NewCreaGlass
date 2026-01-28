@@ -189,9 +189,14 @@ export default function TrainingsHistoryScreen() {
             ) : (
               <View style={styles.trainingsContainer}>
                 {trainings.map((training) => (
-                  <View
+                  <TouchableOpacity
                     key={training.id}
                     style={[styles.trainingCard, { backgroundColor: colors.cardBackground }]}
+                    onPress={() => router.push({
+                      pathname: '/training-detail',
+                      params: { trainingId: training.id },
+                    } as any)}
+                    activeOpacity={0.7}
                   >
                     <View style={styles.trainingHeader}>
                       <Text style={[styles.trainingTitle, { color: colors.text }]} numberOfLines={2}>
@@ -287,7 +292,13 @@ export default function TrainingsHistoryScreen() {
                         )}
                       </View>
                     )}
-                  </View>
+                    <View style={[styles.viewTrainingRow, { borderTopColor: colors.border }]}>
+                      <Ionicons name="open-outline" size={16} color={colors.primary} />
+                      <Text style={[styles.viewTrainingText, { color: colors.primary }]}>
+                        Ver treinamento e mídia
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             )}
@@ -455,6 +466,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.xs,
+  },
+  viewTrainingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    marginTop: theme.spacing.sm,
+    paddingTop: theme.spacing.sm,
+    borderTopWidth: 1,
+  },
+  viewTrainingText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
   },
   completionText: {
     fontSize: theme.typography.fontSize.sm,

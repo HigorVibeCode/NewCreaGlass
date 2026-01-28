@@ -105,13 +105,9 @@
           }
         }
       },
-      "proceduresManuals": {
-        "title": "Procedure & Manuali",
-        "subtitle": "Documentazione delle procedure"
-      },
-      "professionalTraining": {
-        "title": "Formazione Professionale",
-        "subtitle": "Materiali di formazione"
+      "proceduresInstructionsTrainings": {
+        "title": "Procedure, istruzioni e formazione",
+        "subtitle": "Accedi a procedure, istruzioni e formazione"
       }
     }
   },
@@ -266,7 +262,7 @@
     "takePhoto": "Scatta Foto",
     "chooseFromLibrary": "Galleria",
     "chooseDocument": "PDF",
-    "maxAttachments": "Massimo 3 allegati consentiti",
+    "maxAttachments": "Massimo 10 allegati consentiti",
     "cameraPermissionDenied": "Autorizzazione fotocamera negata",
     "mediaPermissionDenied": "Autorizzazione galleria negata",
     "fillRequiredFields": "Si prega di compilare tutti i campi obbligatori",
@@ -355,7 +351,7 @@
     "takePhoto": "Scatta Foto",
     "chooseFromLibrary": "Galleria",
     "chooseDocument": "PDF",
-    "maxAttachments": "Massimo 3 allegati consentiti",
+    "maxAttachments": "Massimo 10 allegati consentiti",
     "addAttachmentError": "Errore nell'aggiunta dell'allegato",
     "cameraPermissionDenied": "Autorizzazione fotocamera negata",
     "mediaPermissionDenied": "Autorizzazione galleria negata",

@@ -102,13 +102,9 @@
           }
         }
       },
-      "proceduresManuals": {
-        "title": "Verfahren & Handbücher",
-        "subtitle": "Verfahrensdokumentation"
-      },
-      "professionalTraining": {
-        "title": "Berufliche Ausbildung",
-        "subtitle": "Schulungsmaterialien"
+      "proceduresInstructionsTrainings": {
+        "title": "Verfahren, Anweisungen und Schulungen",
+        "subtitle": "Zugriff auf Verfahren, Anweisungen und Schulungen"
       }
     }
   },
@@ -263,7 +259,7 @@
     "takePhoto": "Foto aufnehmen",
     "chooseFromLibrary": "Galerie",
     "chooseDocument": "PDF",
-    "maxAttachments": "Maximal 3 Anhänge erlaubt",
+    "maxAttachments": "Maximal 10 Anhänge erlaubt",
     "cameraPermissionDenied": "Kamera-Berechtigung verweigert",
     "mediaPermissionDenied": "Medienbibliothek-Berechtigung verweigert",
     "fillRequiredFields": "Bitte füllen Sie alle erforderlichen Felder aus",
@@ -352,7 +348,7 @@
     "takePhoto": "Foto aufnehmen",
     "chooseFromLibrary": "Galerie",
     "chooseDocument": "PDF",
-    "maxAttachments": "Maximal 3 Anhänge erlaubt",
+    "maxAttachments": "Maximal 10 Anhänge erlaubt",
     "addAttachmentError": "Fehler beim Hinzufügen des Anhangs",
     "cameraPermissionDenied": "Kamera-Berechtigung verweigert",
     "mediaPermissionDenied": "Medienbibliothek-Berechtigung verweigert",

@@ -105,13 +105,9 @@
           }
         }
       },
-      "proceduresManuals": {
-        "title": "Procedures & Manuals",
-        "subtitle": "Procedure documentation"
-      },
-      "professionalTraining": {
-        "title": "Professional Training",
-        "subtitle": "Training materials"
+      "proceduresInstructionsTrainings": {
+        "title": "Procedures, instructions and trainings",
+        "subtitle": "Access procedures, instructions and trainings"
       }
     }
   },
@@ -267,7 +263,7 @@
     "takePhoto": "Take Photo",
     "chooseFromLibrary": "Gallery",
     "chooseDocument": "PDF",
-    "maxAttachments": "Maximum 3 attachments allowed",
+    "maxAttachments": "Maximum 10 attachments allowed",
     "cameraPermissionDenied": "Camera permission denied",
     "mediaPermissionDenied": "Media library permission denied",
     "fillRequiredFields": "Please fill all required fields",

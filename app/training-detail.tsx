@@ -21,7 +21,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useAuth } from '../src/store/auth-store';
 import { repos } from '../src/services/container';
-import { Training, TrainingCompletion } from '../src/types';
+import { Training, TrainingCompletion, TrainingSignature } from '../src/types';
+import { supabase } from '../src/services/supabase';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
@@ -34,7 +35,7 @@ import { confirmDelete } from '../src/utils/confirm-dialog';
 type TrainingState = 'not_started' | 'in_progress' | 'signature_required' | 'completed';
 
 export default function TrainingDetailScreen() {
-  const { t } = useI18n();
+  const { t, currentLanguage } = useI18n();
   const router = useRouter();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
@@ -58,6 +59,9 @@ export default function TrainingDetailScreen() {
   const isReadingSignatureRef = useRef(false);
   const [isDrawingSignature, setIsDrawingSignature] = useState(false);
   const scrollViewRef = useRef<any>(null);
+  const [completionSignature, setCompletionSignature] = useState<TrainingSignature | null>(null);
+  const [showCompletedSignatureModal, setShowCompletedSignatureModal] = useState(false);
+  const [completedSignatureImageUrl, setCompletedSignatureImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (trainingId) {
@@ -104,6 +108,7 @@ export default function TrainingDetailScreen() {
   const loadTraining = async () => {
     if (!trainingId || !user) return;
     setIsLoading(true);
+    setCompletionSignature(null);
     try {
       const trainingData = await repos.trainingRepo.getTrainingById(trainingId);
       if (trainingData) {
@@ -114,10 +119,13 @@ export default function TrainingDetailScreen() {
         if (existingCompletion) {
           setCompletion(existingCompletion);
           if (existingCompletion.completedAt) {
-            // Já foi concluído - mas permite refazer
-            // Treinamentos concluídos vão para histórico, mas podem ser refeitos
-            setTrainingState('not_started'); // Permite reiniciar
-            setTimeSpent(0);
+            // Já foi concluído: exibir em modo somente leitura (conteúdo, anexos e dados da conclusão)
+            setTrainingState('completed');
+            setTimeSpent(existingCompletion.timeSpentSeconds || 0);
+            // Carregar assinatura da conclusão para exibir na tela
+            repos.trainingRepo.getSignatureByCompletionId(existingCompletion.id).then((sig) => {
+              setCompletionSignature(sig);
+            }).catch(() => setCompletionSignature(null));
           } else {
             // Está em andamento - retomar timer
             setTrainingState('in_progress');
@@ -131,13 +139,13 @@ export default function TrainingDetailScreen() {
           setTrainingState('not_started');
         }
       } else {
-        Alert.alert(t('common.error') || 'Erro', 'Treinamento não encontrado', [
-          { text: t('common.confirm') || 'OK', onPress: () => router.back() },
+        Alert.alert(t('common.error'), t('training.trainingNotFound'), [
+          { text: t('common.ok') || t('common.confirm'), onPress: () => router.back() },
         ]);
       }
     } catch (error) {
       console.error('Error loading training:', error);
-      Alert.alert(t('common.error') || 'Erro', 'Falha ao carregar treinamento');
+      Alert.alert(t('common.error'), t('training.loadError'));
     } finally {
       setIsLoading(false);
     }
@@ -157,7 +165,7 @@ export default function TrainingDetailScreen() {
       setTrainingState('in_progress');
     } catch (error) {
       console.error('Error starting training:', error);
-      Alert.alert(t('common.error') || 'Erro', 'Falha ao iniciar treinamento');
+      Alert.alert(t('common.error'), t('training.startError'));
     }
   };
 
@@ -174,7 +182,7 @@ export default function TrainingDetailScreen() {
   const handleRequestSignature = () => {
     // Verificar se o treinamento está em progresso
     if (trainingState !== 'in_progress') {
-      Alert.alert(t('common.error') || 'Erro', 'O treinamento precisa estar em andamento para ser concluído');
+      Alert.alert(t('common.error'), t('training.mustBeInProgress'));
       return;
     }
     // Resetar estados do modal antes de abrir
@@ -188,7 +196,7 @@ export default function TrainingDetailScreen() {
   const handleSignatureComplete = () => {
     // Verificar nome primeiro
     if (!fullName.trim()) {
-      Alert.alert(t('common.error') || 'Erro', 'Por favor, digite seu nome completo');
+      Alert.alert(t('common.error'), t('training.fullNameRequired'));
       return;
     }
 
@@ -217,16 +225,10 @@ export default function TrainingDetailScreen() {
         console.error('Error reading signature:', error);
         isReadingSignatureRef.current = false;
         setPendingSignature(null);
-        Alert.alert(
-          t('common.error') || 'Erro', 
-          'Não foi possível ler a assinatura. Por favor, desenhe sua assinatura no canvas e clique em "Salvar Assinatura" primeiro.'
-        );
+          Alert.alert(t('common.error'), t('training.signatureReadError'));
       }
     } else {
-      Alert.alert(
-        t('common.error') || 'Erro', 
-        'Por favor, desenhe sua assinatura no campo acima. Você pode clicar em "Salvar Assinatura" no canvas ou usar este botão.'
-      );
+        Alert.alert(t('common.error'), t('training.drawSignatureFirst'));
     }
   };
 
@@ -253,7 +255,7 @@ export default function TrainingDetailScreen() {
             setShowSignatureModal(false);
           }, 100);
         } else {
-          Alert.alert(t('common.error') || 'Erro', 'Por favor, digite seu nome completo');
+          Alert.alert(t('common.error'), t('training.fullNameRequired'));
         }
       }
     } else {
@@ -261,16 +263,10 @@ export default function TrainingDetailScreen() {
       setPendingSignature(null);
       if (isReadingSignatureRef.current) {
         isReadingSignatureRef.current = false;
-        Alert.alert(
-          t('common.error') || 'Erro',
-          'A assinatura está vazia ou muito curta. Por favor, desenhe sua assinatura novamente.'
-        );
+        Alert.alert(t('common.error'), t('training.signatureEmpty'));
       } else {
         // Se o usuário clicou em "Salvar Assinatura" mas a assinatura está vazia
-        Alert.alert(
-          t('common.error') || 'Erro',
-          'Por favor, desenhe sua assinatura no canvas antes de salvar.'
-        );
+        Alert.alert(t('common.error'), t('training.drawSignatureBeforeSave'));
       }
     }
   };
@@ -281,10 +277,7 @@ export default function TrainingDetailScreen() {
     setPendingSignature(null);
     if (isReadingSignatureRef.current) {
       isReadingSignatureRef.current = false;
-      Alert.alert(
-        t('common.error') || 'Erro',
-        'A assinatura está vazia. Por favor, desenhe sua assinatura no canvas.'
-      );
+      Alert.alert(t('common.error'), t('training.signatureEmptyError'));
     }
   };
 
@@ -342,15 +335,15 @@ export default function TrainingDetailScreen() {
       await loadTraining();
 
       Alert.alert(
-        t('common.success') || 'Sucesso',
-        'Treinamento concluído com sucesso!',
+        t('common.success'),
+        t('training.trainingCompleted'),
         [
-          { text: t('common.confirm') || 'OK', onPress: () => router.back() },
+          { text: t('common.ok') || t('common.confirm'), onPress: () => router.back() },
         ]
       );
     } catch (error) {
       console.error('Error completing training:', error);
-      Alert.alert(t('common.error') || 'Erro', 'Falha ao concluir treinamento');
+      Alert.alert(t('common.error'), t('training.completeError'));
     } finally {
       setIsProcessing(false);
       setCanComplete(false);
@@ -373,7 +366,18 @@ export default function TrainingDetailScreen() {
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR', {
+    // Usar locale baseado no idioma atual
+    const localeMap: Record<string, string> = {
+      'pt': 'pt-BR',
+      'en': 'en-US',
+      'es': 'es-ES',
+      'de': 'de-DE',
+      'fr': 'fr-FR',
+      'it': 'it-IT',
+    };
+    const currentLang = currentLanguage || 'pt';
+    const locale = localeMap[currentLang] || 'pt-BR';
+    return date.toLocaleDateString(locale, {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -389,11 +393,11 @@ export default function TrainingDetailScreen() {
       if (canOpen) {
         await Linking.openURL(url);
       } else {
-        Alert.alert(t('common.error') || 'Erro', 'Não foi possível abrir o arquivo');
+        Alert.alert(t('common.error'), t('training.openAttachmentError'));
       }
     } catch (error) {
       console.error('Error opening attachment:', error);
-      Alert.alert(t('common.error') || 'Erro', 'Falha ao abrir anexo');
+      Alert.alert(t('common.error'), t('training.openAttachmentError'));
     }
   };
 
@@ -402,23 +406,23 @@ export default function TrainingDetailScreen() {
     
     confirmDelete(
       t('common.delete') || 'Excluir',
-      'Tem certeza que deseja excluir este treinamento? Esta ação não pode ser desfeita.',
+      t('training.deleteConfirm'),
       async () => {
         try {
           await repos.trainingRepo.deleteTraining(trainingId);
-          Alert.alert(t('common.success') || 'Sucesso', 'Treinamento excluído com sucesso', [
-            { text: t('common.confirm') || 'OK', onPress: () => router.back() },
+          Alert.alert(t('common.success'), t('training.trainingDeleted'), [
+            { text: t('common.ok') || t('common.confirm'), onPress: () => router.back() },
           ]);
         } catch (error) {
           console.error('Error deleting training:', error);
-          Alert.alert(t('common.error') || 'Erro', 'Falha ao excluir treinamento');
+          Alert.alert(t('common.error'), t('training.deleteError'));
         }
       },
       undefined,
-      t('common.delete') || 'Excluir',
-      t('common.cancel') || 'Cancelar',
-      'Treinamento excluído com sucesso',
-      'Falha ao excluir treinamento'
+      t('common.delete'),
+      t('common.cancel'),
+      t('training.trainingDeleted'),
+      t('training.deleteError')
     );
   };
 
@@ -463,6 +467,20 @@ export default function TrainingDetailScreen() {
               {training.title}
             </Text>
             <View style={styles.headerRight}>
+              {(training.category === 'onboarding' || training.category === 'mandatory') && (
+                <PermissionGuard permission="documents.update">
+                  <TouchableOpacity
+                    style={styles.editButton}
+                    onPress={() => router.push({
+                      pathname: '/training-create',
+                      params: { trainingId: training.id, category: training.category },
+                    } as any)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="pencil-outline" size={24} color={colors.primary} />
+                  </TouchableOpacity>
+                </PermissionGuard>
+              )}
               <PermissionGuard permission="documents.delete">
                 <TouchableOpacity
                   style={styles.deleteButton}
@@ -499,7 +517,7 @@ export default function TrainingDetailScreen() {
                 <Text style={[styles.statusText, {
                   color: isCompleted ? colors.success : trainingState === 'in_progress' ? colors.primary : colors.textSecondary
                 }]}>
-                  {isCompleted ? 'Concluído' : trainingState === 'in_progress' ? 'Em Andamento' : 'Não Iniciado'}
+                  {isCompleted ? t('training.status.completed') : trainingState === 'in_progress' ? t('training.status.inProgress') : t('training.status.notStarted')}
                 </Text>
               </View>
             </View>
@@ -513,16 +531,16 @@ export default function TrainingDetailScreen() {
             <View style={styles.infoGrid}>
               <View style={styles.infoItem}>
                 <Ionicons name="time-outline" size={18} color={colors.textSecondary} />
-                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Duração</Text>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('training.duration')}</Text>
                 <Text style={[styles.infoValue, { color: colors.text }]}>
-                  {training.durationMinutes ? `${training.durationMinutes} min` : 'Não especificada'}
+                  {training.durationMinutes ? `${training.durationMinutes} ${t('training.min')}` : t('training.durationNotSpecified')}
                 </Text>
               </View>
 
               {trainingState === 'in_progress' && (
                 <View style={[styles.infoItem, { backgroundColor: colors.primary + '10' }]}>
                   <Ionicons name="timer" size={18} color={colors.primary} />
-                  <Text style={[styles.infoLabel, { color: colors.primary }]}>Tempo Ativo</Text>
+                  <Text style={[styles.infoLabel, { color: colors.primary }]}>{t('training.activeTime')}</Text>
                   <Text style={[styles.infoValue, { color: colors.primary, fontWeight: 'bold' }]}>
                     {formatTime(timeSpent)}
                   </Text>
@@ -533,14 +551,14 @@ export default function TrainingDetailScreen() {
                 <>
                   <View style={styles.infoItem}>
                     <Ionicons name="calendar-outline" size={18} color={colors.textSecondary} />
-                    <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Concluído em</Text>
+                    <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('training.completedAt')}</Text>
                     <Text style={[styles.infoValue, { color: colors.text }]}>
                       {formatDate(completion.completedAt!)}
                     </Text>
                   </View>
                   <View style={styles.infoItem}>
                     <Ionicons name="time" size={18} color={colors.textSecondary} />
-                    <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Tempo Total</Text>
+                    <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('training.totalTime')}</Text>
                     <Text style={[styles.infoValue, { color: colors.text }]}>
                       {formatTime(completion.timeSpentSeconds)}
                     </Text>
@@ -548,21 +566,54 @@ export default function TrainingDetailScreen() {
                 </>
               )}
             </View>
+            {/* Assinatura do treinamento concluído */}
+            {isCompleted && completionSignature && completionSignature.signaturePath && (
+              <View style={[styles.completedSignatureSection, { borderTopColor: colors.border }]}>
+                <Text style={[styles.completedSignatureLabel, { color: colors.textSecondary }]}>
+                  {t('training.signedBy')} {completionSignature.fullName}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.completedSignatureButton, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
+                  onPress={async () => {
+                    try {
+                      const filename = completionSignature.signaturePath.replace('signatures/', '');
+                      const { data, error } = await supabase.storage
+                        .from('signatures')
+                        .createSignedUrl(filename, 3600);
+                      if (error) throw error;
+                      if (data?.signedUrl) {
+                        setCompletedSignatureImageUrl(data.signedUrl);
+                        setShowCompletedSignatureModal(true);
+                      }
+                    } catch (e) {
+                      console.error('Error opening signature:', e);
+                      Alert.alert(t('common.error'), t('training.openSignatureError'));
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="document-text" size={24} color={colors.primary} />
+                  <Text style={[styles.completedSignatureButtonText, { color: colors.primary }]}>
+                    {t('training.viewSignature')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
 
           {/* Start Training Button - Only show when not started */}
           {trainingState === 'not_started' && (
             <View style={styles.startSection}>
               <Text style={[styles.startTitle, { color: colors.text }]}>
-                Pronto para começar?
+                {t('training.readyToStart')}
               </Text>
               <Text style={[styles.startDescription, { color: colors.textSecondary }]}>
-                Deslize o botão abaixo para iniciar o treinamento. O timer começará automaticamente.
+                {t('training.readyToStartDescription')}
               </Text>
               <SlideToConfirm
                 onConfirm={handleStartTraining}
-                text="Deslize para iniciar o treinamento"
-                confirmText="Iniciar"
+                text={t('training.slideToStart')}
+                confirmText={t('training.start')}
               />
             </View>
           )}
@@ -572,7 +623,7 @@ export default function TrainingDetailScreen() {
             <>
               {training.content && (
                 <View style={[styles.contentCard, { backgroundColor: colors.cardBackground }]}>
-                  <Text style={[styles.sectionTitle, { color: colors.text }]}>Conteúdo do Treinamento</Text>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('training.contentTitle')}</Text>
                   <View style={[styles.contentBox, { backgroundColor: colors.backgroundSecondary }]}>
                     <Text style={[styles.contentText, { color: colors.text }]}>
                       {training.content}
@@ -581,10 +632,10 @@ export default function TrainingDetailScreen() {
                 </View>
               )}
 
-              {/* Attachments */}
+              {/* Attachments / Mídias */}
               {training.attachments && training.attachments.length > 0 && (
                 <View style={[styles.contentCard, { backgroundColor: colors.cardBackground }]}>
-                  <Text style={[styles.sectionTitle, { color: colors.text }]}>Anexos PDF</Text>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('training.mediaLabel')}</Text>
                   <View style={styles.attachmentsList}>
                     {training.attachments.map((attachment) => (
                       <TouchableOpacity
@@ -595,14 +646,14 @@ export default function TrainingDetailScreen() {
                       >
                         <View style={styles.attachmentContent}>
                           <View style={[styles.attachmentIcon, { backgroundColor: colors.error + '20' }]}>
-                            <Ionicons name="document-text" size={24} color={colors.error} />
+                            <Ionicons name={attachment.mimeType?.startsWith('video/') ? 'videocam' : 'document-text'} size={24} color={colors.error} />
                           </View>
                           <View style={styles.attachmentInfo}>
                             <Text style={[styles.attachmentName, { color: colors.text }]} numberOfLines={1}>
                               {attachment.filename}
                             </Text>
                             <Text style={[styles.attachmentType, { color: colors.textSecondary }]}>
-                              PDF
+                              {attachment.mimeType?.startsWith('video/') ? t('training.video') : t('training.pdf')}
                             </Text>
                           </View>
                           <Ionicons name="open-outline" size={20} color={colors.textSecondary} />
@@ -620,26 +671,26 @@ export default function TrainingDetailScreen() {
                     <View style={styles.timerHeader}>
                       <Ionicons name="timer" size={24} color={colors.primary} />
                       <Text style={[styles.timerTitle, { color: colors.primary }]}>
-                        Treinamento em Andamento
+                        {t('training.inProgressTitle')}
                       </Text>
                     </View>
                     <Text style={[styles.timerValue, { color: colors.primary }]}>
                       {formatTime(timeSpent)}
                     </Text>
                     <Text style={[styles.timerDescription, { color: colors.textSecondary }]}>
-                      O tempo está sendo contabilizado enquanto você lê o conteúdo.
+                      {t('training.timeCounting')}
                     </Text>
                   </View>
                   
                   <View style={styles.completionSection}>
                     <Text style={[styles.actionTitle, { color: colors.text }]}>
-                      Finalizar Treinamento
+                      {t('training.finishTraining')}
                     </Text>
                     <Text style={[styles.actionDescription, { color: colors.textSecondary }]}>
-                      Após ler todo o conteúdo, você precisará assinar digitalmente para confirmar a conclusão.
+                      {t('training.finishDescription')}
                     </Text>
                     <Button
-                      title="Assinar e Concluir"
+                      title={t('training.signAndComplete')}
                       onPress={handleRequestSignature}
                       disabled={isProcessing}
                     />
@@ -652,15 +703,15 @@ export default function TrainingDetailScreen() {
                   <View style={[styles.signatureConfirmation, { backgroundColor: colors.success + '20', borderColor: colors.success }]}>
                     <Ionicons name="checkmark-circle" size={24} color={colors.success} />
                     <Text style={[styles.signatureConfirmationText, { color: colors.success }]}>
-                      Assinatura confirmada! Você pode concluir o treinamento.
+                      {t('training.signatureConfirmed')}
                     </Text>
                   </View>
                   <View style={styles.completionSection}>
                     <Text style={[styles.actionDescription, { color: colors.textSecondary, marginBottom: theme.spacing.md }]}>
-                      Ao concluir, o treinamento será marcado como finalizado e não poderá ser reiniciado.
+                      {t('training.completeWarning')}
                     </Text>
                     <Button
-                      title="Concluir Treinamento"
+                      title={t('training.completeTraining')}
                       onPress={handleComplete}
                       loading={isProcessing}
                       disabled={isProcessing || !canComplete}
@@ -718,14 +769,14 @@ export default function TrainingDetailScreen() {
                 scrollEventThrottle={16}
               >
                 <Text style={[styles.modalText, { color: colors.textSecondary }]}>
-                  Por favor, assine digitalmente para confirmar a conclusão do treinamento.
+                  {t('training.signatureDescription')}
                 </Text>
 
                 <Input
-                  label="Nome Completo *"
+                  label={`${t('training.fullNameLabel')} *`}
                   value={fullName}
                   onChangeText={setFullName}
-                  placeholder="Digite seu nome completo"
+                  placeholder={t('training.fullNamePlaceholder')}
                   style={styles.nameInput}
                 />
 
@@ -740,8 +791,8 @@ export default function TrainingDetailScreen() {
                     onOK={handleSignatureOK}
                     onEmpty={handleSignatureEmpty}
                     descriptionText=""
-                    clearText="Limpar"
-                    confirmText="Salvar Assinatura"
+                    clearText={t('training.clear')}
+                    confirmText={t('training.saveSignature')}
                     penColor="#000000"
                     backgroundColor="#ffffff"
                     minWidth={2}
@@ -805,14 +856,14 @@ export default function TrainingDetailScreen() {
                       <View style={[styles.statusIndicator, { backgroundColor: colors.primary + '20' }]}>
                         <ActivityIndicator size="small" color={colors.primary} />
                         <Text style={[styles.statusText, { color: colors.primary }]}>
-                          Processando assinatura...
+                          {t('training.processingSignature')}
                         </Text>
                       </View>
                     ) : signatureBase64 && fullName.trim() ? (
                       <View style={[styles.statusIndicator, { backgroundColor: colors.success + '20' }]}>
                         <Ionicons name="checkmark-circle" size={20} color={colors.success} />
                         <Text style={[styles.statusText, { color: colors.success }]}>
-                          Assinatura e nome preenchidos ✓
+                          {t('training.signatureAndNameFilled')}
                         </Text>
                       </View>
                     ) : (
@@ -820,15 +871,15 @@ export default function TrainingDetailScreen() {
                         <Ionicons name="alert-circle" size={20} color={colors.warning} />
                         <Text style={[styles.statusText, { color: colors.warning }]}>
                           {!fullName.trim() 
-                            ? 'Digite seu nome completo' 
-                            : 'Desenhe sua assinatura no canvas. Você pode clicar em "Salvar Assinatura" no canvas ou usar o botão abaixo'}
+                            ? t('training.fullNameRequired') 
+                            : t('training.drawSignature')}
                         </Text>
                       </View>
                     )}
                   </View>
                   
                   <Button
-                    title="Confirmar e Continuar"
+                    title={t('training.confirmAndContinue')}
                     onPress={handleSignatureComplete}
                     disabled={!fullName.trim() || pendingSignature === 'waiting' || isProcessing}
                     style={styles.confirmButton}
@@ -836,6 +887,45 @@ export default function TrainingDetailScreen() {
                   />
                 </View>
               </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Modal para visualizar assinatura do treinamento concluído */}
+        <Modal
+          visible={showCompletedSignatureModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => {
+            setShowCompletedSignatureModal(false);
+            setCompletedSignatureImageUrl(null);
+          }}
+        >
+          <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.9)' }]}>
+            <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+              <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>
+                  Assinatura Digital
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowCompletedSignatureModal(false);
+                    setCompletedSignatureImageUrl(null);
+                  }}
+                  style={styles.modalCloseButton}
+                >
+                  <Ionicons name="close" size={24} color={colors.text} />
+                </TouchableOpacity>
+              </View>
+              {completedSignatureImageUrl && (
+                <View style={styles.completedSignatureModalContent}>
+                  <Image
+                    source={{ uri: completedSignatureImageUrl }}
+                    style={styles.completedSignatureModalImage}
+                    contentFit="contain"
+                  />
+                </View>
+              )}
             </View>
           </View>
         </Modal>
@@ -875,8 +965,16 @@ const styles = StyleSheet.create({
     width: 40,
   },
   headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  editButton: {
     width: 40,
-    alignItems: 'flex-end',
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   deleteButton: {
     width: 40,
@@ -939,6 +1037,37 @@ const styles = StyleSheet.create({
   infoValue: {
     fontSize: theme.typography.fontSize.md,
     fontWeight: theme.typography.fontWeight.semibold,
+  },
+  completedSignatureSection: {
+    marginTop: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+    borderTopWidth: 1,
+    gap: theme.spacing.sm,
+  },
+  completedSignatureLabel: {
+    fontSize: theme.typography.fontSize.sm,
+  },
+  completedSignatureButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+  },
+  completedSignatureButtonText: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  completedSignatureModalContent: {
+    padding: theme.spacing.lg,
+    minHeight: 200,
+  },
+  completedSignatureModalImage: {
+    width: '100%',
+    minHeight: 300,
   },
   startSection: {
     padding: theme.spacing.lg,

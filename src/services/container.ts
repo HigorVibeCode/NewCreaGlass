@@ -6,6 +6,7 @@ import {
   EventsRepository,
   InventoryRepository,
   MaintenanceRepository,
+  ManualsRepository,
   NotificationPreferencesRepository,
   NotificationsRepository,
   PermissionsRepository,
@@ -28,6 +29,7 @@ import { SupabaseEventsRepository } from '../repositories/supabase/SupabaseEvent
 import { SupabaseProductionRepository } from '../repositories/supabase/SupabaseProductionRepository';
 import { SupabaseWorkOrdersRepository } from '../repositories/supabase/SupabaseWorkOrdersRepository';
 import { SupabaseMaintenanceRepository } from '../repositories/supabase/SupabaseMaintenanceRepository';
+import { SupabaseManualsRepository } from '../repositories/supabase/SupabaseManualsRepository';
 import { SupabaseTrainingRepository } from '../repositories/supabase/SupabaseTrainingRepository';
 import { SupabaseDeviceTokensRepository } from '../repositories/supabase/SupabaseDeviceTokensRepository';
 import { SupabaseNotificationPreferencesRepository } from '../repositories/supabase/SupabaseNotificationPreferencesRepository';
@@ -62,6 +64,7 @@ export const repos = {
   eventsRepo: (USE_MOCK_REPOSITORIES ? new MockEventsRepository() : new SupabaseEventsRepository()) as EventsRepository,
   productionRepo: (USE_MOCK_REPOSITORIES ? new MockProductionRepository() : new SupabaseProductionRepository()) as ProductionRepository,
   maintenanceRepo: (USE_MOCK_REPOSITORIES ? new MockMaintenanceRepository() : new SupabaseMaintenanceRepository()) as MaintenanceRepository,
+  manualsRepo: new SupabaseManualsRepository() as ManualsRepository,
   workOrdersRepo: new SupabaseWorkOrdersRepository() as WorkOrdersRepository, // Always use Supabase for work orders
   trainingRepo: new SupabaseTrainingRepository() as TrainingRepository, // Always use Supabase for trainings
   deviceTokensRepo: new SupabaseDeviceTokensRepository() as DeviceTokensRepository,

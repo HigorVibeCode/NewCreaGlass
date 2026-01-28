@@ -22,6 +22,7 @@ import { Button } from '../src/components/shared/Button';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { repos } from '../src/services/container';
 import { useAuth } from '../src/store/auth-store';
+import { confirmDelete } from '../src/utils/confirm-dialog';
 import { MaintenanceRecord } from '../src/types';
 import { theme } from '../src/theme';
 
@@ -76,28 +77,19 @@ export default function MaintenanceDetailScreen() {
   };
 
   const handleDelete = () => {
-    Alert.alert(
+    if (!recordId) return;
+    confirmDelete(
       t('common.confirm'),
       t('maintenance.deleteConfirm'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('common.delete'),
-          style: 'destructive',
-          onPress: async () => {
-            if (!recordId) return;
-            try {
-              await repos.maintenanceRepo.deleteMaintenanceRecord(recordId);
-              Alert.alert(t('common.success'), t('maintenance.recordDeleted'), [
-                { text: t('common.confirm'), onPress: () => router.back() },
-              ]);
-            } catch (error) {
-              console.error('Error deleting maintenance record:', error);
-              Alert.alert(t('common.error'), t('maintenance.deleteError'));
-            }
-          },
-        },
-      ]
+      async () => {
+        await repos.maintenanceRepo.deleteMaintenanceRecord(recordId);
+        router.back();
+      },
+      undefined,
+      t('common.delete'),
+      t('common.cancel'),
+      t('maintenance.recordDeleted'),
+      t('maintenance.deleteError')
     );
   };
 

@@ -104,6 +104,10 @@ export default function DocumentsCategoryScreen() {
     : null;
 
   const handleSubCategoryPress = (subCategoryId: string) => {
+    if (subCategoryId === 'manuals') {
+      router.push('/manuals-list');
+      return;
+    }
     if (subCategoryId === 'maintenance') {
       // Navegar para a lista de manutenções
       router.push('/maintenance-list');

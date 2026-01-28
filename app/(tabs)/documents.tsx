@@ -39,14 +39,7 @@ export default function DocumentsScreen() {
       chevronColor: '#f59e0b',
     },
     {
-      id: 'proceduresManuals',
-      icon: 'document-text',
-      iconColor: '#a855f7',
-      iconBgColor: '#f3e8ff',
-      chevronColor: '#a855f7',
-    },
-    {
-      id: 'professionalTraining',
+      id: 'proceduresInstructionsTrainings',
       icon: 'school',
       iconColor: '#10b981',
       iconBgColor: '#d1fae5',
@@ -55,8 +48,8 @@ export default function DocumentsScreen() {
   ];
 
   const handleCategoryPress = (categoryId: string) => {
-    // Professional Training vai direto para a lista de treinamentos
-    if (categoryId === 'professionalTraining') {
+    // Procedimentos, instruções e treinamentos → lista de treinamentos profissionais
+    if (categoryId === 'proceduresInstructionsTrainings') {
       router.push({
         pathname: '/trainings-list',
         params: { category: 'professional' },

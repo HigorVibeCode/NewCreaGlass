@@ -29,13 +29,14 @@ import {
     PaintType,
     Production,
     ProductionAttachment,
+    ProductionCompany,
     ProductionItem,
     StructureType,
 } from '../src/types';
 
 const GLASS_GROUP_ID = 'group-glass';
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-const MAX_ATTACHMENTS = 3;
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
+const MAX_ATTACHMENTS = 10;
 
 interface ProductionItemForm {
   glassId: string;
@@ -57,6 +58,7 @@ export default function ProductionCreateScreen() {
   const [orderNumber, setOrderNumber] = useState('');
   const [clientName, setClientName] = useState('');
   const [orderType, setOrderType] = useState('');
+  const [company, setCompany] = useState<ProductionCompany>('3S');
   const [dueDate, setDueDate] = useState('');
   const [glassItems, setGlassItems] = useState<InventoryItem[]>([]);
   const [productionItem, setProductionItem] = useState<ProductionItemForm>({
@@ -90,6 +92,7 @@ export default function ProductionCreateScreen() {
         setOrderNumber(productionData.orderNumber);
         setClientName(productionData.clientName);
         setOrderType(productionData.orderType);
+        setCompany(productionData.company || '3S');
         setDueDate(productionData.dueDate);
         setAttachments(productionData.attachments);
         if (productionData.items.length > 0) {
@@ -155,6 +158,11 @@ export default function ProductionCreateScreen() {
     { label: t('production.paintTypes.printed'), value: 'printed' },
     { label: t('production.paintTypes.satiniert'), value: 'satiniert' },
     { label: t('production.paintTypes.check_project'), value: 'check_project' },
+  ];
+
+  const companyOptions: DropdownOption[] = [
+    { label: '3S', value: '3S' },
+    { label: 'Crea Glass', value: 'Crea Glass' },
   ];
 
   const handleUpdateItem = (field: keyof ProductionItemForm, value: string) => {
@@ -254,6 +262,10 @@ export default function ProductionCreateScreen() {
           'image/jpeg',
           'image/png',
           'image/webp',
+          'video/mp4',
+          'video/quicktime',
+          'video/x-msvideo',
+          'video/webm',
         ],
         copyToCacheDirectory: true,
         multiple: false,
@@ -267,15 +279,15 @@ export default function ProductionCreateScreen() {
       const fileMimeType = file.mimeType || 'application/octet-stream';
       const fileExtension = file.name?.split('.').pop()?.toLowerCase() || '';
       
-      // Verificar extensão e MIME type
       const isImage = ['jpg', 'jpeg', 'png', 'webp'].includes(fileExtension) || 
                       fileMimeType.startsWith('image/');
       const isPDF = fileExtension === 'pdf' || fileMimeType === 'application/pdf';
+      const isVideo = fileExtension === 'mp4' || fileExtension === 'mov' || fileExtension === 'avi' || fileExtension === 'webm' || fileMimeType.startsWith('video/');
       
-      if (!isImage && !isPDF) {
+      if (!isImage && !isPDF && !isVideo) {
         Alert.alert(
           t('common.error'), 
-          t('documents.allowedTypes') || 'Apenas imagens (JPG, PNG, WEBP) e PDF são permitidos'
+          t('documents.allowedTypes') || 'Apenas imagens (JPG, PNG, WEBP), PDF e vídeos são permitidos'
         );
         return;
       }
@@ -315,6 +327,11 @@ export default function ProductionCreateScreen() {
       return false;
     }
 
+    if (!company || (company !== '3S' && company !== 'Crea Glass')) {
+      Alert.alert(t('common.error'), 'Selecione a Company (3S ou Crea Glass).');
+      return false;
+    }
+
     if (!dueDate.trim()) {
       Alert.alert(t('common.error'), t('production.fillRequiredFields'));
       return false;
@@ -351,6 +368,7 @@ export default function ProductionCreateScreen() {
           orderNumber: orderNumber.trim(),
           clientName: clientName.trim(),
           orderType: orderType.trim(),
+          company,
           dueDate,
           items: [item],
           attachments,
@@ -364,6 +382,7 @@ export default function ProductionCreateScreen() {
           orderNumber: orderNumber.trim(),
           clientName: clientName.trim(),
           orderType: orderType.trim(),
+          company,
           dueDate,
           status: 'not_authorized',
           items: [item],
@@ -435,6 +454,13 @@ export default function ProductionCreateScreen() {
           value={orderType}
           onChangeText={setOrderType}
           placeholder={t('production.orderTypePlaceholder')}
+        />
+
+        <Dropdown
+          label="Company *"
+          value={company}
+          options={companyOptions}
+          onSelect={(value) => setCompany(value as ProductionCompany)}
         />
 
         <Input

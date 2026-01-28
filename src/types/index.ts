@@ -213,6 +213,8 @@ export interface ProductionStatusHistory {
   changedAt: string;
 }
 
+export type ProductionCompany = '3S' | 'Crea Glass';
+
 export interface Production {
   id: string;
   clientName: string;
@@ -222,6 +224,7 @@ export interface Production {
   status: ProductionStatus;
   items: ProductionItem[];
   attachments: ProductionAttachment[];
+  company?: ProductionCompany;
   createdAt: string;
   createdBy: string;
 }
@@ -329,4 +332,21 @@ export interface TrainingWithCompletion extends Training {
   completion?: TrainingCompletion;
   signature?: TrainingSignature;
   attachments?: TrainingAttachment[];
+}
+
+// Manuals (Equipment & Tools - Manuais)
+export interface ManualAttachment {
+  id: string;
+  manualId: string;
+  filename: string;
+  mimeType: string;
+  storagePath: string;
+  createdAt: string;
+}
+
+export interface Manual {
+  id: string;
+  title: string;
+  attachments?: ManualAttachment[];
+  createdAt: string;
 }

@@ -82,6 +82,21 @@ Os logs foram ajustados para serem menos verbosos em produção:
 | Token inválido | Token desativado automaticamente | ⚠️ Esperado |
 | Permissão negada | Token não registrado | ⚠️ Esperado |
 
+### Push parou de funcionar após o build (standalone)
+
+Se as notificações funcionavam no desenvolvimento e pararam após gerar um **build standalone** (EAS Build ou similar):
+
+1. **projectId no build**: No build standalone, `Constants.expoConfig?.extra?.eas?.projectId` às vezes não está disponível. O app agora usa um **fallback** com o EAS Project ID do `app.json`, para que o token Expo seja obtido corretamente.
+2. **Retry ao voltar ao app**: Se o token não for obtido na primeira vez (ex.: permissão concedida depois), o app tenta **registrar de novo** quando o usuário volta ao app (App State = active).
+3. **Credenciais FCM/APNs**: No build standalone, é necessário configurar no EAS:
+   - **Android**: credenciais FCM (Google Services). Execute `eas credentials` e configure o FCM.
+   - **iOS**: certificado/keys APNs. Execute `eas credentials` e configure o Apple Push Notification.
+4. **Verificar logs**: No dispositivo, procure por:
+   - `[registerForPushNotificationsAsync] Using fallback EAS projectId` → fallback em uso (normal no standalone).
+   - `[registerForPushNotificationsAsync] Expo push token obtained successfully` → token obtido.
+   - `[usePushNotifications] Device token registered successfully` → token enviado ao backend.
+   - Se aparecer erro com "projectId" ou "credentials", configure as credenciais no EAS.
+
 ### Próximos Passos
 
 Se você quiser garantir que mais usuários recebam push notifications:

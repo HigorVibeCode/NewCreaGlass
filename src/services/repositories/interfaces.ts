@@ -25,6 +25,8 @@ import {
     TrainingSignature,
     TrainingWithCompletion,
     User,
+    Manual,
+    ManualAttachment,
 } from '../../types';
 
 // Auth Repository
@@ -152,10 +154,23 @@ export interface TrainingRepository {
   updateTrainingTime(trainingId: string, userId: string, timeSpentSeconds: number): Promise<TrainingCompletion>;
   completeTraining(trainingId: string, userId: string, signatureData: string, fullName: string, latitude: number, longitude: number): Promise<TrainingCompletion>;
   getTrainingCompletion(trainingId: string, userId: string): Promise<TrainingCompletion | null>;
+  getSignatureByCompletionId(completionId: string): Promise<import('../../types').TrainingSignature | null>;
   
   // History
   getCompletedTrainings(userId?: string): Promise<TrainingWithCompletion[]>; // If userId is provided, get user's completions; if not and user is Master, get all
   getTrainingHistory(trainingId: string, userId?: string): Promise<TrainingWithCompletion[]>; // Get all completions for a specific training
+}
+
+// Manuals Repository (Equipment & Tools - Manuais)
+export interface ManualsRepository {
+  getAllManuals(): Promise<Manual[]>;
+  getManualById(manualId: string): Promise<Manual | null>;
+  createManual(manual: Omit<Manual, 'id' | 'createdAt' | 'attachments'>): Promise<Manual>;
+  updateManual(manualId: string, updates: Partial<Pick<Manual, 'title'>>): Promise<Manual>;
+  deleteManual(manualId: string): Promise<void>;
+  addManualAttachment(manualId: string, file: File | { uri: string; name: string; type: string }): Promise<ManualAttachment>;
+  deleteManualAttachment(attachmentId: string): Promise<void>;
+  getManualAttachmentUrl(attachmentId: string): Promise<string>;
 }
 
 // Device Tokens Repository

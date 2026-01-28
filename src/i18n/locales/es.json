@@ -105,13 +105,9 @@
           }
         }
       },
-      "proceduresManuals": {
-        "title": "Procedimientos y Manuales",
-        "subtitle": "Documentación de procedimientos"
-      },
-      "professionalTraining": {
-        "title": "Capacitación Profesional",
-        "subtitle": "Materiales de capacitación"
+      "proceduresInstructionsTrainings": {
+        "title": "Procedimientos, instrucciones y capacitaciones",
+        "subtitle": "Acceder a procedimientos, instrucciones y capacitaciones"
       }
     }
   },
@@ -266,7 +262,7 @@
     "takePhoto": "Tomar Foto",
     "chooseFromLibrary": "Galería",
     "chooseDocument": "PDF",
-    "maxAttachments": "Máximo 3 adjuntos permitidos",
+    "maxAttachments": "Máximo 10 adjuntos permitidos",
     "cameraPermissionDenied": "Permiso de cámara denegado",
     "mediaPermissionDenied": "Permiso de galería denegado",
     "fillRequiredFields": "Por favor, complete todos los campos obligatorios",
@@ -355,7 +351,7 @@
     "takePhoto": "Tomar Foto",
     "chooseFromLibrary": "Galería",
     "chooseDocument": "PDF",
-    "maxAttachments": "Máximo 3 adjuntos permitidos",
+    "maxAttachments": "Máximo 10 adjuntos permitidos",
     "addAttachmentError": "Error al agregar adjunto",
     "cameraPermissionDenied": "Permiso de cámara denegado",
     "mediaPermissionDenied": "Permiso de galería denegado",

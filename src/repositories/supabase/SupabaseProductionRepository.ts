@@ -63,6 +63,7 @@ export class SupabaseProductionRepository implements ProductionRepository {
         due_date: production.dueDate,
         status: production.status,
         created_by: user.id,
+        ...(production.company != null && production.company !== '' && { company: production.company }),
       })
       .select()
       .single();
@@ -152,6 +153,7 @@ export class SupabaseProductionRepository implements ProductionRepository {
     if (updates.orderType !== undefined) updateData.order_type = updates.orderType;
     if (updates.dueDate !== undefined) updateData.due_date = updates.dueDate;
     if (updates.status !== undefined) updateData.status = updates.status;
+    if (updates.company !== undefined) updateData.company = updates.company;
 
     // Get current production to check status change
     const currentProduction = await this.getProductionById(productionId);
@@ -518,6 +520,7 @@ export class SupabaseProductionRepository implements ProductionRepository {
       status: prodData.status as ProductionStatus,
       items,
       attachments,
+      company: prodData.company ?? undefined,
       createdAt: prodData.created_at,
       createdBy: prodData.created_by,
     };

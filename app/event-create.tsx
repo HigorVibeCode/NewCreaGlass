@@ -27,7 +27,7 @@ import { Event, EventType, EventAttachment } from '../src/types';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
 const MAX_ATTACHMENTS = 3;
 
 export default function EventCreateScreen() {
@@ -223,6 +223,10 @@ export default function EventCreateScreen() {
           'image/jpeg',
           'image/png',
           'image/webp',
+          'video/mp4',
+          'video/quicktime',
+          'video/x-msvideo',
+          'video/webm',
         ],
         copyToCacheDirectory: true,
         multiple: false,
@@ -232,19 +236,18 @@ export default function EventCreateScreen() {
 
       const file = result.assets[0];
       
-      // Verificar se o tipo é permitido após seleção
       const fileMimeType = file.mimeType || 'application/octet-stream';
       const fileExtension = file.name?.split('.').pop()?.toLowerCase() || '';
       
-      // Verificar extensão e MIME type
       const isImage = ['jpg', 'jpeg', 'png', 'webp'].includes(fileExtension) || 
                       fileMimeType.startsWith('image/');
       const isPDF = fileExtension === 'pdf' || fileMimeType === 'application/pdf';
+      const isVideo = fileExtension === 'mp4' || fileExtension === 'mov' || fileExtension === 'avi' || fileExtension === 'webm' || fileMimeType.startsWith('video/');
       
-      if (!isImage && !isPDF) {
+      if (!isImage && !isPDF && !isVideo) {
         Alert.alert(
           t('common.error'), 
-          t('documents.allowedTypes') || 'Apenas imagens (JPG, PNG, WEBP) e PDF são permitidos'
+          t('documents.allowedTypes') || 'Apenas imagens (JPG, PNG, WEBP), PDF e vídeos são permitidos'
         );
         return;
       }

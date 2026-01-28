@@ -16,7 +16,7 @@ import { Training, TrainingCategory } from '../src/types';
 import { theme } from '../src/theme';
 
 export default function TrainingsListScreen() {
-  const { t } = useI18n();
+  const { t, currentLanguage } = useI18n();
   const router = useRouter();
   const colors = useThemeColors();
   const { effectiveTheme } = useAppTheme();
@@ -93,7 +93,18 @@ export default function TrainingsListScreen() {
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR', {
+    // Usar locale baseado no idioma atual
+    const localeMap: Record<string, string> = {
+      'pt': 'pt-BR',
+      'en': 'en-US',
+      'es': 'es-ES',
+      'de': 'de-DE',
+      'fr': 'fr-FR',
+      'it': 'it-IT',
+    };
+    const currentLang = currentLanguage || 'pt';
+    const locale = localeMap[currentLang] || 'pt-BR';
+    return date.toLocaleDateString(locale, {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -107,7 +118,7 @@ export default function TrainingsListScreen() {
     if (trainingCategory === 'onboarding') {
       return t('documents.categories.legalRequirements.subCategories.onboarding.title');
     }
-    return t('documents.categories.professionalTraining.title');
+    return t('documents.categories.proceduresInstructionsTrainings.title');
   };
 
   const getCategoryIcon = () => {
@@ -220,11 +231,11 @@ export default function TrainingsListScreen() {
                   <Ionicons name={getCategoryIcon() as any} size={48} color={colors.textTertiary} />
                 </View>
                 <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                  Nenhum treinamento disponível
+                  {t('training.noTrainingsAvailable')}
                 </Text>
                 <PermissionGuard permission="documents.create">
                   <Button
-                    title="Adicionar Treinamento"
+                    title={t('training.addTraining')}
                     onPress={handleAddTraining}
                     style={styles.createButton}
                   />
@@ -267,7 +278,7 @@ export default function TrainingsListScreen() {
                           <View style={styles.trainingDetailRow}>
                             <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
                             <Text style={[styles.trainingDetailText, { color: colors.textSecondary }]}>
-                              {training.durationMinutes} minutos
+                              {training.durationMinutes} {t('training.minutes')}
                             </Text>
                           </View>
                         )}
@@ -275,7 +286,7 @@ export default function TrainingsListScreen() {
                           <View style={styles.trainingDetailRow}>
                             <Ionicons name="document-text" size={16} color={colors.primary} />
                             <Text style={[styles.trainingDetailText, { color: colors.primary }]}>
-                              {training.attachments!.length} {training.attachments!.length === 1 ? 'anexo' : 'anexos'}
+                              {training.attachments!.length} {training.attachments!.length === 1 ? t('training.attachment') : t('training.attachments')}
                             </Text>
                           </View>
                         )}
