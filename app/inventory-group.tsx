@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, Alert, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,6 +20,53 @@ import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { confirmDelete } from '../src/utils/confirm-dialog';
 
+function SignedInventoryImage({
+  storagePath,
+  style,
+  imageStyle,
+  placeholderIconSize = 32,
+}: {
+  storagePath: string;
+  style?: object;
+  imageStyle?: object;
+  placeholderIconSize?: number;
+}) {
+  const colors = useThemeColors();
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!storagePath) {
+      setSignedUrl(null);
+      return;
+    }
+    let cancelled = false;
+    repos.inventoryRepo
+      .getItemImageUrlSigned(storagePath)
+      .then((url) => {
+        if (!cancelled && url) setSignedUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setSignedUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [storagePath]);
+
+  if (!signedUrl) {
+    return (
+      <View style={[styles.itemImageWrap, { backgroundColor: colors.backgroundSecondary }, style]}>
+        <Ionicons name="image-outline" size={placeholderIconSize} color={colors.textTertiary} />
+      </View>
+    );
+  }
+  return (
+    <View style={[styles.itemImageWrap, { backgroundColor: colors.backgroundSecondary }, style]}>
+      <Image source={{ uri: signedUrl }} style={[styles.itemImage, imageStyle]} contentFit="cover" />
+    </View>
+  );
+}
+
 export default function InventoryGroupScreen() {
   const { t } = useI18n();
   const router = useRouter();
@@ -25,7 +74,7 @@ export default function InventoryGroupScreen() {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { hasPermission } = usePermissions();
-  const { groupId } = useLocalSearchParams<{ groupId: string }>();
+  const { groupId, editItemId } = useLocalSearchParams<{ groupId: string; editItemId?: string }>();
   
   const [group, setGroup] = useState<InventoryGroup | null>(null);
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -45,9 +94,22 @@ export default function InventoryGroupScreen() {
   
   // Other groups fields
   const [itemName, setItemName] = useState('');
-  const [itemUnit, setItemUnit] = useState('');
   const [itemStock, setItemStock] = useState('');
   const [itemThreshold, setItemThreshold] = useState('');
+  // Supplies: Position, Color, Type, OPO Oeschger Code
+  const [position, setPosition] = useState('');
+  const [color, setColor] = useState('');
+  const [suppliesType, setSuppliesType] = useState('');
+  const [opoOeschgerCode, setOpoOeschgerCode] = useState('');
+  // Supplies: up to 3 images, one main (shown on card)
+  const [itemImages, setItemImages] = useState<
+    Array<
+      | { type: 'existing'; id: string; storagePath: string; isMain: boolean }
+      | { type: 'new'; uri: string; isMain: boolean }
+    >
+  >([]);
+  const didOpenEditFromParam = useRef(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Declare loadItems first using useCallback
   const loadItems = useCallback(async () => {
@@ -78,6 +140,17 @@ export default function InventoryGroupScreen() {
     }
   }, [groupId, loadGroup, loadItems]);
 
+  useEffect(() => {
+    if (groupId && editItemId && items.length > 0 && !didOpenEditFromParam.current) {
+      const item = items.find((i) => i.id === editItemId);
+      if (item) {
+        didOpenEditFromParam.current = true;
+        handleEditItem(item);
+        router.replace({ pathname: '/inventory-group', params: { groupId } });
+      }
+    }
+  }, [groupId, editItemId, items]);
+
   useFocusEffect(
     useCallback(() => {
       if (groupId) {
@@ -87,9 +160,26 @@ export default function InventoryGroupScreen() {
   );
 
   const isGlassGroup = group?.name === 'Glass';
+  const isSuppliesGroup = group?.name === 'Supplies';
+
+  const suppliesFilteredItems = useMemo(() => {
+    if (group?.name !== 'Supplies' || !searchTerm.trim()) return items;
+    const lower = searchTerm.toLowerCase().trim();
+    return items.filter((item) => {
+      const typeLabel =
+        item.type === 'aluminios' ? t('inventory.typeAluminios') : item.type === 'vedacoes' ? t('inventory.typeVedacoes') : item.type === 'magnets' ? t('inventory.typeMagnets') : item.type || '';
+      const searchable = [item.name, item.position, item.type, item.opoOeschgerCode, typeLabel].filter(Boolean).join(' ').toLowerCase();
+      return searchable.includes(lower);
+    });
+  }, [items, group?.name, searchTerm, t]);
+
+  const displayItems = isSuppliesGroup ? suppliesFilteredItems : items;
 
   const handleCreateGlassItem = async () => {
-    if (!user || !groupId) return;
+    if (!user || !groupId) {
+      Alert.alert(t('common.error'), t('inventory.createItemError'));
+      return;
+    }
 
     if (!glassName.trim() || !height.trim() || !width.trim() || !thickness.trim()) {
       Alert.alert(t('common.error'), t('inventory.fillAllRequiredFields'));
@@ -118,44 +208,76 @@ export default function InventoryGroupScreen() {
         supplier: supplier || undefined,
         referenceNumber: referenceNumber.trim() || undefined,
       });
-      
-      // Reset form
       resetForm();
       await loadItems();
+      Alert.alert(t('common.success'), t('inventory.createItemSuccess'));
     } catch (error) {
-      console.error('Error creating item:', error);
-      Alert.alert(t('common.error'), t('inventory.createItemError'));
+      console.error('Error creating glass item:', error);
+      const message = error instanceof Error ? error.message : t('inventory.createItemError');
+      Alert.alert(t('common.error'), message);
     }
   };
 
   const handleCreateItem = async () => {
-    if (!user || !groupId) return;
+    if (!user || !groupId) {
+      Alert.alert(t('common.error'), t('inventory.createItemError'));
+      return;
+    }
 
-    if (!itemName.trim() || !itemUnit.trim()) {
+    if (!itemName.trim()) {
       Alert.alert(t('common.error'), t('inventory.fillAllRequiredFields'));
       return;
     }
 
+    if (isSuppliesGroup && itemImages.length > 0) {
+      const mainCount = itemImages.filter((e) => e.isMain).length;
+      if (mainCount !== 1) {
+        Alert.alert(t('common.error'), t('inventory.selectOneMainImage'));
+        return;
+      }
+    }
+    if (isSuppliesGroup && itemImages.length > 3) {
+      Alert.alert(t('common.error'), t('inventory.maxImagesPerItem') ? 'Maximum 3 images.' : 'Máximo 3 imagens.');
+      return;
+    }
+
     try {
-      await repos.inventoryRepo.createItem({
+      const created = await repos.inventoryRepo.createItem({
         groupId,
         name: itemName.trim(),
-        unit: itemUnit.trim(),
-        stock: parseFloat(itemStock) || 0,
+        unit: 'un',
+        stock: isSuppliesGroup ? 0 : parseFloat(itemStock) || 0,
         lowStockThreshold: parseFloat(itemThreshold) || 0,
         createdBy: user.id,
+        position: isSuppliesGroup ? position.trim() || undefined : undefined,
+        color: isSuppliesGroup ? color.trim() || undefined : undefined,
+        type: isSuppliesGroup ? (suppliesType || undefined) : undefined,
+        opoOeschgerCode: isSuppliesGroup ? opoOeschgerCode.trim() || undefined : undefined,
       });
-      
-      // Reset form
+      if (isSuppliesGroup && itemImages.length > 0) {
+        for (let i = 0; i < itemImages.length; i++) {
+          const entry = itemImages[i];
+          if (entry.type === 'new') {
+            const filename = entry.uri.split('/').pop() || `photo_${Date.now()}.jpg`;
+            await repos.inventoryRepo.addItemImage(created.id, { uri: entry.uri, name: filename, type: 'image/jpeg' }, entry.isMain);
+          }
+        }
+      }
       setItemName('');
-      setItemUnit('');
       setItemStock('');
       setItemThreshold('');
+      setPosition('');
+      setColor('');
+      setSuppliesType('');
+      setOpoOeschgerCode('');
+      setItemImages([]);
       setShowCreateItem(false);
       await loadItems();
+      Alert.alert(t('common.success'), t('inventory.createItemSuccess'));
     } catch (error) {
       console.error('Error creating item:', error);
-      Alert.alert(t('common.error'), t('inventory.createItemError'));
+      const message = error instanceof Error ? error.message : t('inventory.createItemError');
+      Alert.alert(t('common.error'), message);
     }
   };
 
@@ -173,9 +295,25 @@ export default function InventoryGroupScreen() {
       setReferenceNumber(item.referenceNumber || '');
     } else {
       setItemName(item.name);
-      setItemUnit(item.unit);
-      setItemStock(item.stock.toString());
+      if (!isSuppliesGroup) {
+        setItemStock(item.stock.toString());
+      }
       setItemThreshold(item.lowStockThreshold.toString());
+      setItemImages([]);
+      if (isSuppliesGroup) {
+        setPosition(item.position || '');
+        setColor(item.color || '');
+        setSuppliesType(item.type || '');
+        setOpoOeschgerCode(item.opoOeschgerCode || '');
+        setItemImages(
+          (item.images || []).map((im) => ({
+            type: 'existing' as const,
+            id: im.id,
+            storagePath: im.storagePath,
+            isMain: im.isMain,
+          }))
+        );
+      }
     }
     setShowCreateItem(true);
   };
@@ -216,32 +354,67 @@ export default function InventoryGroupScreen() {
       await loadItems();
     } catch (error) {
       console.error('Error updating item:', error);
-      Alert.alert(t('common.error'), t('inventory.updateItemError'));
+      const message = error instanceof Error ? error.message : t('inventory.updateItemError');
+      Alert.alert(t('common.error'), message);
     }
   };
 
   const handleUpdateItem = async () => {
     if (!user || !groupId || !editingItem) return;
 
-    if (!itemName.trim() || !itemUnit.trim()) {
+    if (!itemName.trim()) {
       Alert.alert(t('common.error'), t('inventory.fillAllRequiredFields'));
+      return;
+    }
+    if (isSuppliesGroup && itemImages.length > 0) {
+      const mainCount = itemImages.filter((e) => e.isMain).length;
+      if (mainCount !== 1) {
+        Alert.alert(t('common.error'), t('inventory.selectOneMainImage'));
+        return;
+      }
+    }
+    if (isSuppliesGroup && itemImages.length > 3) {
+      Alert.alert(t('common.error'), t('inventory.maxImagesPerItem') ? 'Maximum 3 images.' : 'Máximo 3 imagens.');
       return;
     }
 
     try {
-      await repos.inventoryRepo.updateItem(editingItem.id, {
+      if (isSuppliesGroup) {
+        const existingIds = new Set((editingItem.images ?? []).map((im) => im.id));
+        const keptEntries = itemImages.filter((e): e is { type: 'existing'; id: string; storagePath: string; isMain: boolean } => e.type === 'existing');
+        const keptIds = new Set(keptEntries.map((e) => e.id));
+        for (const id of existingIds) {
+          if (!keptIds.has(id)) await repos.inventoryRepo.deleteItemImage(id);
+        }
+        for (const entry of itemImages) {
+          if (entry.type === 'new') {
+            const filename = entry.uri.split('/').pop() || `photo_${Date.now()}.jpg`;
+            await repos.inventoryRepo.addItemImage(editingItem.id, { uri: entry.uri, name: filename, type: 'image/jpeg' }, entry.isMain);
+          }
+        }
+        const mainExisting = keptEntries.find((e) => e.isMain);
+        if (mainExisting) {
+          await repos.inventoryRepo.setMainItemImage(mainExisting.id);
+        }
+      }
+      const updatePayload: Parameters<typeof repos.inventoryRepo.updateItem>[1] = {
         name: itemName.trim(),
-        unit: itemUnit.trim(),
-        stock: parseFloat(itemStock) || 0,
         lowStockThreshold: parseFloat(itemThreshold) || 0,
-      });
-      
-      // Reset form
+        position: isSuppliesGroup ? position.trim() || undefined : undefined,
+        color: isSuppliesGroup ? color.trim() || undefined : undefined,
+        type: isSuppliesGroup ? (suppliesType || undefined) : undefined,
+        opoOeschgerCode: isSuppliesGroup ? opoOeschgerCode.trim() || undefined : undefined,
+      };
+      if (!isSuppliesGroup) {
+        updatePayload.stock = parseFloat(itemStock) || 0;
+      }
+      await repos.inventoryRepo.updateItem(editingItem.id, updatePayload);
       resetForm();
       await loadItems();
     } catch (error) {
       console.error('Error updating item:', error);
-      Alert.alert(t('common.error'), t('inventory.updateItemError'));
+      const message = error instanceof Error ? error.message : t('inventory.updateItemError');
+      Alert.alert(t('common.error'), message);
     }
   };
 
@@ -272,11 +445,69 @@ export default function InventoryGroupScreen() {
     setSupplier('');
     setReferenceNumber('');
     setItemName('');
-    setItemUnit('');
     setItemStock('');
     setItemThreshold('');
+    setPosition('');
+    setColor('');
+    setSuppliesType('');
+    setOpoOeschgerCode('');
+    setItemImages([]);
     setShowCreateItem(false);
     setEditingItem(null);
+  };
+
+  const handleTakePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(t('common.error'), t('production.cameraPermissionDenied') || 'Permissão da câmera negada');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets[0]) return;
+      const isFirst = itemImages.length === 0;
+      setItemImages((prev) => (prev.length >= 3 ? prev : [...prev, { type: 'new' as const, uri: result.assets[0].uri, isMain: isFirst }]));
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert(t('common.error'), t('inventory.createItemError'));
+    }
+  };
+
+  const handleChooseFromGallery = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(t('common.error'), t('production.mediaPermissionDenied') || 'Permissão da galeria negada');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets[0]) return;
+      const isFirst = itemImages.length === 0;
+      setItemImages((prev) => (prev.length >= 3 ? prev : [...prev, { type: 'new' as const, uri: result.assets[0].uri, isMain: isFirst }]));
+    } catch (error) {
+      console.error('Error choosing from gallery:', error);
+      Alert.alert(t('common.error'), t('inventory.createItemError'));
+    }
+  };
+
+  const setMainImage = (index: number) => {
+    setItemImages((prev) =>
+      prev.map((e, i) => ({ ...e, isMain: i === index }))
+    );
+  };
+
+  const removeImage = (index: number) => {
+    setItemImages((prev) => prev.filter((_, i) => i !== index));
   };
 
   if (!group) {
@@ -324,16 +555,59 @@ export default function InventoryGroupScreen() {
 
       <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.content}>
+          {isSuppliesGroup && (
+            <View style={[styles.searchContainer, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+              <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
+              <TextInput
+                style={[styles.searchInput, { color: colors.text }]}
+                placeholder={t('inventory.searchPlaceholder')}
+                placeholderTextColor={colors.textTertiary}
+                value={searchTerm}
+                onChangeText={setSearchTerm}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {searchTerm.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setSearchTerm('')}
+                  style={styles.searchClearButton}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
           <View style={styles.section}>
 
-          {items.length === 0 ? (
+          {displayItems.length === 0 ? (
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              {t('inventory.noItems')}
+              {isSuppliesGroup && searchTerm.trim() ? t('inventory.noItemsFound') : t('inventory.noItems')}
             </Text>
           ) : (
-            <View style={styles.itemsList}>
-              {items.map((item) => (
-                <View key={item.id} style={[styles.itemCard, { backgroundColor: colors.cardBackground }]}>
+                            <View style={styles.itemsList}>
+              {displayItems.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.itemCard, { backgroundColor: colors.cardBackground }]}
+                  onPress={() => router.push({ pathname: '/inventory-item-detail', params: { itemId: item.id, groupId: groupId! } })}
+                  activeOpacity={0.7}
+                >
+                  {isSuppliesGroup && (() => {
+                    const mainImg = item.images?.find((im) => im.isMain) ?? item.images?.[0];
+                    return mainImg ? (
+                      <SignedInventoryImage
+                        storagePath={mainImg.storagePath}
+                        style={styles.itemImageWrapLarge}
+                        imageStyle={styles.itemImageLarge}
+                        placeholderIconSize={40}
+                      />
+                    ) : (
+                      <View style={[styles.itemImageWrapLarge, { backgroundColor: colors.backgroundSecondary }]}>
+                        <Ionicons name="image-outline" size={40} color={colors.textTertiary} />
+                      </View>
+                    );
+                  })()}
                   <View style={styles.itemInfo}>
                     <View style={styles.itemHeader}>
                       <View style={styles.itemHeaderLeft}>
@@ -341,6 +615,14 @@ export default function InventoryGroupScreen() {
                         {isGlassGroup && item.height && item.width && (
                           <Text style={[styles.itemDimensions, { color: colors.textSecondary }]}>
                             {item.width}mm × {item.height}mm{item.thickness && ` × ${item.thickness}mm`}
+                          </Text>
+                        )}
+                        {isSuppliesGroup && (item.position || item.type) && (
+                          <Text style={[styles.itemDimensions, { color: colors.textSecondary }]}>
+                            {[
+                              item.position,
+                              item.type === 'aluminios' ? t('inventory.typeAluminios') : item.type === 'vedacoes' ? t('inventory.typeVedacoes') : item.type === 'magnets' ? t('inventory.typeMagnets') : item.type,
+                            ].filter(Boolean).join(' · ')}
                           </Text>
                         )}
                       </View>
@@ -404,7 +686,7 @@ export default function InventoryGroupScreen() {
                       </View>
                     )}
                   </View>
-                </View>
+                </TouchableOpacity>
               ))}
             </View>
           )}
@@ -517,32 +799,126 @@ export default function InventoryGroupScreen() {
                     </>
                   ) : (
                     <>
-                      <Input
-                        label={t('inventory.itemName')}
-                        value={itemName}
-                        onChangeText={setItemName}
-                        placeholder={t('inventory.itemNamePlaceholder')}
-                      />
-                      <Input
-                        label={t('inventory.unit')}
-                        value={itemUnit}
-                        onChangeText={setItemUnit}
-                        placeholder={t('inventory.unitPlaceholder')}
-                      />
-                      <Input
-                        label={t('inventory.stock')}
-                        value={itemStock}
-                        onChangeText={setItemStock}
-                        placeholder={t('inventory.stockPlaceholder')}
-                        keyboardType="numeric"
-                      />
-                      <Input
-                        label={t('inventory.lowStockThreshold')}
-                        value={itemThreshold}
-                        onChangeText={setItemThreshold}
-                        placeholder={t('inventory.lowStockThresholdPlaceholder')}
-                        keyboardType="numeric"
-                      />
+                      {isSuppliesGroup ? (
+                        <>
+                          <Input
+                            label={t('inventory.itemName')}
+                            value={itemName}
+                            onChangeText={setItemName}
+                            placeholder={t('inventory.itemNamePlaceholder')}
+                          />
+                          <Input
+                            label={t('inventory.position')}
+                            value={position}
+                            onChangeText={setPosition}
+                            placeholder={t('inventory.positionPlaceholder')}
+                          />
+                          <Dropdown
+                            label={t('inventory.type')}
+                            value={suppliesType}
+                            options={[
+                              { label: t('inventory.typeAluminios'), value: 'aluminios' },
+                              { label: t('inventory.typeVedacoes'), value: 'vedacoes' },
+                              { label: t('inventory.typeMagnets'), value: 'magnets' },
+                            ]}
+                            onSelect={setSuppliesType}
+                          />
+                          <Input
+                            label={t('inventory.opoOeschgerCode')}
+                            value={opoOeschgerCode}
+                            onChangeText={setOpoOeschgerCode}
+                            placeholder={t('inventory.opoOeschgerCodePlaceholder')}
+                          />
+                          <Input
+                            label={t('inventory.lowStockThreshold')}
+                            value={itemThreshold}
+                            onChangeText={setItemThreshold}
+                            placeholder={t('inventory.lowStockThresholdPlaceholder')}
+                            keyboardType="numeric"
+                          />
+                          <View style={styles.productImageSection}>
+                            <Text style={[styles.productImageLabel, { color: colors.text }]}>
+                              {t('inventory.productImage')} ({t('inventory.maxImagesPerItem')})
+                            </Text>
+                            <View style={styles.productImageRow}>
+                              {itemImages.map((entry, index) => (
+                                <View key={entry.type === 'existing' ? entry.id : `new-${index}`} style={styles.productImagePreviewWrap}>
+                                  {entry.type === 'existing' ? (
+                                    <SignedInventoryImage
+                                      storagePath={entry.storagePath}
+                                      style={[styles.productImagePreview, { backgroundColor: colors.backgroundSecondary }]}
+                                      imageStyle={styles.productImagePreview}
+                                      placeholderIconSize={28}
+                                    />
+                                  ) : (
+                                    <Image source={{ uri: entry.uri }} style={styles.productImagePreview} contentFit="cover" />
+                                  )}
+                                  <TouchableOpacity
+                                    style={[styles.removeImageButton, { backgroundColor: colors.error }]}
+                                    onPress={() => removeImage(index)}
+                                  >
+                                    <Ionicons name="close" size={18} color="#fff" />
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={[
+                                      styles.mainImageBadge,
+                                      { backgroundColor: entry.isMain ? colors.primary : colors.backgroundSecondary },
+                                    ]}
+                                    onPress={() => setMainImage(index)}
+                                  >
+                                    <Text style={[styles.mainImageBadgeText, { color: entry.isMain ? colors.textInverse : colors.textSecondary }]}>
+                                      {t('inventory.mainImage')}
+                                    </Text>
+                                  </TouchableOpacity>
+                                </View>
+                              ))}
+                              {itemImages.length < 3 && (
+                                <View style={styles.productImageButtons}>
+                                  <TouchableOpacity
+                                    style={[styles.productImageButton, { backgroundColor: colors.primary + '20', borderColor: colors.primary }]}
+                                    onPress={handleTakePhoto}
+                                    activeOpacity={0.7}
+                                  >
+                                    <Ionicons name="camera" size={24} color={colors.primary} />
+                                    <Text style={[styles.productImageButtonText, { color: colors.primary }]}>{t('inventory.camera')}</Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={[styles.productImageButton, { backgroundColor: colors.primary + '20', borderColor: colors.primary }]}
+                                    onPress={handleChooseFromGallery}
+                                    activeOpacity={0.7}
+                                  >
+                                    <Ionicons name="images" size={24} color={colors.primary} />
+                                    <Text style={[styles.productImageButtonText, { color: colors.primary }]}>{t('inventory.gallery')}</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              )}
+                            </View>
+                          </View>
+                        </>
+                      ) : (
+                        <>
+                          <Input
+                            label={t('inventory.itemName')}
+                            value={itemName}
+                            onChangeText={setItemName}
+                            placeholder={t('inventory.itemNamePlaceholder')}
+                          />
+                          <Input
+                            label={t('inventory.stock')}
+                            value={itemStock}
+                            onChangeText={setItemStock}
+                            placeholder={t('inventory.stockPlaceholder')}
+                            keyboardType="numeric"
+                          />
+                          <Input
+                            label={t('inventory.lowStockThreshold')}
+                            value={itemThreshold}
+                            onChangeText={setItemThreshold}
+                            placeholder={t('inventory.lowStockThresholdPlaceholder')}
+                            keyboardType="numeric"
+                          />
+                        </>
+                      )}
                     </>
                   )}
                 </ScrollView>
@@ -619,6 +995,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing.md,
+    borderWidth: 1,
+    marginBottom: theme.spacing.md,
+    minHeight: 44,
+  },
+  searchIcon: {
+    marginRight: theme.spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: theme.typography.fontSize.md,
+    paddingVertical: theme.spacing.sm,
+    minWidth: 0,
+  },
+  searchClearButton: {
+    marginLeft: theme.spacing.xs,
+    padding: theme.spacing.xs,
+  },
   container: {
     flex: 1,
   },
@@ -637,9 +1035,36 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
   },
   itemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: theme.spacing.md,
     borderRadius: theme.borderRadius.md,
     ...theme.shadows.sm,
+    gap: theme.spacing.md,
+  },
+  itemImageWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: theme.borderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  itemImageWrapLarge: {
+    width: 96,
+    height: 96,
+    borderRadius: theme.borderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  itemImage: {
+    width: '100%',
+    height: '100%',
+  },
+  itemImageLarge: {
+    width: 96,
+    height: 96,
   },
   itemInfo: {
     flex: 1,
@@ -763,5 +1188,68 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     marginBottom: 0,
+  },
+  productImageSection: {
+    marginBottom: theme.spacing.md,
+  },
+  productImageLabel: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.semibold,
+    marginBottom: theme.spacing.sm,
+  },
+  productImageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+  },
+  productImagePreviewWrap: {
+    position: 'relative',
+  },
+  productImagePreview: {
+    width: 80,
+    height: 80,
+    borderRadius: theme.borderRadius.md,
+  },
+  productImageButtons: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+  },
+  productImageButton: {
+    flex: 1,
+    borderWidth: 2,
+    borderRadius: theme.borderRadius.md,
+    padding: theme.spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.xs,
+  },
+  productImageButtonText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.semibold,
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mainImageBadge: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: theme.spacing.xs,
+    alignItems: 'center',
+    borderBottomLeftRadius: theme.borderRadius.md,
+    borderBottomRightRadius: theme.borderRadius.md,
+  },
+  mainImageBadgeText: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
 });

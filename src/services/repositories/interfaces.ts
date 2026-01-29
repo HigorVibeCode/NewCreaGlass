@@ -7,6 +7,7 @@ import {
     InventoryGroup,
     InventoryHistory,
     InventoryItem,
+    InventoryItemImage,
     MaintenanceHistory,
     MaintenanceInfo,
     MaintenanceInfoImage,
@@ -81,6 +82,12 @@ export interface InventoryRepository {
   adjustStock(itemId: string, delta: number, userId: string): Promise<InventoryItem>;
   
   getItemHistory(itemId: string): Promise<InventoryHistory[]>;
+
+  /** Up to 3 images per item; one can be main (shown on card). */
+  addItemImage(itemId: string, file: { uri: string; name: string; type: string }, isMain?: boolean): Promise<InventoryItemImage>;
+  deleteItemImage(imageId: string): Promise<void>;
+  setMainItemImage(imageId: string): Promise<void>;
+  getItemImageUrlSigned(storagePath: string): Promise<string>;
 }
 
 // Notifications Repository

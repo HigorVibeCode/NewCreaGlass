@@ -335,12 +335,11 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
       }
 
       if (targetUserIds.length === 0) {
-        // No target users - this is expected for notifications with specific target_user_id that doesn't exist
-        if (__DEV__) {
-          console.log('[dispatchPushNotifications] No target users found');
-        }
+        console.log('[dispatchPushNotifications] Nenhum usuário alvo para notificação', notification.type);
         return;
       }
+
+      console.log('[dispatchPushNotifications] Enviando push para', targetUserIds.length, 'usuário(s), tipo:', notification.type);
 
       // Generate push notification content
       const { title, body } = pushNotificationService.generateNotificationContent(notification);
@@ -369,10 +368,7 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
           // Check if user should receive push
           const shouldSend = await pushNotificationService.shouldSendPush(userId, notification.type);
           if (!shouldSend) {
-            // User has push notifications disabled for this type - this is expected behavior
-            if (__DEV__) {
-              console.log(`[dispatchPushNotifications] User ${userId} has push disabled for type ${notification.type}`);
-            }
+            console.log('[dispatchPushNotifications] Usuário', userId, 'tem push desativado para', notification.type);
             continue;
           }
 
@@ -380,13 +376,11 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
           const deviceTokens = await repos.deviceTokensRepo.getActiveDeviceTokensByUserId(userId);
           
           if (deviceTokens.length === 0) {
-            // This is expected if user hasn't logged in on any device yet or hasn't granted notification permissions
-            // Only log in debug mode to reduce console noise
-            if (__DEV__) {
-              console.log(`[dispatchPushNotifications] No active device tokens for user ${userId} - user may not have logged in on any device or granted notification permissions`);
-            }
+            console.warn('[dispatchPushNotifications] Nenhum token de dispositivo ativo para o usuário', userId, '- faça login no app (build nativo, não Expo Go) e aceite notificações.');
             continue;
           }
+
+          console.log('[dispatchPushNotifications] Usuário', userId, ':', deviceTokens.length, 'dispositivo(s), enviando push...');
 
           // Send push to all user's devices
           const tokens = deviceTokens.map(dt => ({
@@ -396,6 +390,14 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
           }));
 
           const results = await pushNotificationService.sendToTokens(tokens, payload);
+
+          const sent = results.filter(r => r.success).length;
+          const failed = results.filter(r => !r.success).length;
+          if (failed > 0) {
+            console.warn('[dispatchPushNotifications] Resultado:', sent, 'enviado(s),', failed, 'falha(s). Erros:', results.filter(r => r.error).map(r => r.error));
+          } else {
+            console.log('[dispatchPushNotifications] Push enviado com sucesso para', sent, 'dispositivo(s).');
+          }
 
           // Log delivery attempts
           for (let i = 0; i < results.length; i++) {

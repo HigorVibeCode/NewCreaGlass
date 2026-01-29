@@ -45,6 +45,16 @@ export interface InventoryGroup {
   createdAt: string;
 }
 
+// Image attached to an inventory item (e.g. Supplies). One can be marked as main (shown on card).
+export interface InventoryItemImage {
+  id: string;
+  itemId: string;
+  storagePath: string;
+  sortOrder: number;
+  isMain: boolean;
+  createdAt: string;
+}
+
 export interface InventoryItem {
   id: string;
   groupId: string;
@@ -63,6 +73,13 @@ export interface InventoryItem {
   location?: string;
   supplier?: string; // '3S' or 'Crea Glass'
   referenceNumber?: string;
+  // Supplies-specific (aluminum/rubber profiles)
+  position?: string;
+  color?: string;
+  type?: string;
+  opoOeschgerCode?: string;
+  /** Fetched separately; main image is the one with isMain true (or first). */
+  images?: InventoryItemImage[];
 }
 
 export interface InventoryHistory {

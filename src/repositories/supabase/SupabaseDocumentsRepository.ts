@@ -1,7 +1,7 @@
+import { Platform } from 'react-native';
 import { DocumentsRepository } from '../../services/repositories/interfaces';
 import { Document } from '../../types';
 import { supabase } from '../../services/supabase';
-import { File } from 'expo-file-system';
 
 const BUCKET_NAME = 'documents';
 
@@ -53,12 +53,13 @@ export class SupabaseDocumentsRepository implements DocumentsRepository {
       // Read file and prepare for upload
       let fileData: Blob | Uint8Array | string;
       
-      if (fileUri.startsWith('file://') || fileUri.startsWith('content://')) {
-        // React Native - read file as base64 and convert to Uint8Array
+      if (Platform.OS === 'web' && typeof fetch !== 'undefined' && fileUri) {
+        const response = await fetch(fileUri);
+        fileData = await response.blob();
+      } else if (fileUri.startsWith('file://') || fileUri.startsWith('content://')) {
+        const { File } = require('expo-file-system');
         const sourceFile = new File(fileUri);
         const base64 = await sourceFile.base64();
-        
-        // Convert base64 to Uint8Array for Supabase Storage
         const byteCharacters = atob(base64);
         const byteNumbers = new Array(byteCharacters.length);
         for (let i = 0; i < byteCharacters.length; i++) {

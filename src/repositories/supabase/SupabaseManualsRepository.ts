@@ -1,7 +1,7 @@
+import { Platform } from 'react-native';
 import { ManualsRepository } from '../../services/repositories/interfaces';
 import { Manual, ManualAttachment } from '../../types';
 import { supabase } from '../../services/supabase';
-import { File } from 'expo-file-system';
 
 const BUCKET_NAME = 'documents';
 
@@ -115,7 +115,11 @@ export class SupabaseManualsRepository implements ManualsRepository {
     const uniqueFilename = `manuals_${manualId}_${Date.now()}_${filename}`;
 
     let fileData: Blob | Uint8Array;
-    if (fileUri.startsWith('file://') || fileUri.startsWith('content://')) {
+    if (Platform.OS === 'web' && typeof fetch !== 'undefined' && fileUri) {
+      const response = await fetch(fileUri);
+      fileData = await response.blob();
+    } else if (fileUri.startsWith('file://') || fileUri.startsWith('content://')) {
+      const { File } = require('expo-file-system');
       const sourceFile = new File(fileUri);
       const base64 = await sourceFile.base64();
       const byteCharacters = atob(base64);
