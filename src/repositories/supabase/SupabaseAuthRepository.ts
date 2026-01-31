@@ -1,6 +1,6 @@
 import { AuthRepository } from '../../services/repositories/interfaces';
 import { Session, User } from '../../types';
-import { supabase } from '../../services/supabase';
+import { supabase, clearSupabaseAuthStorage, isRefreshTokenError } from '../../services/supabase';
 
 export class SupabaseAuthRepository implements AuthRepository {
   private supabase;
@@ -92,7 +92,11 @@ export class SupabaseAuthRepository implements AuthRepository {
   async logout(): Promise<void> {
     try {
       await this.supabase.auth.signOut();
-    } catch (error) {
+    } catch (error: any) {
+      if (isRefreshTokenError(error)) {
+        await clearSupabaseAuthStorage();
+        return;
+      }
       console.error('Logout error:', error);
       throw error;
     }
@@ -101,26 +105,14 @@ export class SupabaseAuthRepository implements AuthRepository {
   async getCurrentSession(): Promise<Session | null> {
     try {
       const { data: { session: supabaseSession }, error } = await this.supabase.auth.getSession();
-      
-      // Handle refresh token errors
+
       if (error) {
-        // Check if error is related to invalid refresh token
-        if (error.message?.includes('Refresh Token') || 
-            error.message?.includes('invalid_grant') ||
-            error.message?.includes('Invalid Refresh Token')) {
-          console.warn('[SupabaseAuthRepository] Invalid refresh token detected, clearing session');
-          // Clear invalid session
-          try {
-            await this.supabase.auth.signOut();
-          } catch (signOutError) {
-            // Ignore errors during signout
-            console.warn('[SupabaseAuthRepository] Error during signout:', signOutError);
-          }
-          return null;
+        if (isRefreshTokenError(error)) {
+          await clearSupabaseAuthStorage();
         }
         return null;
       }
-      
+
       if (!supabaseSession) {
         return null;
       }
@@ -148,7 +140,11 @@ export class SupabaseAuthRepository implements AuthRepository {
         user,
         token: supabaseSession.access_token,
       };
-    } catch (error) {
+    } catch (error: any) {
+      if (isRefreshTokenError(error)) {
+        await clearSupabaseAuthStorage();
+        return null;
+      }
       console.error('Error getting current session:', error);
       return null;
     }
@@ -163,26 +159,14 @@ export class SupabaseAuthRepository implements AuthRepository {
 
       // Get current Supabase session
       const { data: { session: supabaseSession }, error: sessionError } = await this.supabase.auth.getSession();
-      
-      // Handle refresh token errors
+
       if (sessionError) {
-        // Check if error is related to invalid refresh token
-        if (sessionError.message?.includes('Refresh Token') || 
-            sessionError.message?.includes('invalid_grant') ||
-            sessionError.message?.includes('Invalid Refresh Token')) {
-          console.warn('[SupabaseAuthRepository] Invalid refresh token during validation, clearing session');
-          // Clear invalid session
-          try {
-            await this.supabase.auth.signOut();
-          } catch (signOutError) {
-            // Ignore errors during signout
-            console.warn('[SupabaseAuthRepository] Error during signout:', signOutError);
-          }
+        if (isRefreshTokenError(sessionError)) {
+          await clearSupabaseAuthStorage();
         }
-        console.log('No Supabase session found:', sessionError?.message);
         return false;
       }
-      
+
       if (!supabaseSession) {
         return false;
       }
@@ -214,8 +198,31 @@ export class SupabaseAuthRepository implements AuthRepository {
       // Session is valid if Supabase session exists and user is active
       // Token comparison can be skipped as Supabase manages session lifecycle
       return true;
-    } catch (error) {
-      console.error('Error validating session:', error);
+    } catch (error: any) {
+      if (isRefreshTokenError(error)) {
+        await clearSupabaseAuthStorage();
+      }
+      return false;
+    }
+  }
+
+  async validatePassword(password: string): Promise<boolean> {
+    try {
+      const { data: { session } } = await this.supabase.auth.getSession();
+      if (!session?.user?.id) return false;
+      const { data: userData, error: userError } = await this.supabase
+        .from('users')
+        .select('username')
+        .eq('id', session.user.id)
+        .single();
+      if (userError || !userData?.username) return false;
+      const emailToUse = `${userData.username.toLowerCase()}@creaglass.local`;
+      const { error } = await this.supabase.auth.signInWithPassword({
+        email: emailToUse,
+        password,
+      });
+      return !error;
+    } catch {
       return false;
     }
   }

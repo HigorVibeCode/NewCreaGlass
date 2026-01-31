@@ -20,6 +20,7 @@ import {
     ProductionStatusHistory,
     PushDeliveryLog,
     Session,
+    TimeEntry,
     Training,
     TrainingCategory,
     TrainingCompletion,
@@ -36,6 +37,8 @@ export interface AuthRepository {
   logout(): Promise<void>;
   getCurrentSession(): Promise<Session | null>;
   validateSession(session: Session): Promise<boolean>;
+  /** Valida senha do usuário atual (para confirmação ex.: registro de ponto). */
+  validatePassword(password: string): Promise<boolean>;
 }
 
 // Users Repository
@@ -135,6 +138,8 @@ export interface MaintenanceRepository {
   createMaintenanceRecord(record: Omit<MaintenanceRecord, 'id' | 'createdAt' | 'updatedAt' | 'infos' | 'history'>): Promise<MaintenanceRecord>;
   updateMaintenanceRecord(recordId: string, updates: Partial<MaintenanceRecord>, changedBy?: string): Promise<MaintenanceRecord>;
   deleteMaintenanceRecord(recordId: string): Promise<void>;
+  /** Upload a cover image to storage; returns the storage path (filename) to store in cover_image_path */
+  uploadCoverImage(file: { uri: string; name: string; type: string }): Promise<string>;
   addMaintenanceInfo(recordId: string, info: Omit<MaintenanceInfo, 'id' | 'createdAt' | 'updatedAt' | 'images'>): Promise<MaintenanceInfo>;
   updateMaintenanceInfo(infoId: string, updates: Partial<MaintenanceInfo>, changedBy?: string): Promise<MaintenanceInfo>;
   deleteMaintenanceInfo(infoId: string, changedBy?: string): Promise<void>;
@@ -205,4 +210,16 @@ export interface PushDeliveryLogsRepository {
   updateLogStatus(logId: string, status: PushDeliveryLog['status'], errorMessage?: string, deliveredAt?: string): Promise<void>;
   getLogsByNotificationId(notificationId: string): Promise<PushDeliveryLog[]>;
   getLogsByUserId(userId: string, limit?: number): Promise<PushDeliveryLog[]>;
+}
+
+// Time Entries Repository (Controle de Ponto)
+export interface TimeEntriesRepository {
+  createTimeEntry(entry: Omit<TimeEntry, 'id' | 'createdAt'>): Promise<TimeEntry>;
+  getMyTimeEntries(userId: string, options?: { from?: string; to?: string }): Promise<TimeEntry[]>;
+  getAllTimeEntries(options?: { from?: string; to?: string; userId?: string }): Promise<TimeEntry[]>;
+  getServerTime(): Promise<string>;
+  updateTimeEntryAdjustment(
+    entryId: string,
+    payload: { adjustedRecordedAt: string; adjustDescription: string }
+  ): Promise<TimeEntry>;
 }

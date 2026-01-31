@@ -25,11 +25,11 @@ export default function DocumentsScreen() {
 
   const categories: DocumentCategory[] = [
     {
-      id: 'legalRequirements',
-      icon: 'shield-checkmark',
-      iconColor: '#3b82f6',
-      iconBgColor: '#dbeafe',
-      chevronColor: '#3b82f6',
+      id: 'proceduresInstructionsTrainings',
+      icon: 'school',
+      iconColor: '#10b981',
+      iconBgColor: '#d1fae5',
+      chevronColor: '#10b981',
     },
     {
       id: 'equipmentTools',
@@ -39,11 +39,11 @@ export default function DocumentsScreen() {
       chevronColor: '#f59e0b',
     },
     {
-      id: 'proceduresInstructionsTrainings',
-      icon: 'school',
-      iconColor: '#10b981',
-      iconBgColor: '#d1fae5',
-      chevronColor: '#10b981',
+      id: 'legalRequirements',
+      icon: 'shield-checkmark',
+      iconColor: '#3b82f6',
+      iconBgColor: '#dbeafe',
+      chevronColor: '#3b82f6',
     },
   ];
 

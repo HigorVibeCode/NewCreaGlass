@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useAuth } from '../src/store/auth-store';
+import { usePermissions } from '../src/hooks/use-permissions';
 import { Button } from '../src/components/shared/Button';
 import { repos } from '../src/services/container';
 import { theme } from '../src/theme';
@@ -13,6 +15,8 @@ const TIMER_SECONDS = 10;
 export default function BloodPriorityScreen() {
   const { t } = useI18n();
   const { user } = useAuth();
+  const router = useRouter();
+  const { hasPermission } = usePermissions();
   const colors = useThemeColors();
   const [messages, setMessages] = useState<any[]>([]);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
@@ -125,6 +129,14 @@ export default function BloodPriorityScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
     >
       <View style={styles.content}>
+        {hasPermission('bloodPriority.create') && (
+          <View style={styles.createButtonRow}>
+            <Button
+              title={t('permissions.bloodPriority.create')}
+              onPress={() => router.push('/blood-priority-create')}
+            />
+          </View>
+        )}
         {messages.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{t('bloodPriority.noMessages')}</Text>
@@ -190,6 +202,9 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: theme.spacing.lg,
+  },
+  createButtonRow: {
+    marginBottom: theme.spacing.lg,
   },
   emptyState: {
     padding: theme.spacing.xl,

@@ -268,6 +268,24 @@ export default function RootLayout() {
                     headerShown: false,
                   }} 
                 />
+                <Stack.Screen 
+                  name="point" 
+                  options={{ 
+                    presentation: 'card',
+                    title: 'Ponto',
+                    animation: 'slide_from_right',
+                    headerShown: false,
+                  }} 
+                />
+                <Stack.Screen 
+                  name="point-reports" 
+                  options={{ 
+                    presentation: 'card',
+                    title: 'Relatórios de Ponto',
+                    animation: 'slide_from_right',
+                    headerShown: false,
+                  }} 
+                />
                 <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
               </Stack>
             </AuthGuard>

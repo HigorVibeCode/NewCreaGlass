@@ -5,7 +5,6 @@ import { useRouter } from 'expo-router';
 import { useI18n } from '../../hooks/use-i18n';
 import { theme } from '../../theme';
 import { useThemeColors } from '../../hooks/use-theme-colors';
-import { usePermissions } from '../../hooks/use-permissions';
 
 interface MenuItem {
   icon: keyof typeof Ionicons.glyphMap;
@@ -23,20 +22,19 @@ export const ThreeDotsMenu: React.FC<ThreeDotsMenuProps> = ({ visible, onClose }
   const router = useRouter();
   const { t } = useI18n();
   const colors = useThemeColors();
-  const { hasPermission } = usePermissions();
 
   const menuItems: MenuItem[] = [
+    {
+      icon: 'time-outline',
+      label: t('navigation.point'),
+      route: '/point',
+      color: colors.primary,
+    },
     {
       icon: 'person-outline',
       label: t('navigation.profile'),
       route: '/profile',
       color: colors.primary,
-    },
-    {
-      icon: 'settings-outline',
-      label: t('navigation.settings'),
-      route: '/settings',
-      color: colors.textSecondary,
     },
     {
       icon: 'shield-checkmark-outline',
@@ -50,16 +48,6 @@ export const ThreeDotsMenu: React.FC<ThreeDotsMenuProps> = ({ visible, onClose }
       route: '/blood-priority',
       color: colors.error,
     },
-    ...(hasPermission('bloodPriority.create')
-      ? [
-          {
-            icon: 'add-circle-outline' as keyof typeof Ionicons.glyphMap,
-            label: t('bloodPriority.createMessage'),
-            route: '/blood-priority-create',
-            color: colors.error,
-          },
-        ]
-      : []),
   ];
 
   const handleMenuPress = (route: string) => {

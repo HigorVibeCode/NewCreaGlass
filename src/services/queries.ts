@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Permission, User, Notification } from '../types';
+import { Permission, User, Notification, TimeEntry } from '../types';
 import { repos } from './container';
 
 export const usePermissionsQuery = (userId?: string) => {
@@ -73,5 +73,29 @@ export const useUnreadNotificationsCountQuery = (userId?: string) => {
     },
     enabled: !!userId,
     refetchInterval: 5000, // Refetch every 5 seconds as fallback
+  });
+};
+
+export const useMyTimeEntriesQuery = (
+  userId: string | undefined,
+  options?: { from?: string; to?: string }
+) => {
+  return useQuery<TimeEntry[]>({
+    queryKey: ['timeEntries', 'my', userId, options?.from, options?.to],
+    queryFn: () => repos.timeEntriesRepo.getMyTimeEntries(userId!, options),
+    enabled: !!userId,
+  });
+};
+
+export const useAllTimeEntriesQuery = (options?: {
+  from?: string;
+  to?: string;
+  userId?: string;
+  enabled?: boolean;
+}) => {
+  return useQuery<TimeEntry[]>({
+    queryKey: ['timeEntries', 'all', options?.from, options?.to, options?.userId],
+    queryFn: () => repos.timeEntriesRepo.getAllTimeEntries(options),
+    enabled: options?.enabled ?? true,
   });
 };

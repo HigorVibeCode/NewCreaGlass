@@ -61,17 +61,49 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   },
 });
 
+/** Chave usada pelo Supabase Auth para persistir sessão (sb-<project>-auth-token). */
+function getSupabaseAuthStorageKey(): string {
+  try {
+    const hostname = new URL(SUPABASE_URL).hostname.split('.')[0] || 'auth';
+    return `sb-${hostname}-auth-token`;
+  } catch {
+    return 'sb-auth-token';
+  }
+}
+
+/**
+ * Remove a sessão do storage quando o refresh token é inválido (ex.: Refresh Token Not Found).
+ * Assim o app não fica tentando usar um token que o servidor já não reconhece.
+ */
+export async function clearSupabaseAuthStorage(): Promise<void> {
+  try {
+    const key = getSupabaseAuthStorageKey();
+    await storage.removeItem(key);
+  } catch (e) {
+    if (__DEV__) console.warn('[Supabase] clearSupabaseAuthStorage failed:', e);
+  }
+}
+
+/** Indica se o erro é de refresh token inválido (servidor não encontrou/revogou o token). */
+export function isRefreshTokenError(error: unknown): boolean {
+  const msg = typeof (error as any)?.message === 'string' ? (error as any).message : '';
+  const code = (error as any)?.code;
+  return (
+    msg.includes('Refresh Token') ||
+    msg.includes('refresh_token') ||
+    msg.includes('invalid_grant') ||
+    code === 'invalid_grant'
+  );
+}
+
 // Listen for auth state changes and handle refresh token errors
 supabase.auth.onAuthStateChange(async (event, session) => {
-  // Handle token refresh errors
   if (event === 'TOKEN_REFRESHED' && !session) {
-    // Token refresh failed - session is invalid
-    console.warn('[Supabase] Token refresh failed, session cleared');
+    console.warn('[Supabase] Token refresh failed, clearing local session');
     try {
       await supabase.auth.signOut();
     } catch (error) {
-      // Ignore errors during signout
-      console.warn('[Supabase] Error during signout after token refresh failure:', error);
+      await clearSupabaseAuthStorage();
     }
   }
 });

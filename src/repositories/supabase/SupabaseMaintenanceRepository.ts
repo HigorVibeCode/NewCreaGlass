@@ -43,21 +43,30 @@ export class SupabaseMaintenanceRepository implements MaintenanceRepository {
     return await this.loadRecordWithRelations(data);
   }
 
+  async uploadCoverImage(file: { uri: string; name: string; type: string }): Promise<string> {
+    return this.uploadImage(file);
+  }
+
   async createMaintenanceRecord(
     record: Omit<MaintenanceRecord, 'id' | 'createdAt' | 'updatedAt' | 'infos' | 'history'>
   ): Promise<MaintenanceRecord> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
 
+    const insertData: Record<string, unknown> = {
+      title: record.title,
+      equipment: record.equipment,
+      type: record.type,
+      created_by: user.id,
+    };
+    if (record.coverImagePath) {
+      insertData.cover_image_path = record.coverImagePath;
+    }
+
     // Create maintenance record
     const { data: recordData, error: recordError } = await supabase
       .from('maintenance_records')
-      .insert({
-        title: record.title,
-        equipment: record.equipment,
-        type: record.type,
-        created_by: user.id,
-      })
+      .insert(insertData)
       .select()
       .single();
 
@@ -84,6 +93,7 @@ export class SupabaseMaintenanceRepository implements MaintenanceRepository {
     if (updates.title !== undefined) updateData.title = updates.title;
     if (updates.equipment !== undefined) updateData.equipment = updates.equipment;
     if (updates.type !== undefined) updateData.type = updates.type;
+    if (updates.coverImagePath !== undefined) updateData.cover_image_path = updates.coverImagePath || null;
 
     const { data, error } = await supabase
       .from('maintenance_records')
@@ -431,11 +441,22 @@ export class SupabaseMaintenanceRepository implements MaintenanceRepository {
     // Load history
     const history = await this.getMaintenanceHistory(recordId);
 
+    // Resolve cover image to signed URL if present
+    let coverImagePath: string | undefined;
+    if (recordData.cover_image_path) {
+      try {
+        coverImagePath = await this.getImageUrl(recordData.cover_image_path);
+      } catch {
+        coverImagePath = undefined;
+      }
+    }
+
     return {
       id: recordData.id,
       title: recordData.title,
       equipment: recordData.equipment,
       type: recordData.type,
+      coverImagePath,
       infos,
       history,
       createdAt: recordData.created_at,

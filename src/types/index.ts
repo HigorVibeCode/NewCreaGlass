@@ -290,6 +290,8 @@ export interface MaintenanceRecord {
   title: string;
   equipment: string;
   type: string;
+  /** Storage path or signed URL for the Basic Information card cover image */
+  coverImagePath?: string;
   infos: MaintenanceInfo[];
   history: MaintenanceHistory[];
   createdAt: string;
@@ -366,4 +368,23 @@ export interface Manual {
   title: string;
   attachments?: ManualAttachment[];
   createdAt: string;
+}
+
+// Time entries (Controle de Ponto)
+export type GpsSource = 'gps' | 'network';
+
+export interface TimeEntry {
+  id: string;
+  userId: string;
+  userName: string;
+  recordedAt: string;
+  locationAddress: string | null;
+  gpsAccuracy: number | null;
+  gpsSource: GpsSource | null;
+  createdAt: string;
+  isAdjusted: boolean;
+  adjustedRecordedAt: string | null;
+  adjustDescription: string | null;
+  adjustedAt: string | null;
+  adjustedByUserId: string | null;
 }

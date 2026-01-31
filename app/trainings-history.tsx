@@ -86,12 +86,12 @@ export default function TrainingsHistoryScreen() {
 
   const getCategoryTitle = () => {
     if (trainingCategory === 'mandatory') {
-      return 'Histórico - Treinamentos Obrigatórios';
+      return t('training.historyMandatory');
     }
     if (trainingCategory === 'onboarding') {
-      return 'Histórico - Treinamentos de Onboarding';
+      return t('training.historyOnboarding');
     }
-    return 'Histórico - Treinamentos Profissionais';
+    return t('training.historyProfessional');
   };
 
   const getCategoryIcon = () => {

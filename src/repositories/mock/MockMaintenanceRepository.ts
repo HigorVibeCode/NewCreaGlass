@@ -139,6 +139,10 @@ export class MockMaintenanceRepository implements MaintenanceRepository {
     return await this.getMaintenanceRecordById(recordId)!;
   }
 
+  async uploadCoverImage(file: { uri: string; name: string; type: string }): Promise<string> {
+    return `mock/cover_${Date.now()}_${file.name}`;
+  }
+
   async deleteMaintenanceRecord(recordId: string): Promise<void> {
     const records = await this.getRecords();
     const filtered = records.filter(r => r.id !== recordId);

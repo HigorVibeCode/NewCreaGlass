@@ -12,6 +12,7 @@ import {
   PermissionsRepository,
   ProductionRepository,
   PushDeliveryLogsRepository,
+  TimeEntriesRepository,
   TrainingRepository,
   UsersRepository,
   WorkOrdersRepository,
@@ -30,6 +31,7 @@ import { SupabaseProductionRepository } from '../repositories/supabase/SupabaseP
 import { SupabaseWorkOrdersRepository } from '../repositories/supabase/SupabaseWorkOrdersRepository';
 import { SupabaseMaintenanceRepository } from '../repositories/supabase/SupabaseMaintenanceRepository';
 import { SupabaseManualsRepository } from '../repositories/supabase/SupabaseManualsRepository';
+import { SupabaseTimeEntriesRepository } from '../repositories/supabase/SupabaseTimeEntriesRepository';
 import { SupabaseTrainingRepository } from '../repositories/supabase/SupabaseTrainingRepository';
 import { SupabaseDeviceTokensRepository } from '../repositories/supabase/SupabaseDeviceTokensRepository';
 import { SupabaseNotificationPreferencesRepository } from '../repositories/supabase/SupabaseNotificationPreferencesRepository';
@@ -46,6 +48,7 @@ import { MockBloodPriorityRepository } from '../repositories/mock/MockBloodPrior
 import { MockEventsRepository } from '../repositories/mock/MockEventsRepository';
 import { MockProductionRepository } from '../repositories/mock/MockProductionRepository';
 import { MockMaintenanceRepository } from '../repositories/mock/MockMaintenanceRepository';
+import { MockTimeEntriesRepository } from '../repositories/mock/MockTimeEntriesRepository';
 
 // Dependency Injection Container
 // Now using Supabase repositories for real-time sync across all devices
@@ -64,6 +67,7 @@ export const repos = {
   eventsRepo: (USE_MOCK_REPOSITORIES ? new MockEventsRepository() : new SupabaseEventsRepository()) as EventsRepository,
   productionRepo: (USE_MOCK_REPOSITORIES ? new MockProductionRepository() : new SupabaseProductionRepository()) as ProductionRepository,
   maintenanceRepo: (USE_MOCK_REPOSITORIES ? new MockMaintenanceRepository() : new SupabaseMaintenanceRepository()) as MaintenanceRepository,
+  timeEntriesRepo: (USE_MOCK_REPOSITORIES ? new MockTimeEntriesRepository() : new SupabaseTimeEntriesRepository()) as TimeEntriesRepository,
   manualsRepo: new SupabaseManualsRepository() as ManualsRepository,
   workOrdersRepo: new SupabaseWorkOrdersRepository() as WorkOrdersRepository, // Always use Supabase for work orders
   trainingRepo: new SupabaseTrainingRepository() as TrainingRepository, // Always use Supabase for trainings

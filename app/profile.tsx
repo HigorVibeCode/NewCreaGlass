@@ -39,6 +39,13 @@ export default function ProfileScreen() {
             {user.isActive ? t('profile.active') : t('profile.inactive')}
           </Text>
         </View>
+        <View style={[styles.section, { borderBottomColor: colors.border }]}>
+          <Button
+            title={t('navigation.settings') || 'Settings'}
+            onPress={() => router.push('/settings')}
+            variant="outline"
+          />
+        </View>
         <View style={styles.section}>
           <Button title={t('common.logout') || 'Logout'} onPress={handleLogout} variant="outline" />
         </View>

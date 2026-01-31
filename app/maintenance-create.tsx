@@ -8,8 +8,9 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Image,
+  ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,17 +44,26 @@ export default function MaintenanceCreateScreen() {
   const insets = useSafeAreaInsets();
   const { effectiveTheme } = useAppTheme();
   const isDark = effectiveTheme === 'dark';
-  const { recordId } = useLocalSearchParams<{ recordId: string }>();
+  const params = useLocalSearchParams<{ recordId?: string; recordid?: string }>();
+  const rawId = params.recordId ?? (params as { recordid?: string }).recordid;
+  const recordId = typeof rawId === 'string' ? rawId : Array.isArray(rawId) ? rawId[0] : undefined;
 
   const [title, setTitle] = useState('');
   const [equipment, setEquipment] = useState('');
   const [type, setType] = useState('');
+  const [coverImageUri, setCoverImageUri] = useState<string | null>(null);
+  const [existingCoverUrl, setExistingCoverUrl] = useState<string | null>(null);
+  const [removedCover, setRemovedCover] = useState(false);
   const [infoBoxes, setInfoBoxes] = useState<InfoBox[]>([]);
   const [isCreating, setIsCreating] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [currentRecordId, setCurrentRecordId] = useState<string | null>(recordId || null);
+  const [isLoading, setIsLoading] = useState(!!recordId);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [currentRecordId, setCurrentRecordId] = useState<string | null>(recordId ?? null);
 
   const isEditing = !!recordId;
+
+  const isValidImageUri = (uri: string | undefined): uri is string =>
+    !!uri && typeof uri === 'string' && uri.length > 0 && (uri.startsWith('http') || uri.startsWith('file') || uri.startsWith('content') || uri.startsWith('blob'));
 
   useEffect(() => {
     if (recordId) {
@@ -64,38 +74,66 @@ export default function MaintenanceCreateScreen() {
   const loadRecord = async () => {
     if (!recordId) return;
     setIsLoading(true);
+    setLoadError(null);
     try {
       const record = await repos.maintenanceRepo.getMaintenanceRecordById(recordId);
       if (record) {
-        setTitle(record.title);
-        setEquipment(record.equipment);
-        setType(record.type);
+        setTitle(record.title ?? '');
+        setEquipment(record.equipment ?? '');
+        setType(record.type ?? '');
+        setExistingCoverUrl(record.coverImagePath ?? null);
+        setCoverImageUri(null);
+        setRemovedCover(false);
         setCurrentRecordId(record.id);
         
-        // Convert infos to InfoBox format
-        const boxes: InfoBox[] = record.infos.map((info) => ({
+        // Convert infos to InfoBox format (protect against missing images)
+        const boxes: InfoBox[] = (record.infos ?? []).map((info) => ({
           id: info.id,
-          description: info.description,
-          images: info.images.map((img) => ({
-            uri: img.storagePath,
-            filename: img.filename,
-            mimeType: img.mimeType,
+          description: info.description ?? '',
+          images: (info.images ?? []).map((img) => ({
+            uri: img.storagePath ?? '',
+            filename: img.filename ?? '',
+            mimeType: img.mimeType ?? 'image/jpeg',
           })),
           isCreated: true,
           infoId: info.id,
         }));
         setInfoBoxes(boxes);
       } else {
-        Alert.alert(t('common.error'), t('maintenance.recordNotFound'), [
-          { text: t('common.confirm'), onPress: () => router.back() },
-        ]);
+        setLoadError(t('maintenance.recordNotFound'));
       }
     } catch (error) {
       console.error('Error loading maintenance record:', error);
-      Alert.alert(t('common.error'), t('maintenance.loadError'));
+      setLoadError(t('maintenance.loadError'));
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handlePickCoverImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(t('common.error'), t('maintenance.imagePickerError'));
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets[0]) return;
+      setCoverImageUri(result.assets[0].uri);
+      setRemovedCover(false);
+    } catch (error) {
+      console.error('Error picking cover image:', error);
+      Alert.alert(t('common.error'), t('maintenance.imagePickerError'));
+    }
+  };
+
+  const handleRemoveCoverImage = () => {
+    setCoverImageUri(null);
+    if (existingCoverUrl) setRemovedCover(true);
   };
 
   const handleAddInfo = () => {
@@ -286,20 +324,33 @@ export default function MaintenanceCreateScreen() {
     setIsCreating(true);
     try {
       let recordIdToUse = currentRecordId;
+      let coverPath: string | null = null;
 
-      // Create or update record
+      if (coverImageUri) {
+        const filename = coverImageUri.split('/').pop() || `cover_${Date.now()}.jpg`;
+        coverPath = await repos.maintenanceRepo.uploadCoverImage({
+          uri: coverImageUri,
+          name: filename,
+          type: 'image/jpeg',
+        });
+      }
+
       if (isEditing && recordId) {
-        await repos.maintenanceRepo.updateMaintenanceRecord(
-          recordId,
-          { title: title.trim(), equipment: equipment.trim(), type: type.trim() },
-          user.id
-        );
+        const updates: { title: string; equipment: string; type: string; coverImagePath?: string | null } = {
+          title: title.trim(),
+          equipment: equipment.trim(),
+          type: type.trim(),
+        };
+        if (removedCover) updates.coverImagePath = null;
+        else if (coverPath) updates.coverImagePath = coverPath;
+        await repos.maintenanceRepo.updateMaintenanceRecord(recordId, updates, user.id);
         recordIdToUse = recordId;
       } else {
         const newRecord = await repos.maintenanceRepo.createMaintenanceRecord({
           title: title.trim(),
           equipment: equipment.trim(),
           type: type.trim(),
+          coverImagePath: coverPath || undefined,
           infos: [],
           history: [],
           createdBy: user.id,
@@ -308,9 +359,13 @@ export default function MaintenanceCreateScreen() {
         setCurrentRecordId(newRecord.id);
       }
 
-      Alert.alert(t('common.success'), isEditing ? t('maintenance.recordUpdated') : t('maintenance.recordCreated'), [
-        { text: t('common.confirm'), onPress: () => router.back() },
-      ]);
+      if (isEditing) {
+        router.back();
+      } else {
+        Alert.alert(t('common.success'), t('maintenance.recordCreated'), [
+          { text: t('common.confirm'), onPress: () => router.back() },
+        ]);
+      }
     } catch (error) {
       console.error('Error saving maintenance record:', error);
       Alert.alert(t('common.error'), isEditing ? t('maintenance.updateError') : t('maintenance.createError'));
@@ -321,8 +376,20 @@ export default function MaintenanceCreateScreen() {
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ color: colors.text }}>{t('common.loading')}</Text>
+      <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.text }]}>{t('common.loading')}</Text>
+      </View>
+    );
+  }
+
+  if (loadError && recordId) {
+    return (
+      <View style={[styles.container, styles.centered, { backgroundColor: colors.background, padding: theme.spacing.lg }]}>
+        <Text style={{ color: colors.text, textAlign: 'center', marginBottom: theme.spacing.md }}>{loadError}</Text>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Text style={{ color: colors.primary }}>{t('common.back')}</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -343,8 +410,41 @@ export default function MaintenanceCreateScreen() {
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
               {t('maintenance.basicInfo')}
             </Text>
+            <Text style={[styles.coverLabel, { color: colors.textSecondary }]}>
+              {t('maintenance.coverImage')}
+            </Text>
+            <View style={styles.coverRow}>
+              {(() => {
+                const coverUri = coverImageUri ?? (existingCoverUrl && !removedCover ? existingCoverUrl : null);
+                const showCover = coverUri && isValidImageUri(coverUri);
+                return showCover ? (
+                <>
+                  <View style={styles.coverPreviewWrap}>
+                    <Image source={{ uri: coverUri }} style={styles.coverPreview} contentFit="cover" />
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.removeCoverButton, { backgroundColor: colors.error }]}
+                    onPress={handleRemoveCoverImage}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#fff" />
+                    <Text style={styles.removeCoverText}>{t('maintenance.removeCoverImage')}</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.addCoverButton, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary }]}
+                  onPress={handlePickCoverImage}
+                >
+                  <Ionicons name="image-outline" size={32} color={colors.textSecondary} />
+                  <Text style={[styles.addCoverText, { color: colors.textSecondary }]}>
+                    {t('maintenance.addCoverImage')}
+                  </Text>
+                </TouchableOpacity>
+              );
+              })()}
+            </View>
             <Input
-              label={t('maintenance.title')}
+              label={t('maintenance.titleLabel')}
               value={title}
               onChangeText={setTitle}
               placeholder={t('maintenance.titlePlaceholder')}
@@ -408,9 +508,15 @@ export default function MaintenanceCreateScreen() {
                     {t('maintenance.images')} ({box.images.length}/{MAX_IMAGES_PER_INFO})
                   </Text>
                   <View style={styles.imagesContainer}>
-                    {box.images.map((image, imgIndex) => (
+                    {(box.images ?? []).map((image, imgIndex) => (
                       <View key={imgIndex} style={styles.imageContainer}>
-                        <Image source={{ uri: image.uri }} style={styles.imagePreview} />
+                        {isValidImageUri(image.uri) ? (
+                          <Image source={{ uri: image.uri }} style={styles.imagePreview} contentFit="cover" />
+                        ) : (
+                          <View style={[styles.imagePreview, styles.imagePlaceholder, { backgroundColor: colors.backgroundSecondary }]}>
+                            <Ionicons name="image-outline" size={24} color={colors.textTertiary} />
+                          </View>
+                        )}
                         <TouchableOpacity
                           style={[styles.removeImageButton, { backgroundColor: colors.error }]}
                           onPress={() => handleRemoveImageFromInfo(box.id, imgIndex)}
@@ -451,13 +557,21 @@ export default function MaintenanceCreateScreen() {
             )}
           </View>
 
-          {/* Save Record Button */}
-          <Button
-            title={isEditing ? t('maintenance.updateRecord') : t('maintenance.createRecord')}
-            onPress={handleSaveRecord}
-            loading={isCreating}
-            style={styles.saveButton}
-          />
+          {/* Back + Save/Update Record Buttons */}
+          <View style={styles.saveRow}>
+            <Button
+              title={t('common.back')}
+              variant="outline"
+              onPress={() => router.back()}
+              style={styles.backButton}
+            />
+            <Button
+              title={isEditing ? t('maintenance.updateRecord') : t('maintenance.createRecord')}
+              onPress={handleSaveRecord}
+              loading={isCreating}
+              style={styles.saveButtonFlex}
+            />
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </ScreenWrapper>
@@ -467,6 +581,13 @@ export default function MaintenanceCreateScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: theme.spacing.md,
   },
   scrollView: {
     flex: 1,
@@ -488,6 +609,56 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.lg,
     fontWeight: theme.typography.fontWeight.bold,
     marginBottom: theme.spacing.md,
+  },
+  coverLabel: {
+    fontSize: theme.typography.fontSize.sm,
+    marginBottom: theme.spacing.xs,
+  },
+  coverRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+  },
+  coverPreviewWrap: {
+    width: 96,
+    height: 96,
+    borderRadius: theme.borderRadius.sm,
+    overflow: 'hidden',
+  },
+  coverPreview: {
+    width: 96,
+    height: 96,
+  },
+  imagePlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removeCoverButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.borderRadius.sm,
+  },
+  removeCoverText: {
+    color: '#fff',
+    fontSize: theme.typography.fontSize.sm,
+  },
+  addCoverButton: {
+    width: 120,
+    height: 96,
+    borderRadius: theme.borderRadius.sm,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  addCoverText: {
+    fontSize: theme.typography.fontSize.xs,
+    textAlign: 'center',
   },
   addFirstInfoButton: {
     marginTop: 0,
@@ -563,7 +734,15 @@ const styles = StyleSheet.create({
   addInfoButton: {
     marginTop: theme.spacing.md,
   },
-  saveButton: {
+  saveRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
     marginTop: theme.spacing.lg,
+  },
+  backButton: {
+    flex: 1,
+  },
+  saveButtonFlex: {
+    flex: 1,
   },
 });

@@ -9,9 +9,9 @@ import {
   ActivityIndicator,
   Dimensions,
   Modal,
-  Image,
   Platform,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -36,38 +36,50 @@ export default function MaintenanceDetailScreen() {
   const { effectiveTheme } = useAppTheme();
   const insets = useSafeAreaInsets();
   const isDark = effectiveTheme === 'dark';
-  const { recordId } = useLocalSearchParams<{ recordId: string }>();
+  const params = useLocalSearchParams<{ recordId?: string; recordid?: string }>();
+  const rawId = params.recordId ?? (params as { recordid?: string }).recordid;
+  const recordId = typeof rawId === 'string' ? rawId : Array.isArray(rawId) ? rawId[0] : undefined;
 
   const [record, setRecord] = useState<MaintenanceRecord | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [imageModalVisible, setImageModalVisible] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (recordId) {
       loadRecord();
+    } else {
+      setIsLoading(false);
     }
   }, [recordId]);
 
   const loadRecord = async () => {
     if (!recordId) return;
     setIsLoading(true);
+    setLoadError(null);
     try {
       const recordData = await repos.maintenanceRepo.getMaintenanceRecordById(recordId);
       if (recordData) {
         setRecord(recordData);
       } else {
+        setRecord(null);
         Alert.alert(t('common.error'), t('maintenance.recordNotFound'), [
           { text: t('common.confirm'), onPress: () => router.back() },
         ]);
       }
     } catch (error) {
       console.error('Error loading maintenance record:', error);
+      setLoadError(t('maintenance.loadError'));
+      setRecord(null);
       Alert.alert(t('common.error'), t('maintenance.loadError'));
     } finally {
       setIsLoading(false);
     }
   };
+
+  const isValidImageUri = (uri: string | undefined): uri is string =>
+    !!uri && typeof uri === 'string' && (uri.startsWith('http://') || uri.startsWith('https://'));
 
   const handleEdit = () => {
     router.push({
@@ -117,10 +129,15 @@ export default function MaintenanceDetailScreen() {
     );
   }
 
-  if (!record) {
+  if (!record && !isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ color: colors.text }}>{t('maintenance.recordNotFound')}</Text>
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', padding: theme.spacing.lg }]}>
+        <Text style={{ color: colors.text, textAlign: 'center' }}>
+          {loadError || t('maintenance.recordNotFound')}
+        </Text>
+        <TouchableOpacity style={{ marginTop: theme.spacing.md }} onPress={() => router.back()}>
+          <Text style={{ color: colors.primary }}>{t('common.back')}</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -160,92 +177,146 @@ export default function MaintenanceDetailScreen() {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* Basic Info */}
-        <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            {t('maintenance.basicInfo')}
-          </Text>
-          <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
-              {t('maintenance.title')}:
+        {/* Basic Info card with cover image */}
+        <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
+          {(() => {
+            const coverImage = record.coverImagePath ?? (record.infos ?? []).find((info) => info.images?.length)?.images?.[0]?.storagePath;
+            const showImage = isValidImageUri(coverImage);
+            return showImage ? (
+              <TouchableOpacity onPress={() => handleImagePress(coverImage!)} activeOpacity={0.9} style={styles.cardCoverWrap}>
+                <View style={styles.cardCoverImageWrap}>
+                  <Image source={{ uri: coverImage! }} style={styles.cardCoverImage} contentFit="cover" />
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <View style={[styles.cardCoverPlaceholder, { backgroundColor: colors.backgroundSecondary }]}>
+                <Ionicons name="construct-outline" size={40} color={colors.textTertiary} />
+              </View>
+            );
+          })()}
+          <View style={styles.cardContent}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              {t('maintenance.basicInfo')}
             </Text>
-            <Text style={[styles.infoValue, { color: colors.text }]}>
-              {record.title}
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
-              {t('maintenance.equipment')}:
-            </Text>
-            <Text style={[styles.infoValue, { color: colors.text }]}>
-              {record.equipment}
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
-              {t('maintenance.type')}:
-            </Text>
-            <Text style={[styles.infoValue, { color: colors.text }]}>
-              {record.type}
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
-              {t('maintenance.createdAt')}:
-            </Text>
-            <Text style={[styles.infoValue, { color: colors.text }]}>
-              {formatDate(record.createdAt)}
-            </Text>
-          </View>
-          {record.updatedAt !== record.createdAt && (
-            <View style={styles.infoRow}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
-                {t('maintenance.updatedAt')}:
-              </Text>
-              <Text style={[styles.infoValue, { color: colors.text }]}>
-                {formatDate(record.updatedAt)}
-              </Text>
+            <View style={styles.infoGrid}>
+              <View style={styles.infoRow}>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
+                  {t('maintenance.titleLabel')}
+                </Text>
+                <Text style={[styles.infoValue, { color: colors.text }]} numberOfLines={2}>
+                  {record.title}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
+                  {t('maintenance.equipment')}
+                </Text>
+                <Text style={[styles.infoValue, { color: colors.text }]} numberOfLines={2}>
+                  {record.equipment}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
+                  {t('maintenance.type')}
+                </Text>
+                <Text style={[styles.infoValue, { color: colors.text }]} numberOfLines={2}>
+                  {record.type}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
+                  {t('maintenance.createdAt')}
+                </Text>
+                <Text style={[styles.infoValue, { color: colors.text }]}>
+                  {formatDate(record.createdAt)}
+                </Text>
+              </View>
+              {record.updatedAt !== record.createdAt && (
+                <View style={styles.infoRow}>
+                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
+                    {t('maintenance.updatedAt')}
+                  </Text>
+                  <Text style={[styles.infoValue, { color: colors.text }]}>
+                    {formatDate(record.updatedAt)}
+                  </Text>
+                </View>
+              )}
             </View>
-          )}
+          </View>
         </View>
 
         {/* Info Boxes */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            {t('maintenance.infos')} ({record.infos.length})
+            {t('maintenance.infos')} ({(record.infos ?? []).length})
           </Text>
-          {record.infos.length === 0 ? (
+          {(record.infos ?? []).length === 0 ? (
             <View style={[styles.emptyInfoBox, { backgroundColor: colors.cardBackground }]}>
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                 {t('maintenance.noInfos')}
               </Text>
             </View>
           ) : (
-            record.infos.map((info, index) => (
-              <View key={info.id} style={[styles.infoBox, { backgroundColor: colors.cardBackground }]}>
-                <View style={styles.infoBoxHeader}>
-                  <Text style={[styles.infoBoxTitle, { color: colors.text }]}>
-                    {t('maintenance.info')} {index + 1}
-                  </Text>
-                </View>
-                <Text style={[styles.infoDescription, { color: colors.text }]}>
-                  {info.description}
-                </Text>
-                {info.images.length > 0 && (
-                  <View style={styles.imagesContainer}>
-                    {info.images.map((image, imgIndex) => (
+            (record.infos ?? []).map((info, index) => {
+              const firstImage = info.images?.[0]?.storagePath;
+              const showFirstImage = isValidImageUri(firstImage);
+              const otherImages = (info.images ?? []).slice(1);
+              return (
+                <View key={info.id} style={[styles.card, { backgroundColor: colors.cardBackground }]}>
+                  <View style={styles.cardContent}>
+                    <View style={styles.infoBoxRow}>
                       <TouchableOpacity
-                        key={imgIndex}
-                        onPress={() => handleImagePress(image.storagePath)}
-                        style={styles.imageWrapper}
+                        onPress={() => showFirstImage && handleImagePress(firstImage!)}
+                        activeOpacity={0.9}
+                        style={styles.infoBoxThumbWrap}
                       >
-                        <Image source={{ uri: image.storagePath }} style={styles.imagePreview} />
+                        {showFirstImage ? (
+                          <View style={styles.infoBoxThumbBox}>
+                            <Image source={{ uri: firstImage! }} style={styles.infoBoxThumbImage} contentFit="cover" />
+                          </View>
+                        ) : (
+                          <View style={[styles.infoBoxThumbBox, styles.imageThumbPlaceholder, { backgroundColor: colors.backgroundSecondary }]}>
+                            <Ionicons name="information-circle-outline" size={28} color={colors.textTertiary} />
+                          </View>
+                        )}
                       </TouchableOpacity>
-                    ))}
+                      <View style={styles.infoBoxTextBlock}>
+                        <Text style={[styles.infoBoxTitle, { color: colors.text }]}>
+                          {t('maintenance.info')} {index + 1}
+                        </Text>
+                        {info.description ? (
+                          <Text style={[styles.infoDescription, { color: colors.text }]}>
+                            {info.description}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                    {otherImages.length > 0 && (
+                      <View style={styles.imagesContainer}>
+                        {otherImages.map((image, imgIndex) => (
+                          <TouchableOpacity
+                            key={imgIndex}
+                            onPress={() => handleImagePress(image.storagePath)}
+                            activeOpacity={0.8}
+                            style={styles.imageThumbWrap}
+                          >
+                            {isValidImageUri(image.storagePath) ? (
+                              <View style={styles.imageThumbBox}>
+                                <Image source={{ uri: image.storagePath }} style={styles.imageThumb} contentFit="cover" />
+                              </View>
+                            ) : (
+                              <View style={[styles.imageThumbBox, styles.imageThumbPlaceholder, { backgroundColor: colors.backgroundSecondary }]}>
+                                <Ionicons name="image-outline" size={22} color={colors.textTertiary} />
+                              </View>
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
-            ))
+                </View>
+              );
+            })
           )}
         </View>
 
@@ -277,8 +348,8 @@ export default function MaintenanceDetailScreen() {
           onPress={() => setImageModalVisible(false)}
         >
           <View style={styles.modalContent}>
-            {selectedImage && (
-              <Image source={{ uri: selectedImage }} style={styles.modalImage} resizeMode="contain" />
+            {selectedImage && isValidImageUri(selectedImage) && (
+              <Image source={{ uri: selectedImage }} style={styles.modalImage} contentFit="contain" />
             )}
             <TouchableOpacity
               style={styles.closeModalButton}
@@ -294,6 +365,9 @@ export default function MaintenanceDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   header: {
     paddingHorizontal: theme.spacing.md,
     paddingBottom: theme.spacing.md,
@@ -334,10 +408,43 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.fontWeight.bold,
     marginBottom: theme.spacing.md,
   },
+  card: {
+    borderRadius: theme.borderRadius.md,
+    marginBottom: theme.spacing.lg,
+    overflow: 'hidden',
+    ...theme.shadows.sm,
+  },
+  cardCoverWrap: {
+    width: '100%',
+    height: 96,
+  },
+  cardCoverImageWrap: {
+    width: '100%',
+    height: 96,
+    overflow: 'hidden',
+  },
+  cardCoverImage: {
+    width: '100%',
+    height: 96,
+    backgroundColor: '#e5e7eb',
+  },
+  cardCoverPlaceholder: {
+    width: '100%',
+    height: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardContent: {
+    padding: theme.spacing.md,
+  },
+  infoGrid: {
+    gap: theme.spacing.sm,
+  },
   infoRow: {
     flexDirection: 'row',
-    marginBottom: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
     gap: theme.spacing.sm,
+    alignItems: 'flex-start',
   },
   infoLabel: {
     fontSize: theme.typography.fontSize.sm,
@@ -348,32 +455,69 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     flex: 1,
   },
-  infoBox: {
-    borderRadius: theme.borderRadius.md,
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-    ...theme.shadows.sm,
-  },
-  infoBoxHeader: {
+  infoBoxRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.spacing.md,
     marginBottom: theme.spacing.sm,
+  },
+  infoBoxThumbWrap: {
+    width: 72,
+    height: 72,
+  },
+  infoBoxThumbBox: {
+    width: 72,
+    height: 72,
+    borderRadius: theme.borderRadius.sm,
+    overflow: 'hidden',
+  },
+  infoBoxThumbImage: {
+    width: 72,
+    height: 72,
+    borderRadius: theme.borderRadius.sm,
+  },
+  infoBoxTextBlock: {
+    flex: 1,
+    minWidth: 0,
   },
   infoBoxTitle: {
     fontSize: theme.typography.fontSize.md,
     fontWeight: theme.typography.fontWeight.bold,
+    marginBottom: theme.spacing.xs,
   },
   infoDescription: {
     fontSize: theme.typography.fontSize.sm,
     lineHeight: theme.typography.lineHeight.md,
-    marginBottom: theme.spacing.md,
+    marginBottom: 0,
   },
   imagesContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: theme.spacing.sm,
+    alignItems: 'flex-start',
+  },
+  imageThumbWrap: {
+    width: 72,
+    height: 72,
+  },
+  imageThumbBox: {
+    width: 72,
+    height: 72,
+    borderRadius: theme.borderRadius.sm,
+    overflow: 'hidden',
+  },
+  imageThumb: {
+    width: 72,
+    height: 72,
+    borderRadius: theme.borderRadius.sm,
+  },
+  imageThumbPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   imageWrapper: {
-    width: (SCREEN_WIDTH - theme.spacing.lg * 2 - theme.spacing.md * 2 - theme.spacing.sm * 2) / 3,
-    height: (SCREEN_WIDTH - theme.spacing.lg * 2 - theme.spacing.md * 2 - theme.spacing.sm * 2) / 3,
+    width: 72,
+    height: 72,
   },
   imagePreview: {
     width: '100%',
@@ -407,8 +551,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-    width: SCREEN_WIDTH * 0.9,
-    height: SCREEN_WIDTH * 0.9,
+    width: (SCREEN_WIDTH || 400) * 0.9,
+    height: (SCREEN_WIDTH || 400) * 0.9,
     justifyContent: 'center',
     alignItems: 'center',
   },

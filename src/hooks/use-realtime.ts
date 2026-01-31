@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { supabase } from '../services/supabase';
+import { supabase, clearSupabaseAuthStorage, isRefreshTokenError } from '../services/supabase';
 import { useQueryClient } from '@tanstack/react-query';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { triggerNotificationAlert } from '../utils/notification-alert';
@@ -356,11 +356,17 @@ export const useRealtime = () => {
     };
 
     // Verificar se está autenticado antes de criar subscriptions
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setupSubscriptions();
-      }
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (session) {
+          setupSubscriptions();
+        }
+      })
+      .catch((err) => {
+        if (isRefreshTokenError(err)) {
+          clearSupabaseAuthStorage();
+        }
+      });
 
     // Cleanup: remover todas as subscriptions quando o componente desmontar
     return () => {
@@ -409,11 +415,17 @@ export const useRealtimeSubscription = (
       channelRef.current = channel;
     };
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setupSubscription();
-      }
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (session) {
+          setupSubscription();
+        }
+      })
+      .catch((err) => {
+        if (isRefreshTokenError(err)) {
+          clearSupabaseAuthStorage();
+        }
+      });
 
     return () => {
       if (channelRef.current) {

@@ -3,7 +3,7 @@ import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { Platform, Alert } from 'react-native';
-import { supabase } from '../services/supabase';
+import { supabase, clearSupabaseAuthStorage, isRefreshTokenError } from '../services/supabase';
 
 /**
  * Mostra um alerta de erro (compatível com Web e Mobile)
@@ -91,30 +91,35 @@ async function getSignedUrlFromStorage(storagePath: string, fallbackFilename?: s
       return storagePath;
     }
   }
-  
-  // Se o filename não tem extensão mas temos um fallbackFilename com extensão, tentar usar
-  if (!filename.includes('.') && fallbackFilename && fallbackFilename.includes('.')) {
-    // Pode ser que o storagePath seja um UUID e o arquivo real tenha o nome do fallbackFilename
-    // Tentar primeiro com o storagePath como está, se falhar tentar com fallbackFilename
+
+  // Se o storagePath parece UUID (sem extensão) e temos fallback com extensão, usar fallback como primeiro candidato
+  // para evitar request inútil; o arquivo no Storage costuma ser timestamp_nome.pdf
+  const looksLikeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(filename);
+  if (looksLikeUuid && fallbackFilename?.includes('.')) {
+    filename = fallbackFilename;
+  } else if (!filename.includes('.') && fallbackFilename && fallbackFilename.includes('.')) {
     try {
       const { data, error } = await supabase.storage
         .from(BUCKET_NAME)
         .createSignedUrl(filename, 86400);
-      
-      if (!error && data?.signedUrl) {
-        return data.signedUrl;
-      }
+      if (!error && data?.signedUrl) return data.signedUrl;
     } catch {
-      // Continuar para tentar com fallbackFilename
+      // ignorar
     }
-    
-    // Tentar com fallbackFilename se o original não funcionou
     filename = fallbackFilename;
   }
 
   try {
     // Verificar se há uma sessão ativa antes de gerar a URL assinada
-    const { data: { session } } = await supabase.auth.getSession();
+    let session = null;
+    try {
+      const { data } = await supabase.auth.getSession();
+      session = data.session;
+    } catch (authErr: any) {
+      if (isRefreshTokenError(authErr)) {
+        await clearSupabaseAuthStorage();
+      }
+    }
     if (!session) {
       console.warn('No active session found when trying to get signed URL');
       // Continuar mesmo assim - pode funcionar dependendo das políticas RLS
@@ -153,8 +158,12 @@ async function getSignedUrlFromStorage(storagePath: string, fallbackFilename?: s
       .createSignedUrl(filename, expiresIn);
 
     if (error) {
+      const isNotFound =
+        error.message?.includes('not found') ||
+        error.message?.includes('Object not found') ||
+        error.message?.toLowerCase().includes('the resource was not found');
       console.error('Error getting signed URL:', error.message, 'filename:', filename);
-      
+
       // Se falhou e temos um fallbackFilename diferente, tentar com ele
       if (fallbackFilename && fallbackFilename !== filename && fallbackFilename.includes('.')) {
         console.log('Trying with fallback filename:', fallbackFilename);
@@ -162,7 +171,7 @@ async function getSignedUrlFromStorage(storagePath: string, fallbackFilename?: s
           const { data: fallbackData, error: fallbackError } = await supabase.storage
             .from(BUCKET_NAME)
             .createSignedUrl(fallbackFilename, expiresIn);
-          
+
           if (!fallbackError && fallbackData?.signedUrl) {
             return fallbackData.signedUrl;
           }
@@ -170,32 +179,78 @@ async function getSignedUrlFromStorage(storagePath: string, fallbackFilename?: s
           console.error('Error with fallback filename:', fallbackErr);
         }
       }
-      
+
+      // Último recurso: se o erro for "Object not found", listar o bucket e procurar objeto
+      // cujo nome termina com o nome do arquivo (ex.: 1769011344757_glaswerk total.pdf)
+      const searchName = (fallbackFilename || filename).trim();
+      if (isNotFound && searchName) {
+        const searchNameUnderscore = searchName.replace(/\s+/g, '_');
+        const matchByName = (f: { name: string }) =>
+          f.name === searchName ||
+          f.name === filename ||
+          f.name.endsWith('_' + searchName) ||
+          f.name.endsWith('_' + searchNameUnderscore) ||
+          (f.name.includes(searchName) && /\.[a-z0-9]+$/i.test(f.name)) ||
+          (f.name.includes(searchNameUnderscore) && /\.[a-z0-9]+$/i.test(f.name));
+
+        const searchInList = async (path: string): Promise<string | null> => {
+          const { data: listData, error: listError } = await supabase.storage
+            .from(BUCKET_NAME)
+            .list(path, { limit: 500 });
+          if (listError || !listData?.length) return null;
+          const found = listData.find(matchByName);
+          if (!found) return null;
+          const objectPath = path ? `${path}/${found.name}` : found.name;
+          const { data: signed, error: signErr } = await supabase.storage
+            .from(BUCKET_NAME)
+            .createSignedUrl(objectPath, expiresIn);
+          return !signErr && signed?.signedUrl ? signed.signedUrl : null;
+        };
+
+        try {
+          let rootUrl = await searchInList('');
+          if (rootUrl) return rootUrl;
+          const { data: rootList, error: rootErr } = await supabase.storage
+            .from(BUCKET_NAME)
+            .list('', { limit: 100 });
+          if (!rootErr && rootList?.length) {
+            for (const item of rootList) {
+              if (!item.name.includes('.')) {
+                rootUrl = await searchInList(item.name);
+                if (rootUrl) return rootUrl;
+              }
+            }
+          }
+        } catch (listErr) {
+          console.warn('List fallback failed:', listErr);
+        }
+      }
+
       // Tentar novamente com tempo menor se falhar
       const { data: retryData, error: retryError } = await supabase.storage
         .from(BUCKET_NAME)
         .createSignedUrl(filename, 3600);
-      
+
       if (retryError) {
         // Se ainda falhar e temos fallbackFilename, tentar uma última vez
         if (fallbackFilename && fallbackFilename !== filename && fallbackFilename.includes('.')) {
           const { data: lastRetryData, error: lastRetryError } = await supabase.storage
             .from(BUCKET_NAME)
             .createSignedUrl(fallbackFilename, 3600);
-          
+
           if (!lastRetryError && lastRetryData?.signedUrl) {
             return lastRetryData.signedUrl;
           }
         }
-        
+
         console.error('Error getting signed URL on retry:', retryError.message);
         throw new Error(`Não foi possível obter a URL do arquivo: ${retryError.message}`);
       }
-      
+
       if (!retryData?.signedUrl) {
         throw new Error('URL assinada não foi retornada pelo Supabase');
       }
-      
+
       return retryData.signedUrl;
     }
 
