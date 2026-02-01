@@ -77,17 +77,20 @@ export class SupabaseTrainingRepository implements TrainingRepository {
       throw new Error('User not authenticated');
     }
 
+    const insertData: Record<string, unknown> = {
+      title: training.title,
+      description: training.description || null,
+      category: training.category,
+      content: training.content || null,
+      duration_minutes: training.durationMinutes || null,
+      is_active: training.isActive !== undefined ? training.isActive : true,
+      created_by: authUser.id,
+    };
+    if (training.titleI18n != null) insertData.title_i18n = training.titleI18n;
+    if (training.descriptionI18n != null) insertData.description_i18n = training.descriptionI18n;
     const { data, error } = await supabase
       .from('trainings')
-      .insert({
-        title: training.title,
-        description: training.description || null,
-        category: training.category,
-        content: training.content || null,
-        duration_minutes: training.durationMinutes || null,
-        is_active: training.isActive !== undefined ? training.isActive : true,
-        created_by: authUser.id,
-      })
+      .insert(insertData)
       .select()
       .single();
 
@@ -103,6 +106,8 @@ export class SupabaseTrainingRepository implements TrainingRepository {
     const updateData: any = {};
     if (updates.title !== undefined) updateData.title = updates.title;
     if (updates.description !== undefined) updateData.description = updates.description;
+    if (updates.titleI18n !== undefined) updateData.title_i18n = updates.titleI18n;
+    if (updates.descriptionI18n !== undefined) updateData.description_i18n = updates.descriptionI18n;
     if (updates.category !== undefined) updateData.category = updates.category;
     if (updates.content !== undefined) updateData.content = updates.content;
     if (updates.durationMinutes !== undefined) updateData.duration_minutes = updates.durationMinutes;
@@ -438,6 +443,8 @@ export class SupabaseTrainingRepository implements TrainingRepository {
       id: data.id,
       title: data.title,
       description: data.description,
+      titleI18n: data.title_i18n ?? undefined,
+      descriptionI18n: data.description_i18n ?? undefined,
       category: data.category,
       content: data.content,
       durationMinutes: data.duration_minutes,

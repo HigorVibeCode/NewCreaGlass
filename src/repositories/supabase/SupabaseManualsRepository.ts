@@ -10,7 +10,7 @@ export class SupabaseManualsRepository implements ManualsRepository {
     const { data, error } = await supabase
       .from('manuals')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('title', { ascending: true });
 
     if (error) {
       console.error('Error fetching manuals:', error);
@@ -29,7 +29,7 @@ export class SupabaseManualsRepository implements ManualsRepository {
         return manual;
       })
     );
-    return manuals;
+    return manuals.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
   }
 
   async getManualById(manualId: string): Promise<Manual | null> {
@@ -57,9 +57,11 @@ export class SupabaseManualsRepository implements ManualsRepository {
   }
 
   async createManual(manual: Omit<Manual, 'id' | 'createdAt' | 'attachments'>): Promise<Manual> {
+    const insertData: Record<string, unknown> = { title: manual.title };
+    if (manual.thumbnailPath != null) insertData.thumbnail_path = manual.thumbnailPath;
     const { data, error } = await supabase
       .from('manuals')
-      .insert({ title: manual.title })
+      .insert(insertData)
       .select()
       .single();
 
@@ -70,9 +72,17 @@ export class SupabaseManualsRepository implements ManualsRepository {
     return this.mapToManual(data);
   }
 
-  async updateManual(manualId: string, updates: Partial<Pick<Manual, 'title'>>): Promise<Manual> {
+  async updateManual(manualId: string, updates: Partial<Pick<Manual, 'title' | 'thumbnailPath'>>): Promise<Manual> {
+    if (updates.thumbnailPath === null) {
+      const { data: current } = await supabase.from('manuals').select('thumbnail_path').eq('id', manualId).single();
+      if (current?.thumbnail_path) {
+        const filename = current.thumbnail_path.includes('/') ? current.thumbnail_path.split('/').pop() : current.thumbnail_path;
+        await supabase.storage.from(BUCKET_NAME).remove([filename || current.thumbnail_path]);
+      }
+    }
     const updateData: Record<string, unknown> = {};
     if (updates.title !== undefined) updateData.title = updates.title;
+    if (updates.thumbnailPath !== undefined) updateData.thumbnail_path = updates.thumbnailPath;
 
     const { data, error } = await supabase
       .from('manuals')
@@ -97,6 +107,10 @@ export class SupabaseManualsRepository implements ManualsRepository {
           : att.storagePath.replace(`${BUCKET_NAME}/`, '');
         await supabase.storage.from(BUCKET_NAME).remove([filename || att.storagePath]);
       }
+    }
+    if (manual?.thumbnailPath) {
+      const thumbFile = manual.thumbnailPath.includes('/') ? manual.thumbnailPath.split('/').pop() : manual.thumbnailPath;
+      await supabase.storage.from(BUCKET_NAME).remove([thumbFile || manual.thumbnailPath]);
     }
     const { error } = await supabase.from('manuals').delete().eq('id', manualId);
     if (error) {
@@ -214,10 +228,75 @@ export class SupabaseManualsRepository implements ManualsRepository {
     return data.signedUrl;
   }
 
+  async uploadManualThumbnail(manualId: string, file: { uri: string; name: string; type: string }): Promise<string> {
+    const { data: current } = await supabase.from('manuals').select('thumbnail_path').eq('id', manualId).single();
+    if (current?.thumbnail_path) {
+      const oldFile = current.thumbnail_path.includes('/') ? current.thumbnail_path.split('/').pop() : current.thumbnail_path;
+      await supabase.storage.from(BUCKET_NAME).remove([oldFile || current.thumbnail_path]);
+    }
+    const filename = file.name || file.uri.split('/').pop() || `thumb_${Date.now()}.jpg`;
+    const mimeType = file.type || 'image/jpeg';
+    const uniqueFilename = `manuals_${manualId}_thumb_${Date.now()}_${filename}`;
+
+    let fileData: Blob | Uint8Array;
+    if (Platform.OS === 'web' && typeof fetch !== 'undefined') {
+      const response = await fetch(file.uri);
+      fileData = await response.blob();
+    } else if (file.uri.startsWith('file://') || file.uri.startsWith('content://')) {
+      const { File } = require('expo-file-system');
+      const sourceFile = new File(file.uri);
+      const base64 = await sourceFile.base64();
+      const byteCharacters = atob(base64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      fileData = new Uint8Array(byteNumbers);
+    } else if (typeof fetch !== 'undefined') {
+      const response = await fetch(file.uri);
+      fileData = await response.blob();
+    } else {
+      throw new Error('Unsupported environment for thumbnail upload');
+    }
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(uniqueFilename, fileData, { contentType: mimeType, upsert: true });
+
+    if (uploadError) {
+      console.error('Error uploading manual thumbnail:', uploadError);
+      throw new Error(`Failed to upload thumbnail: ${uploadError.message}`);
+    }
+
+    await this.updateManual(manualId, { thumbnailPath: uniqueFilename });
+    return uniqueFilename;
+  }
+
+  async getManualThumbnailUrl(manualId: string): Promise<string> {
+    const { data: manual, error } = await supabase
+      .from('manuals')
+      .select('thumbnail_path')
+      .eq('id', manualId)
+      .single();
+
+    if (error || !manual?.thumbnail_path) return '';
+
+    const filename = manual.thumbnail_path.includes('/')
+      ? manual.thumbnail_path.split('/').pop()
+      : manual.thumbnail_path;
+    const { data, error: urlError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .createSignedUrl(filename || manual.thumbnail_path, 3600);
+
+    if (urlError) return '';
+    return data.signedUrl;
+  }
+
   private mapToManual(data: any): Manual {
     return {
       id: data.id,
       title: data.title,
+      thumbnailPath: data.thumbnail_path ?? undefined,
       createdAt: data.created_at,
     };
   }

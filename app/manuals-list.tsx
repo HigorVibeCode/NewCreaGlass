@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, ActivityIndicator, Linking } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, ActivityIndicator, Linking, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +21,7 @@ export default function ManualsListScreen() {
   const isDark = effectiveTheme === 'dark';
   const [manuals, setManuals] = useState<Manual[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
 
   const loadManuals = useCallback(async () => {
     setIsLoading(true);
@@ -37,6 +38,25 @@ export default function ManualsListScreen() {
   useEffect(() => {
     loadManuals();
   }, [loadManuals]);
+
+  useEffect(() => {
+    const withThumb = manuals.filter((m) => m.thumbnailPath);
+    if (withThumb.length === 0) return;
+    let cancelled = false;
+    const load = async () => {
+      const next: Record<string, string> = {};
+      for (const m of withThumb) {
+        if (cancelled) return;
+        try {
+          const url = await repos.manualsRepo.getManualThumbnailUrl(m.id);
+          if (url) next[m.id] = url;
+        } catch (_) {}
+      }
+      if (!cancelled) setThumbnailUrls((prev) => ({ ...prev, ...next }));
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [manuals]);
 
   useFocusEffect(
     useCallback(() => {
@@ -134,17 +154,28 @@ export default function ManualsListScreen() {
                     onPress={() => handleManualPress(manual)}
                     activeOpacity={0.7}
                   >
-                    <View style={styles.cardHeader}>
-                      <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
-                        {manual.title}
-                      </Text>
-                    </View>
-                    <View style={styles.cardDetails}>
-                      <View style={styles.cardDetailRow}>
-                        <Ionicons name="document-text-outline" size={16} color={colors.textSecondary} />
-                        <Text style={[styles.cardDetailText, { color: colors.textSecondary }]}>
-                          {manual.attachments?.length ?? 0} {t('manuals.pdfs')}
-                        </Text>
+                    <View style={styles.cardRow}>
+                      <View style={[styles.thumbnailWrap, { backgroundColor: colors.backgroundSecondary }]}>
+                        {manual.thumbnailPath && thumbnailUrls[manual.id] ? (
+                          <Image source={{ uri: thumbnailUrls[manual.id] }} style={styles.cardThumbnail} resizeMode="cover" />
+                        ) : (
+                          <Ionicons name="book-outline" size={28} color={colors.textTertiary} />
+                        )}
+                      </View>
+                      <View style={styles.cardBody}>
+                        <View style={styles.cardHeader}>
+                          <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
+                            {manual.title}
+                          </Text>
+                        </View>
+                        <View style={styles.cardDetails}>
+                          <View style={styles.cardDetailRow}>
+                            <Ionicons name="document-text-outline" size={16} color={colors.textSecondary} />
+                            <Text style={[styles.cardDetailText, { color: colors.textSecondary }]}>
+                              {manual.attachments?.length ?? 0} {t('manuals.pdfs')}
+                            </Text>
+                          </View>
+                        </View>
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -264,6 +295,27 @@ const styles = StyleSheet.create({
   },
   cardMain: {
     marginBottom: theme.spacing.sm,
+  },
+  cardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+  },
+  thumbnailWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: theme.borderRadius.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  cardThumbnail: {
+    width: 56,
+    height: 56,
+  },
+  cardBody: {
+    flex: 1,
+    minWidth: 0,
   },
   cardHeader: {
     marginBottom: theme.spacing.xs,

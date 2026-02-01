@@ -9,11 +9,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { Button } from '../src/components/shared/Button';
 import { Input } from '../src/components/shared/Input';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
@@ -45,6 +47,9 @@ export default function ManualCreateScreen() {
 
   const [title, setTitle] = useState('');
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+  const [thumbnailUri, setThumbnailUri] = useState<string | null>(null);
+  const [thumbnailRemoved, setThumbnailRemoved] = useState(false);
+  const [thumbnailUploading, setThumbnailUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [uploadingAttachments, setUploadingAttachments] = useState<Set<string>>(new Set());
@@ -62,6 +67,12 @@ export default function ManualCreateScreen() {
       const manual = await repos.manualsRepo.getManualById(manualId);
       if (manual) {
         setTitle(manual.title);
+        if (manual.thumbnailPath) {
+          try {
+            const url = await repos.manualsRepo.getManualThumbnailUrl(manualId);
+            if (url) setThumbnailUri(url);
+          } catch (_) {}
+        }
         if (manual.attachments?.length) {
           setAttachments(
             manual.attachments.map((att) => ({
@@ -119,6 +130,32 @@ export default function ManualCreateScreen() {
       console.error('Error picking PDF:', error);
       Alert.alert(t('common.error'), t('manuals.selectPdfError'));
     }
+  };
+
+  const handlePickThumbnail = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(t('common.error'), t('manuals.imagePickerError'));
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets[0]) return;
+      setThumbnailUri(result.assets[0].uri);
+      setThumbnailRemoved(false);
+    } catch (error) {
+      console.error('Error picking thumbnail:', error);
+      Alert.alert(t('common.error'), t('manuals.imagePickerError'));
+    }
+  };
+
+  const handleRemoveThumbnail = () => {
+    setThumbnailUri(null);
+    if (isEditing) setThumbnailRemoved(true);
   };
 
   const handleRemoveAttachment = (id: string) => {
@@ -186,6 +223,26 @@ export default function ManualCreateScreen() {
           Alert.alert(t('common.error'), t('manuals.uploadPdfsError'));
         } finally {
           setUploadingAttachments(new Set());
+        }
+      }
+
+      if (thumbnailRemoved && isEditing && savedManualId) {
+        await repos.manualsRepo.updateManual(savedManualId, { thumbnailPath: null });
+      }
+      if (thumbnailUri && (thumbnailUri.startsWith('file://') || thumbnailUri.startsWith('content://'))) {
+        setThumbnailUploading(true);
+        try {
+          const filename = thumbnailUri.split('/').pop() || `thumb_${Date.now()}.jpg`;
+          await repos.manualsRepo.uploadManualThumbnail(savedManualId, {
+            uri: thumbnailUri,
+            name: filename,
+            type: 'image/jpeg',
+          });
+        } catch (error) {
+          console.error('Error uploading thumbnail:', error);
+          Alert.alert(t('common.error'), t('manuals.uploadThumbnailError'));
+        } finally {
+          setThumbnailUploading(false);
         }
       }
 
@@ -268,6 +325,43 @@ export default function ManualCreateScreen() {
                 onChangeText={setTitle}
                 placeholder={t('manuals.titlePlaceholder')}
               />
+            </View>
+
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('manuals.thumbnail')}</Text>
+              <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+                {t('manuals.thumbnailHint')}
+              </Text>
+              {thumbnailUri ? (
+                <View style={styles.thumbnailSlot}>
+                  <Image source={{ uri: thumbnailUri }} style={styles.thumbnailPreview} resizeMode="cover" />
+                  <TouchableOpacity
+                    style={[styles.removeThumbnailBtn, { backgroundColor: colors.error }]}
+                    onPress={handleRemoveThumbnail}
+                  >
+                    <Ionicons name="close" size={18} color="#fff" />
+                    <Text style={styles.removeThumbnailText}>{t('common.remove')}</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.addThumbnailButton, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
+                  onPress={handlePickThumbnail}
+                  activeOpacity={0.7}
+                  disabled={thumbnailUploading}
+                >
+                  {thumbnailUploading ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <>
+                      <Ionicons name="image-outline" size={24} color={colors.primary} />
+                      <Text style={[styles.addThumbnailText, { color: colors.primary }]}>
+                        {t('manuals.addThumbnail')}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={styles.section}>
@@ -427,6 +521,43 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   addAttachmentText: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: '500',
+  },
+  thumbnailSlot: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+  },
+  thumbnailPreview: {
+    width: 80,
+    height: 80,
+    borderRadius: theme.borderRadius.sm,
+  },
+  removeThumbnailBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.sm,
+    borderRadius: theme.borderRadius.sm,
+  },
+  removeThumbnailText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: '500',
+    color: '#fff',
+  },
+  addThumbnailButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.sm,
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.sm,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+  },
+  addThumbnailText: {
     fontSize: theme.typography.fontSize.md,
     fontWeight: '500',
   },

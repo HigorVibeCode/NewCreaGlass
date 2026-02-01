@@ -7,6 +7,7 @@
     "confirm": "Confirmar",
     "save": "Guardar",
     "delete": "Eliminar",
+    "remove": "Quitar",
     "edit": "Editar",
     "create": "Crear",
     "close": "Cerrar",
@@ -559,7 +560,12 @@
     "removePdfConfirm": "¿Desea eliminar este PDF?",
     "removeAttachmentError": "Error al eliminar el archivo adjunto",
     "selectPdfError": "Error al seleccionar el PDF",
-    "uploadPdfsError": "Error al subir algunos PDFs"
+    "uploadPdfsError": "Error al subir algunos PDFs",
+    "thumbnail": "Miniatura",
+    "thumbnailHint": "Imagen mostrada en la tarjeta del manual.",
+    "addThumbnail": "Añadir miniatura",
+    "imagePickerError": "Se requiere permiso de galería o error al seleccionar imagen.",
+    "uploadThumbnailError": "Error al subir la miniatura."
   },
   "training": {
     "title": "Capacitaciones",
@@ -639,6 +645,9 @@
     "confirmAndContinue": "Confirmar y Continuar",
     "noTrainingsAvailable": "No hay capacitaciones disponibles",
     "addTraining": "Agregar Capacitación",
+    "addMedia": "Agregar medios",
+    "translationsSection": "Traducciones del contenido",
+    "translationsSectionHint": "Opcional. Complete título y descripción en otros idiomas para mostrar en el idioma del app.",
     "historyMandatory": "Historial - Capacitaciones Obligatorias",
     "historyOnboarding": "Historial - Capacitaciones de Onboarding",
     "historyProfessional": "Historial - Capacitaciones Profesionales",

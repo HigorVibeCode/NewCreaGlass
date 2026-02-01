@@ -306,6 +306,10 @@ export interface Training {
   id: string;
   title: string;
   description?: string;
+  /** Traduções do título por locale (ex: { en: "...", es: "..." }). Usado em onboarding. */
+  titleI18n?: Record<string, string> | null;
+  /** Traduções da descrição por locale. Usado em onboarding. */
+  descriptionI18n?: Record<string, string> | null;
   category: TrainingCategory;
   content?: string;
   durationMinutes?: number;
@@ -366,6 +370,7 @@ export interface ManualAttachment {
 export interface Manual {
   id: string;
   title: string;
+  thumbnailPath?: string | null;
   attachments?: ManualAttachment[];
   createdAt: string;
 }

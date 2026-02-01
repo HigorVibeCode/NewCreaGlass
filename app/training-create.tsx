@@ -39,10 +39,15 @@ export default function TrainingCreateScreen() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [content, setContent] = useState('');
+  const [titleI18n, setTitleI18n] = useState<Record<string, string>>({});
+  const [descriptionI18n, setDescriptionI18n] = useState<Record<string, string>>({});
   const [attachments, setAttachments] = useState<Array<{ id: string; filename: string; mimeType: string; uri: string; isNew?: boolean; attachmentId?: string }>>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [uploadingAttachments, setUploadingAttachments] = useState<Set<string>>(new Set());
+
+  const CONTENT_LOCALES = ['en', 'es', 'de', 'fr', 'it'] as const;
+  const LOCALE_LABELS: Record<string, string> = { en: 'EN', es: 'ES', de: 'DE', fr: 'FR', it: 'IT' };
 
   const isEditing = !!trainingId;
 
@@ -60,8 +65,11 @@ export default function TrainingCreateScreen() {
       if (training) {
         setTitle(training.title);
         setDescription(training.description || '');
-        setContent(training.content || '');
-        
+        if (training.category === 'professional') setContent(training.content || '');
+        if (training.category === 'onboarding') {
+          setTitleI18n(training.titleI18n || {});
+          setDescriptionI18n(training.descriptionI18n || {});
+        }
         // Load attachments
         if (training.attachments) {
           setAttachments(training.attachments.map(att => ({
@@ -179,11 +187,21 @@ export default function TrainingCreateScreen() {
         title: title.trim(),
         description: description.trim() || undefined,
         category: trainingCategory,
-        content: content.trim() || undefined,
+        content: trainingCategory === 'professional' ? (content.trim() || undefined) : undefined,
         durationMinutes: undefined,
         isActive: true,
         createdBy: '', // Será preenchido pelo repository
       };
+      if (trainingCategory === 'onboarding') {
+        const titleI18nFiltered = Object.fromEntries(
+          Object.entries(titleI18n).filter(([, v]) => v != null && v.trim() !== '')
+        );
+        const descriptionI18nFiltered = Object.fromEntries(
+          Object.entries(descriptionI18n).filter(([, v]) => v != null && v.trim() !== '')
+        );
+        if (Object.keys(titleI18nFiltered).length > 0) (trainingData as Training).titleI18n = titleI18nFiltered;
+        if (Object.keys(descriptionI18nFiltered).length > 0) (trainingData as Training).descriptionI18n = descriptionI18nFiltered;
+      }
 
       let savedTrainingId: string;
 
@@ -308,14 +326,45 @@ export default function TrainingCreateScreen() {
                 numberOfLines={3}
               />
 
-              <Input
-                label={t('training.contentLabel')}
-                value={content}
-                onChangeText={setContent}
-                placeholder={t('training.contentPlaceholder')}
-                multiline
-                numberOfLines={10}
-              />
+              {trainingCategory === 'professional' && (
+                <Input
+                  label={t('training.contentLabel')}
+                  value={content}
+                  onChangeText={setContent}
+                  placeholder={t('training.contentPlaceholder')}
+                  multiline
+                  numberOfLines={10}
+                />
+              )}
+
+              {trainingCategory === 'onboarding' && (
+                <>
+                  <Text style={[styles.sectionTitle, { color: colors.text, marginTop: theme.spacing.md }]}>
+                    {t('training.translationsSection')}
+                  </Text>
+                  <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+                    {t('training.translationsSectionHint')}
+                  </Text>
+                  {CONTENT_LOCALES.map((locale) => (
+                    <View key={locale} style={styles.translationBlock}>
+                      <Input
+                        label={`${t('training.titleLabel')} (${LOCALE_LABELS[locale]})`}
+                        value={titleI18n[locale] ?? ''}
+                        onChangeText={(text) => setTitleI18n((prev) => ({ ...prev, [locale]: text }))}
+                        placeholder={t('training.titlePlaceholder')}
+                      />
+                      <Input
+                        label={`${t('training.descriptionLabel')} (${LOCALE_LABELS[locale]})`}
+                        value={descriptionI18n[locale] ?? ''}
+                        onChangeText={(text) => setDescriptionI18n((prev) => ({ ...prev, [locale]: text }))}
+                        placeholder={t('training.descriptionPlaceholder')}
+                        multiline
+                        numberOfLines={2}
+                      />
+                    </View>
+                  ))}
+                </>
+              )}
 
             </View>
 
@@ -364,7 +413,7 @@ export default function TrainingCreateScreen() {
                 >
                   <Ionicons name="add-circle-outline" size={24} color={colors.primary} />
                   <Text style={[styles.addAttachmentText, { color: colors.primary }]}>
-                    Adicionar mídia
+                    {t('training.addMedia')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -432,6 +481,10 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.md,
     fontWeight: theme.typography.fontWeight.semibold,
     marginBottom: theme.spacing.sm,
+  },
+  translationBlock: {
+    marginBottom: theme.spacing.md,
+    gap: theme.spacing.sm,
   },
   buttonContainer: {
     marginTop: theme.spacing.md,

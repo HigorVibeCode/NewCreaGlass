@@ -7,6 +7,7 @@
     "confirm": "Conferma",
     "save": "Salva",
     "delete": "Elimina",
+    "remove": "Rimuovi",
     "edit": "Modifica",
     "create": "Crea",
     "close": "Chiudi",
@@ -559,7 +560,12 @@
     "removePdfConfirm": "Vuoi rimuovere questo PDF?",
     "removeAttachmentError": "Errore nella rimozione dell'allegato",
     "selectPdfError": "Errore nella selezione del PDF",
-    "uploadPdfsError": "Errore nel caricamento di alcuni PDF"
+    "uploadPdfsError": "Errore nel caricamento di alcuni PDF",
+    "thumbnail": "Miniatura",
+    "thumbnailHint": "Immagine visualizzata sulla scheda del manuale.",
+    "addThumbnail": "Aggiungi miniatura",
+    "imagePickerError": "Permesso galleria richiesto o errore nella selezione dell'immagine.",
+    "uploadThumbnailError": "Errore nel caricamento della miniatura."
   },
   "training": {
     "title": "Formazioni",
@@ -639,6 +645,9 @@
     "confirmAndContinue": "Conferma e Continua",
     "noTrainingsAvailable": "Nessuna formazione disponibile",
     "addTraining": "Aggiungi Formazione",
+    "addMedia": "Aggiungi media",
+    "translationsSection": "Traduzioni del contenuto",
+    "translationsSectionHint": "Opzionale. Compila titolo e descrizione in altre lingue per visualizzarli nella lingua dell'app.",
     "historyMandatory": "Cronologia - Formazioni Obbligatorie",
     "historyOnboarding": "Cronologia - Formazioni di Onboarding",
     "historyProfessional": "Cronologia - Formazioni Professionali",

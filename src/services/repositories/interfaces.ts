@@ -178,11 +178,13 @@ export interface ManualsRepository {
   getAllManuals(): Promise<Manual[]>;
   getManualById(manualId: string): Promise<Manual | null>;
   createManual(manual: Omit<Manual, 'id' | 'createdAt' | 'attachments'>): Promise<Manual>;
-  updateManual(manualId: string, updates: Partial<Pick<Manual, 'title'>>): Promise<Manual>;
+  updateManual(manualId: string, updates: Partial<Pick<Manual, 'title' | 'thumbnailPath'>>): Promise<Manual>;
   deleteManual(manualId: string): Promise<void>;
   addManualAttachment(manualId: string, file: File | { uri: string; name: string; type: string }): Promise<ManualAttachment>;
   deleteManualAttachment(attachmentId: string): Promise<void>;
   getManualAttachmentUrl(attachmentId: string): Promise<string>;
+  uploadManualThumbnail(manualId: string, file: { uri: string; name: string; type: string }): Promise<string>;
+  getManualThumbnailUrl(manualId: string): Promise<string>;
 }
 
 // Device Tokens Repository

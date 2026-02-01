@@ -13,10 +13,11 @@ import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { repos } from '../src/services/container';
 import { supabase } from '../src/services/supabase';
 import { TrainingWithCompletion, TrainingCategory } from '../src/types';
+import { getLocalizedTrainingTitle, getLocalizedTrainingDescription } from '../src/utils/training-i18n';
 import { theme } from '../src/theme';
 
 export default function TrainingsHistoryScreen() {
-  const { t } = useI18n();
+  const { t, currentLanguage } = useI18n();
   const router = useRouter();
   const colors = useThemeColors();
   const { effectiveTheme } = useAppTheme();
@@ -200,7 +201,9 @@ export default function TrainingsHistoryScreen() {
                   >
                     <View style={styles.trainingHeader}>
                       <Text style={[styles.trainingTitle, { color: colors.text }]} numberOfLines={2}>
-                        {training.title}
+                        {trainingCategory === 'onboarding'
+                          ? getLocalizedTrainingTitle(training, currentLanguage || 'pt')
+                          : training.title}
                       </Text>
                       <View style={[styles.statusBadge, { backgroundColor: colors.success + '20' }]}>
                         <Ionicons name="checkmark-circle" size={16} color={colors.success} />
@@ -210,9 +213,13 @@ export default function TrainingsHistoryScreen() {
                       </View>
                     </View>
 
-                    {training.description && (
+                    {(trainingCategory === 'onboarding'
+                      ? getLocalizedTrainingDescription(training, currentLanguage || 'pt')
+                      : training.description) && (
                       <Text style={[styles.trainingDescription, { color: colors.textSecondary }]} numberOfLines={2}>
-                        {training.description}
+                        {trainingCategory === 'onboarding'
+                          ? getLocalizedTrainingDescription(training, currentLanguage || 'pt')
+                          : training.description}
                       </Text>
                     )}
 

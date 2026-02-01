@@ -7,6 +7,7 @@
     "confirm": "Confirm",
     "save": "Save",
     "delete": "Delete",
+    "remove": "Remove",
     "edit": "Edit",
     "create": "Create",
     "close": "Close",
@@ -614,7 +615,12 @@
     "removePdfConfirm": "Do you want to remove this PDF?",
     "removeAttachmentError": "Failed to remove attachment",
     "selectPdfError": "Failed to select PDF",
-    "uploadPdfsError": "Failed to upload some PDFs"
+    "uploadPdfsError": "Failed to upload some PDFs",
+    "thumbnail": "Thumbnail",
+    "thumbnailHint": "Image displayed on the manual card.",
+    "addThumbnail": "Add thumbnail",
+    "imagePickerError": "Gallery permission required or error selecting image.",
+    "uploadThumbnailError": "Failed to upload thumbnail."
   },
   "training": {
     "title": "Trainings",
@@ -694,6 +700,9 @@
     "confirmAndContinue": "Confirm and Continue",
     "noTrainingsAvailable": "No trainings available",
     "addTraining": "Add Training",
+    "addMedia": "Add media",
+    "translationsSection": "Content translations",
+    "translationsSectionHint": "Optional. Fill in title and description in other languages to display in the app language.",
     "historyMandatory": "History - Mandatory Trainings",
     "historyOnboarding": "History - Onboarding Trainings",
     "historyProfessional": "History - Professional Trainings",

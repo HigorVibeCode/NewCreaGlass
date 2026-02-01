@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useAuth } from '../src/store/auth-store';
+import { getLocalizedTrainingTitle, getLocalizedTrainingDescription } from '../src/utils/training-i18n';
 import { repos } from '../src/services/container';
 import { Training, TrainingCompletion, TrainingSignature } from '../src/types';
 import { supabase } from '../src/services/supabase';
@@ -464,7 +465,9 @@ export default function TrainingDetailScreen() {
               <Ionicons name="arrow-back" size={24} color={colors.text} />
             </TouchableOpacity>
             <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
-              {training.title}
+              {training.category === 'onboarding'
+                ? getLocalizedTrainingTitle(training, currentLanguage || 'pt')
+                : training.title}
             </Text>
             <View style={styles.headerRight}>
               {(training.category === 'onboarding' || training.category === 'mandatory') && (
@@ -522,9 +525,13 @@ export default function TrainingDetailScreen() {
               </View>
             </View>
 
-            {training.description && (
+            {(training.category === 'onboarding'
+              ? getLocalizedTrainingDescription(training, currentLanguage || 'pt')
+              : training.description) && (
               <Text style={[styles.description, { color: colors.textSecondary }]}>
-                {training.description}
+                {training.category === 'onboarding'
+                  ? getLocalizedTrainingDescription(training, currentLanguage || 'pt')
+                  : training.description}
               </Text>
             )}
 
@@ -618,10 +625,10 @@ export default function TrainingDetailScreen() {
             </View>
           )}
 
-          {/* Content - Only show when in progress or completed */}
+          {/* Content - Only show for professional; onboarding/mandatory have no content field */}
           {(trainingState === 'in_progress' || trainingState === 'signature_required' || isCompleted) && (
             <>
-              {training.content && (
+              {training.content && training.category === 'professional' && (
                 <View style={[styles.contentCard, { backgroundColor: colors.cardBackground }]}>
                   <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('training.contentTitle')}</Text>
                   <View style={[styles.contentBox, { backgroundColor: colors.backgroundSecondary }]}>

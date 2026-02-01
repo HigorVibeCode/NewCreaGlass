@@ -13,6 +13,7 @@ import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { PermissionGuard } from '../src/components/shared/PermissionGuard';
 import { repos } from '../src/services/container';
 import { Training, TrainingCategory } from '../src/types';
+import { getLocalizedTrainingTitle, getLocalizedTrainingDescription } from '../src/utils/training-i18n';
 import { theme } from '../src/theme';
 
 export default function TrainingsListScreen() {
@@ -33,7 +34,11 @@ export default function TrainingsListScreen() {
     setIsLoading(true);
     try {
       const allTrainings = await repos.trainingRepo.getAllTrainings(trainingCategory);
-      setTrainings(allTrainings);
+      const sorted =
+        trainingCategory === 'onboarding'
+          ? [...allTrainings].sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }))
+          : allTrainings;
+      setTrainings(sorted);
     } catch (error) {
       console.error('Error loading trainings:', error);
     } finally {
@@ -261,11 +266,17 @@ export default function TrainingsListScreen() {
                           </View>
                           <View style={styles.trainingTitleContainer}>
                             <Text style={[styles.trainingTitle, { color: colors.text }]} numberOfLines={2}>
-                              {training.title}
+                              {trainingCategory === 'onboarding'
+                                ? getLocalizedTrainingTitle(training, currentLanguage || 'pt')
+                                : training.title}
                             </Text>
-                            {training.description && (
+                            {(trainingCategory === 'onboarding'
+                              ? getLocalizedTrainingDescription(training, currentLanguage || 'pt')
+                              : training.description) && (
                               <Text style={[styles.trainingDescription, { color: colors.textSecondary }]} numberOfLines={2}>
-                                {training.description}
+                                {trainingCategory === 'onboarding'
+                                  ? getLocalizedTrainingDescription(training, currentLanguage || 'pt')
+                                  : training.description}
                               </Text>
                             )}
                           </View>

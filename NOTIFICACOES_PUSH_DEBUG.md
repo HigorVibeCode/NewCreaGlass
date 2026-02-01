@@ -2,6 +2,8 @@
 
 Use este guia quando as notificações **na lista do app** aparecem, mas o **popup no celular** (push) não chega.
 
+**Causa principal:** o envio de push hoje acontece no app; por causa do RLS em `device_tokens`, apenas o próprio usuário (ou um Master) consegue ter os tokens dos destinatários. Por isso o push não chega ao sistema para os outros. **Solução:** usar a Edge Function + Database Webhook para enviar push no backend. Veja [NOTIFICACOES_PUSH_CAUSA_RAIZ.md](./NOTIFICACOES_PUSH_CAUSA_RAIZ.md).
+
 ## 1. Você está no Expo Go?
 
 **Push não funciona no Expo Go** (SDK 53+). O app detecta Expo Go e desativa o registro de push.

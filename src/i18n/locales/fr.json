@@ -7,6 +7,7 @@
     "confirm": "Confirmer",
     "save": "Enregistrer",
     "delete": "Supprimer",
+    "remove": "Retirer",
     "edit": "Modifier",
     "create": "Créer",
     "close": "Fermer",
@@ -556,7 +557,12 @@
     "removePdfConfirm": "Voulez-vous supprimer ce PDF ?",
     "removeAttachmentError": "Échec de la suppression de la pièce jointe",
     "selectPdfError": "Échec de la sélection du PDF",
-    "uploadPdfsError": "Échec du téléchargement de certains PDF"
+    "uploadPdfsError": "Échec du téléchargement de certains PDF",
+    "thumbnail": "Miniature",
+    "thumbnailHint": "Image affichée sur la carte du manuel.",
+    "addThumbnail": "Ajouter une miniature",
+    "imagePickerError": "Permission de la galerie requise ou erreur lors de la sélection de l'image.",
+    "uploadThumbnailError": "Échec du téléchargement de la miniature."
   },
   "training": {
     "title": "Formations",
@@ -636,6 +642,9 @@
     "confirmAndContinue": "Confirmer et Continuer",
     "noTrainingsAvailable": "Aucune formation disponible",
     "addTraining": "Ajouter une Formation",
+    "addMedia": "Ajouter des médias",
+    "translationsSection": "Traductions du contenu",
+    "translationsSectionHint": "Optionnel. Renseignez le titre et la description dans d'autres langues pour l'affichage dans la langue de l'app.",
     "historyMandatory": "Historique - Formations Obligatoires",
     "historyOnboarding": "Historique - Formations d'Intégration",
     "historyProfessional": "Historique - Formations Professionnelles",

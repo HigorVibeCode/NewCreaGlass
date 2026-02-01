@@ -7,6 +7,7 @@
     "confirm": "Bestätigen",
     "save": "Speichern",
     "delete": "Löschen",
+    "remove": "Entfernen",
     "edit": "Bearbeiten",
     "create": "Erstellen",
     "close": "Schließen",
@@ -556,7 +557,12 @@
     "removePdfConfirm": "Möchten Sie dieses PDF entfernen?",
     "removeAttachmentError": "Anhang konnte nicht entfernt werden",
     "selectPdfError": "PDF konnte nicht ausgewählt werden",
-    "uploadPdfsError": "Einige PDFs konnten nicht hochgeladen werden"
+    "uploadPdfsError": "Einige PDFs konnten nicht hochgeladen werden",
+    "thumbnail": "Vorschaubild",
+    "thumbnailHint": "Bild, das auf der Handbuchkarte angezeigt wird.",
+    "addThumbnail": "Vorschaubild hinzufügen",
+    "imagePickerError": "Galerie-Berechtigung erforderlich oder Fehler bei der Bildauswahl.",
+    "uploadThumbnailError": "Vorschaubild konnte nicht hochgeladen werden."
   },
   "training": {
     "title": "Schulungen",
@@ -636,6 +642,9 @@
     "confirmAndContinue": "Bestätigen und fortfahren",
     "noTrainingsAvailable": "Keine Schulungen verfügbar",
     "addTraining": "Schulung hinzufügen",
+    "addMedia": "Medien hinzufügen",
+    "translationsSection": "Inhaltsübersetzungen",
+    "translationsSectionHint": "Optional. Titel und Beschreibung in anderen Sprachen ausfüllen, um sie in der App-Sprache anzuzeigen.",
     "historyMandatory": "Verlauf - Pflichtschulungen",
     "historyOnboarding": "Verlauf - Onboarding-Schulungen",
     "historyProfessional": "Verlauf - Berufliche Schulungen",
