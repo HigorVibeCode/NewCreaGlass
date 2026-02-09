@@ -33,27 +33,10 @@ import {
   getEffectiveRecordedAt,
 } from '../src/utils/point-report-pdf';
 import { getLogoBase64 } from '../src/utils/logo-base64';
-
-function formatDateTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
+import { formatDateTime, formatTimestamp, formatDate } from '../src/utils/date-format';
 
 function formatEmittedAt(): string {
-  return new Date().toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+  return formatTimestamp(new Date());
 }
 
 export default function PointReportsScreen() {
@@ -103,20 +86,8 @@ export default function PointReportsScreen() {
   };
 
   const handleExportPdf = useCallback(async () => {
-    const periodFrom = dateFrom
-      ? new Date(dateFrom + 'T00:00:00').toLocaleDateString('pt-BR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-        })
-      : '—';
-    const periodTo = dateTo
-      ? new Date(dateTo + 'T00:00:00').toLocaleDateString('pt-BR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-        })
-      : '—';
+    const periodFrom = dateFrom ? formatDate(dateFrom) : '—';
+    const periodTo = dateTo ? formatDate(dateTo) : '—';
     const emittedAt = formatEmittedAt();
     const identification = getIdentification();
     const logoBase64 = await Promise.race([

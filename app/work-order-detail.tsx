@@ -23,6 +23,7 @@ import { repos } from '../src/services/container';
 import { supabase } from '../src/services/supabase';
 import { WorkOrder, User, TimeStatus, ServiceLog, Evidence, ChecklistItem } from '../src/types';
 import { theme } from '../src/theme';
+import { formatDate as formatDateUtil, formatDateTime as formatDateTimeUtil, formatTimestamp as formatTimestampUtil } from '../src/utils/date-format';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { confirmDelete } from '../src/utils/confirm-dialog';
 import { downloadAndOpenAttachment } from '../src/utils/attachments';
@@ -693,14 +694,11 @@ export default function WorkOrderDetailScreen() {
 
   const formatDateTime = (date: string, time?: string): string => {
     if (!date) return '';
-    const dateObj = new Date(date);
-    const dateStr = dateObj.toLocaleDateString();
-    return time ? `${dateStr} ${time}` : dateStr;
+    return formatDateTimeUtil(date, time);
   };
 
   const formatTimestamp = (timestamp: string): string => {
-    const date = new Date(timestamp);
-    return date.toLocaleString();
+    return formatTimestampUtil(timestamp);
   };
 
   const formatDuration = (seconds: number): string => {

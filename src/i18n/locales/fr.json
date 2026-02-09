@@ -29,7 +29,8 @@
     "invalidCredentials": "Nom d'utilisateur ou mot de passe invalide",
     "loginError": "Échec de la connexion. Veuillez réessayer.",
     "loggingIn": "Connexion en cours...",
-    "rememberLogin": "Se souvenir de la connexion"
+    "rememberLogin": "Se souvenir de la connexion",
+    "keepLoggedIn": "Rester connecté"
   },
   "navigation": {
     "production": "Production",
@@ -91,8 +92,8 @@
         }
       },
       "equipmentTools": {
-        "title": "Équipement & Outils",
-        "subtitle": "Manuels d'équipement et maintenance",
+        "title": "Équipements, Outils et Machines",
+        "subtitle": "Centre de documentation des équipements",
         "subCategories": {
           "manuals": {
             "title": "Manuels",
@@ -287,21 +288,30 @@
     "status": {
       "all": "Tous",
       "not_authorized": "Non Autorisé",
+      "cancelled": "Annulé",
+      "rework_needed": "Retouche Nécessaire",
       "authorized": "Autorisé",
-      "cutting": "Cutting",
-      "polishing": "Polishing",
-      "on_paint_cabin": "On Paint Cabin",
-      "on_laminating_machine": "On Laminating Machine",
-      "on_schmelz_oven": "On Schmelz Oven",
-      "waiting_for_tempering": "Waiting for Tempering",
-      "waiting_for_schmelz": "Waiting for Schmelz",
-      "tempering_in_progress": "Tempering in Progress",
-      "tempered": "Tempered",
-      "waiting_for_packing": "Waiting for Packing",
-      "packed": "Packed",
-      "ready_for_dispatch": "Ready for Dispatch",
-      "delivered": "Delivered",
-      "completed": "Completed"
+      "on_cutting_process": "En Processus de Coupe",
+      "on_polishing_process": "En Processus de Polissage",
+      "on_paint_cabin": "En Cabine de Peinture",
+      "on_laminating_machine": "Sur Machine de Laminage",
+      "on_schmelz_oven": "Au Four Schmelz",
+      "on_banding_oven": "Au Four Banding",
+      "tempering_in_progress": "En Processus de Trempe",
+      "waiting_to_cnc_wjet": "En Attente CNC / W.Jet",
+      "waiting_to_drill": "En Attente de Perçage",
+      "waiting_to_paint_cabin": "En Attente Cabine de Peinture",
+      "waiting_for_schmelz": "En Attente Schmelz",
+      "waiting_for_tempering": "En Attente de Trempe",
+      "waiting_for_packing": "En Attente d'Emballage",
+      "packed": "Emballé",
+      "ready_for_dispatch": "Prêt à Expédier",
+      "delivered": "Livré",
+      "completed": "Complété",
+      "cutting": "Coupe",
+      "polishing": "Polissage",
+      "tempered": "Trempé",
+      "laminated": "Laminé"
     },
     "orderType": {
       "standard": "Standard",

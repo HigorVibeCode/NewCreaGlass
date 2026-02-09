@@ -177,26 +177,41 @@ export interface Event {
 
 // Production types
 export type ProductionStatus = 
+  // Red group
   | 'not_authorized'
+  | 'cancelled'
+  | 'rework_needed'
+  // Green (entry)
   | 'authorized'
-  | 'cutting'
-  | 'polishing'
+  // Orange group (active processes)
+  | 'on_cutting_process'
+  | 'on_polishing_process'
   | 'on_paint_cabin'
   | 'on_laminating_machine'
   | 'on_schmelz_oven'
-  | 'waiting_for_tempering'
-  | 'waiting_for_schmelz'
+  | 'on_banding_oven'
   | 'tempering_in_progress'
-  | 'tempered'
+  // Yellow group (waiting)
+  | 'waiting_to_cnc_wjet'
+  | 'waiting_to_drill'
+  | 'waiting_to_paint_cabin'
+  | 'waiting_for_schmelz'
+  | 'waiting_for_tempering'
   | 'waiting_for_packing'
+  // Blue group
   | 'packed'
   | 'ready_for_dispatch'
+  // Green (exit)
   | 'delivered'
   | 'completed'
   // Status antigos mantidos para compatibilidade com dados existentes
+  | 'cutting'
+  | 'polishing'
+  | 'tempered'
   | 'on_cabin'
   | 'laminating'
   | 'laminated'
+  | 'on_oven'
   | 'on_oven';
 export type OrderType = 'standard' | 'urgent' | 'custom';
 export type GlassType = 'tempered' | 'strengthened' | 'float' | 'laminated' | 'textured' | 'sandblasted' | 'cuted' | 'insulated';
@@ -373,6 +388,36 @@ export interface Manual {
   thumbnailPath?: string | null;
   attachments?: ManualAttachment[];
   createdAt: string;
+}
+
+// Equipment Documents (Central de Documentos de Máquinas)
+export interface EquipmentMachine {
+  id: string;
+  name: string;
+  icon?: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface EquipmentDocumentAttachment {
+  id: string;
+  documentId: string;
+  filename: string;
+  mimeType: string;
+  storagePath: string;
+  createdAt: string;
+}
+
+export interface EquipmentDocument {
+  id: string;
+  equipmentId: string;
+  title: string;
+  description?: string;
+  thumbnailPath?: string | null;
+  attachments?: EquipmentDocumentAttachment[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // Time entries (Controle de Ponto)

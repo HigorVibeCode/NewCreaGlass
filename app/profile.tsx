@@ -6,6 +6,7 @@ import { useAuth } from '../src/store/auth-store';
 import { Button } from '../src/components/shared/Button';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { clearSavedLogin } from '../src/utils/saved-login';
 
 export default function ProfileScreen() {
   const { t } = useI18n();
@@ -18,6 +19,8 @@ export default function ProfileScreen() {
   }
 
   const handleLogout = async () => {
+    // Clear saved credentials so auto-login doesn't trigger
+    await clearSavedLogin();
     await logout();
     router.replace('/login');
   };

@@ -1,4 +1,5 @@
 import { TimeEntry } from '../types';
+import { formatDate as formatDateCentral, formatTime as formatTimeCentral } from './date-format';
 
 export interface DayRow {
   date: string;
@@ -35,20 +36,16 @@ function toDateKey(iso: string): string {
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('pt-BR', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `${hh}:${mm}:${ss}`;
 }
 
 function formatDateLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+  return formatDateCentral(iso);
 }
 
 /** Formata duração em minutos como HH:MM (horas e minutos inteiros). */

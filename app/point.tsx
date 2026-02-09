@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -11,8 +11,9 @@ import {
   TouchableWithoutFeedback,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { formatDateTime as formatDateTimeUtil } from '../src/utils/date-format';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useI18n } from '../src/hooks/use-i18n';
@@ -35,12 +36,14 @@ import { TimeEntry } from '../src/types';
 export default function PointScreen() {
   const { t } = useI18n();
   const router = useRouter();
+  const params = useLocalSearchParams<{ nfc?: string }>();
   const colors = useThemeColors();
   const { effectiveTheme } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const isMaster = user?.userType === 'Master';
+  const nfcHandledRef = useRef(false);
 
   const { data: entries = [], isLoading } = useMyTimeEntriesQuery(user?.id);
   const [registering, setRegistering] = useState(false);
@@ -51,6 +54,32 @@ export default function PointScreen() {
   const [adjustTime, setAdjustTime] = useState('');
   const [adjustDescription, setAdjustDescription] = useState('');
   const [savingAdjust, setSavingAdjust] = useState(false);
+  const [nfcMode, setNfcMode] = useState(false);
+
+  // NFC auto-trigger: when opened via NFC tag (?nfc=1), auto-open password modal
+  useEffect(() => {
+    if (params.nfc === '1' && user && !nfcHandledRef.current) {
+      nfcHandledRef.current = true;
+      setNfcMode(true);
+      // Small delay to let the screen render first
+      const timer = setTimeout(() => {
+        // On web, skip biometric and go straight to password
+        if (Platform.OS === 'web') {
+          setShowPasswordModal(true);
+        } else {
+          // On mobile, try biometric first then fallback to password
+          tryBiometricAuth(t('point.biometricPrompt')).then((ok) => {
+            if (ok) {
+              performRegister();
+            } else {
+              setShowPasswordModal(true);
+            }
+          });
+        }
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [params.nfc, user]);
 
   const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
   const canAdjustEntry = useCallback(
@@ -173,14 +202,7 @@ export default function PointScreen() {
   );
 
   const formatDateTime = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return formatDateTimeUtil(iso);
   };
 
   return (
@@ -231,6 +253,15 @@ export default function PointScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        {nfcMode && (
+          <View style={[styles.nfcBanner, { backgroundColor: '#6366f1' + '15' }]}>
+            <Ionicons name="radio-outline" size={20} color="#6366f1" />
+            <Text style={[styles.nfcBannerText, { color: '#6366f1' }]}>
+              {t('point.nfcMode') || 'NFC — Registre seu ponto'}
+            </Text>
+          </View>
+        )}
+
         <TouchableOpacity
           style={[styles.registerButton, { backgroundColor: colors.primary }]}
           onPress={handleRegisterPress}
@@ -453,6 +484,20 @@ const styles = StyleSheet.create({
   content: {
     padding: theme.spacing.md,
     paddingBottom: theme.spacing.xl,
+  },
+  nfcBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: theme.spacing.md,
+  },
+  nfcBannerText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
   registerButton: {
     flexDirection: 'row',

@@ -15,6 +15,7 @@ import { repos } from '../src/services/container';
 import { Training, TrainingCategory } from '../src/types';
 import { getLocalizedTrainingTitle, getLocalizedTrainingDescription } from '../src/utils/training-i18n';
 import { theme } from '../src/theme';
+import { formatDate as formatDateUtil } from '../src/utils/date-format';
 
 export default function TrainingsListScreen() {
   const { t, currentLanguage } = useI18n();
@@ -97,23 +98,7 @@ export default function TrainingsListScreen() {
   };
 
   const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    // Usar locale baseado no idioma atual
-    const localeMap: Record<string, string> = {
-      'pt': 'pt-BR',
-      'en': 'en-US',
-      'es': 'es-ES',
-      'de': 'de-DE',
-      'fr': 'fr-FR',
-      'it': 'it-IT',
-    };
-    const currentLang = currentLanguage || 'pt';
-    const locale = localeMap[currentLang] || 'pt-BR';
-    return date.toLocaleDateString(locale, {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
+    return formatDateUtil(dateString);
   };
 
   const getCategoryTitle = () => {

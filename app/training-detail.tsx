@@ -18,6 +18,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { formatDateTime as formatDateTimeUtil } from '../src/utils/date-format';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useAuth } from '../src/store/auth-store';
 import { getLocalizedTrainingTitle, getLocalizedTrainingDescription } from '../src/utils/training-i18n';
@@ -366,25 +367,7 @@ export default function TrainingDetailScreen() {
   };
 
   const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    // Usar locale baseado no idioma atual
-    const localeMap: Record<string, string> = {
-      'pt': 'pt-BR',
-      'en': 'en-US',
-      'es': 'es-ES',
-      'de': 'de-DE',
-      'fr': 'fr-FR',
-      'it': 'it-IT',
-    };
-    const currentLang = currentLanguage || 'pt';
-    const locale = localeMap[currentLang] || 'pt-BR';
-    return date.toLocaleDateString(locale, {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return formatDateTimeUtil(dateString);
   };
 
   const handleOpenAttachment = async (attachment: any) => {

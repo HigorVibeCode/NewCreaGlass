@@ -3,6 +3,9 @@ import {
     BloodPriorityRead,
     DeviceToken,
     Document,
+    EquipmentDocument,
+    EquipmentDocumentAttachment,
+    EquipmentMachine,
     Event,
     InventoryGroup,
     InventoryHistory,
@@ -185,6 +188,32 @@ export interface ManualsRepository {
   getManualAttachmentUrl(attachmentId: string): Promise<string>;
   uploadManualThumbnail(manualId: string, file: { uri: string; name: string; type: string }): Promise<string>;
   getManualThumbnailUrl(manualId: string): Promise<string>;
+}
+
+// Equipment Documents Repository (Central de Documentos de Máquinas)
+export interface EquipmentDocumentsRepository {
+  // Equipment Machines (folders)
+  getAllEquipment(): Promise<EquipmentMachine[]>;
+  getEquipmentById(equipmentId: string): Promise<EquipmentMachine | null>;
+  createEquipment(equipment: Omit<EquipmentMachine, 'id' | 'createdAt'>): Promise<EquipmentMachine>;
+  updateEquipment(equipmentId: string, updates: Partial<Pick<EquipmentMachine, 'name' | 'icon'>>): Promise<EquipmentMachine>;
+  deleteEquipment(equipmentId: string): Promise<void>;
+
+  // Equipment Documents (blocks)
+  getDocumentsByEquipment(equipmentId: string): Promise<EquipmentDocument[]>;
+  getDocumentById(documentId: string): Promise<EquipmentDocument | null>;
+  createDocument(doc: Omit<EquipmentDocument, 'id' | 'createdAt' | 'updatedAt' | 'attachments'>): Promise<EquipmentDocument>;
+  updateDocument(documentId: string, updates: Partial<Pick<EquipmentDocument, 'title' | 'description' | 'thumbnailPath'>>): Promise<EquipmentDocument>;
+  deleteDocument(documentId: string): Promise<void>;
+
+  // Attachments (up to 10 per block)
+  addDocumentAttachment(documentId: string, file: File | { uri: string; name: string; type: string }): Promise<EquipmentDocumentAttachment>;
+  deleteDocumentAttachment(attachmentId: string): Promise<void>;
+  getDocumentAttachmentUrl(attachmentId: string): Promise<string>;
+
+  // Thumbnail
+  uploadDocumentThumbnail(documentId: string, file: { uri: string; name: string; type: string }): Promise<string>;
+  getDocumentThumbnailUrl(documentId: string): Promise<string>;
 }
 
 // Device Tokens Repository

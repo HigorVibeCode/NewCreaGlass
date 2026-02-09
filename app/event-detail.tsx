@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
 import { repos } from '../src/services/container';
+import { formatDateTime as formatDateTimeUtil } from '../src/utils/date-format';
 import { Event, EventType } from '../src/types';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
@@ -101,9 +102,7 @@ export default function EventDetailScreen() {
 
   const formatDateTime = (date: string, time: string): string => {
     if (!date) return '';
-    const dateObj = new Date(date);
-    const dateStr = dateObj.toLocaleDateString();
-    return time ? `${dateStr} ${time}` : dateStr;
+    return formatDateTimeUtil(date, time);
   };
 
   if (isLoading) {

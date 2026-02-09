@@ -13,6 +13,7 @@ import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { repos } from '../src/services/container';
 import { MaintenanceRecord } from '../src/types';
 import { theme } from '../src/theme';
+import { formatDate as formatDateUtil } from '../src/utils/date-format';
 
 export default function MaintenanceListScreen() {
   const { t } = useI18n();
@@ -58,12 +59,7 @@ export default function MaintenanceListScreen() {
   };
 
   const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
+    return formatDateUtil(dateString);
   };
 
   return (

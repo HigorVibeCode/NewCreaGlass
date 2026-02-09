@@ -30,6 +30,7 @@ export default function RootLayout() {
               <NotificationAudioInitializer />
               <Stack
                 screenOptions={{
+                  headerShown: false,
                   animation: 'slide_from_right',
                   animationDuration: 300,
                 }}
@@ -284,6 +285,20 @@ export default function RootLayout() {
                   options={{ 
                     presentation: 'card',
                     title: 'Relatórios de Ponto',
+                    animation: 'slide_from_right',
+                    headerShown: false,
+                  }} 
+                />
+                <Stack.Screen 
+                  name="equipment-documents" 
+                  options={{
+                    animation: 'slide_from_right',
+                    headerShown: false,
+                  }} 
+                />
+                <Stack.Screen 
+                  name="equipment-document-detail" 
+                  options={{
                     animation: 'slide_from_right',
                     headerShown: false,
                   }} 

@@ -1,4 +1,5 @@
 import { Notification } from '../types';
+import { formatDate as formatDateCentral } from './date-format';
 
 /**
  * Formata o texto de exibição de uma notificação para a central de notificações
@@ -80,24 +81,20 @@ export function formatNotificationText(notification: Notification, t?: (key: str
           }
           
           if (!isNaN(date.getTime())) {
-            dateText = date.toLocaleDateString('pt-BR', { 
-              day: '2-digit', 
-              month: '2-digit', 
-              year: 'numeric' 
-            });
+            dateText = formatDateCentral(date);
             
             // Add time if available (format: HH:MM or HH:MM:SS)
             if (scheduledTime && String(scheduledTime).trim() !== '') {
               // Remove seconds if present (HH:MM:SS -> HH:MM)
               const timeStr = String(scheduledTime).trim().split(':').slice(0, 2).join(':');
-              dateText += ` às ${timeStr}`;
+              dateText += ` ${timeStr}`;
             }
           } else {
             // Fallback: use the date string as-is
             dateText = dateStr;
             if (scheduledTime && String(scheduledTime).trim() !== '') {
               const timeStr = String(scheduledTime).trim().split(':').slice(0, 2).join(':');
-              dateText += ` às ${timeStr}`;
+              dateText += ` ${timeStr}`;
             }
           }
         } catch (e) {
@@ -105,7 +102,7 @@ export function formatNotificationText(notification: Notification, t?: (key: str
           dateText = String(scheduledDate);
           if (scheduledTime && String(scheduledTime).trim() !== '') {
             const timeStr = String(scheduledTime).trim().split(':').slice(0, 2).join(':');
-            dateText += ` às ${timeStr}`;
+            dateText += ` ${timeStr}`;
           }
         }
       }
@@ -149,24 +146,20 @@ export function formatNotificationText(notification: Notification, t?: (key: str
           }
           
           if (!isNaN(date.getTime())) {
-            dateText = date.toLocaleDateString('pt-BR', { 
-              day: '2-digit', 
-              month: '2-digit', 
-              year: 'numeric' 
-            });
+            dateText = formatDateCentral(date);
             
             // Add time if available (format: HH:MM or HH:MM:SS)
             if (startTime && String(startTime).trim() !== '') {
               // Remove seconds if present (HH:MM:SS -> HH:MM)
               const timeStr = String(startTime).trim().split(':').slice(0, 2).join(':');
-              dateText += ` às ${timeStr}`;
+              dateText += ` ${timeStr}`;
             }
           } else {
             // Fallback: use the date string as-is
             dateText = dateStr;
             if (startTime && String(startTime).trim() !== '') {
               const timeStr = String(startTime).trim().split(':').slice(0, 2).join(':');
-              dateText += ` às ${timeStr}`;
+              dateText += ` ${timeStr}`;
             }
           }
         } catch (e) {
@@ -174,7 +167,7 @@ export function formatNotificationText(notification: Notification, t?: (key: str
           dateText = String(startDate);
           if (startTime && String(startTime).trim() !== '') {
             const timeStr = String(startTime).trim().split(':').slice(0, 2).join(':');
-            dateText += ` às ${timeStr}`;
+            dateText += ` ${timeStr}`;
           }
         }
       }

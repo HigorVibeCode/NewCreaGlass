@@ -11,6 +11,7 @@ import { repos } from '../../src/services/container';
 import { Event, EventType, WorkOrder } from '../../src/types';
 import { theme } from '../../src/theme';
 import { useThemeColors } from '../../src/hooks/use-theme-colors';
+import { formatDateTime as formatDateTimeUtil } from '../../src/utils/date-format';
 
 type EventOrWorkOrder = 
   | { type: 'event'; data: Event }
@@ -137,9 +138,7 @@ export default function EventsScreen() {
 
   const formatDateTime = (date: string, time: string): string => {
     if (!date) return '';
-    const dateObj = new Date(date);
-    const dateStr = dateObj.toLocaleDateString();
-    return time ? `${dateStr} ${time}` : dateStr;
+    return formatDateTimeUtil(date, time);
   };
 
   const getServiceTypeLabel = (type: string): string => {

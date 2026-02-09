@@ -11,6 +11,7 @@ import { repos } from '../src/services/container';
 import { InventoryItem, InventoryHistory } from '../src/types';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { formatDateTime as formatDateTimeUtil } from '../src/utils/date-format';
 
 export default function InventoryStockCountScreen() {
   const { t } = useI18n();
@@ -80,8 +81,7 @@ export default function InventoryStockCountScreen() {
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return formatDateTimeUtil(dateString);
   };
 
   if (!item) {

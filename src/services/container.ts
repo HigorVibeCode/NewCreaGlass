@@ -3,6 +3,7 @@ import {
   BloodPriorityRepository,
   DeviceTokensRepository,
   DocumentsRepository,
+  EquipmentDocumentsRepository,
   EventsRepository,
   InventoryRepository,
   MaintenanceRepository,
@@ -36,6 +37,7 @@ import { SupabaseTrainingRepository } from '../repositories/supabase/SupabaseTra
 import { SupabaseDeviceTokensRepository } from '../repositories/supabase/SupabaseDeviceTokensRepository';
 import { SupabaseNotificationPreferencesRepository } from '../repositories/supabase/SupabaseNotificationPreferencesRepository';
 import { SupabasePushDeliveryLogsRepository } from '../repositories/supabase/SupabasePushDeliveryLogsRepository';
+import { SupabaseEquipmentDocumentsRepository } from '../repositories/supabase/SupabaseEquipmentDocumentsRepository';
 
 // Import Mock repositories (for fallback or development)
 import { MockAuthRepository } from '../repositories/mock/MockAuthRepository';
@@ -74,4 +76,5 @@ export const repos = {
   deviceTokensRepo: new SupabaseDeviceTokensRepository() as DeviceTokensRepository,
   notificationPreferencesRepo: new SupabaseNotificationPreferencesRepository() as NotificationPreferencesRepository,
   pushDeliveryLogsRepo: new SupabasePushDeliveryLogsRepository() as PushDeliveryLogsRepository,
+  equipmentDocumentsRepo: new SupabaseEquipmentDocumentsRepository() as EquipmentDocumentsRepository,
 };

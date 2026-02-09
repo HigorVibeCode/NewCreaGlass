@@ -11,6 +11,7 @@ import { useAppTheme } from '../src/hooks/use-app-theme';
 import { useAuth } from '../src/store/auth-store';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { repos } from '../src/services/container';
+import { formatDateTime as formatDateTimeUtil } from '../src/utils/date-format';
 import { supabase } from '../src/services/supabase';
 import { TrainingWithCompletion, TrainingCategory } from '../src/types';
 import { getLocalizedTrainingTitle, getLocalizedTrainingDescription } from '../src/utils/training-i18n';
@@ -64,14 +65,7 @@ export default function TrainingsHistoryScreen() {
   );
 
   const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return formatDateTimeUtil(dateString);
   };
 
   const formatTime = (seconds: number): string => {

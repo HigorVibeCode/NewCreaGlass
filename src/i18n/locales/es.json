@@ -32,7 +32,8 @@
     "invalidCredentials": "Nombre de usuario o contraseña inválidos",
     "loginError": "Error al iniciar sesión. Inténtelo de nuevo.",
     "loggingIn": "Iniciando sesión...",
-    "rememberLogin": "Recordar inicio de sesión"
+    "rememberLogin": "Recordar inicio de sesión",
+    "keepLoggedIn": "Mantenerme conectado"
   },
   "navigation": {
     "production": "Producción",
@@ -94,8 +95,8 @@
         }
       },
       "equipmentTools": {
-        "title": "Equipos y Herramientas",
-        "subtitle": "Manuales y mantenimiento de equipos",
+        "title": "Equipos, Herramientas y Máquinas",
+        "subtitle": "Centro de documentación de equipos",
         "subCategories": {
           "manuals": {
             "title": "Manuales",
@@ -290,21 +291,30 @@
     "status": {
       "all": "Todos",
       "not_authorized": "No Autorizado",
+      "cancelled": "Cancelado",
+      "rework_needed": "Retrabajo Necesario",
       "authorized": "Autorizado",
-      "cutting": "Cutting",
-      "polishing": "Polishing",
-      "on_paint_cabin": "On Paint Cabin",
-      "on_laminating_machine": "On Laminating Machine",
-      "on_schmelz_oven": "On Schmelz Oven",
-      "waiting_for_tempering": "Waiting for Tempering",
-      "waiting_for_schmelz": "Waiting for Schmelz",
-      "tempering_in_progress": "Tempering in Progress",
-      "tempered": "Tempered",
-      "waiting_for_packing": "Waiting for Packing",
-      "packed": "Packed",
-      "ready_for_dispatch": "Ready for Dispatch",
-      "delivered": "Delivered",
-      "completed": "Completed"
+      "on_cutting_process": "En Proceso de Corte",
+      "on_polishing_process": "En Proceso de Pulido",
+      "on_paint_cabin": "En Cabina de Pintura",
+      "on_laminating_machine": "En Máquina Laminadora",
+      "on_schmelz_oven": "En Horno Schmelz",
+      "on_banding_oven": "En Horno Banding",
+      "tempering_in_progress": "En Proceso de Temple",
+      "waiting_to_cnc_wjet": "Esperando CNC / W.Jet",
+      "waiting_to_drill": "Esperando Perforación",
+      "waiting_to_paint_cabin": "Esperando Cabina de Pintura",
+      "waiting_for_schmelz": "Esperando Schmelz",
+      "waiting_for_tempering": "Esperando Temple",
+      "waiting_for_packing": "Esperando Embalaje",
+      "packed": "Embalado",
+      "ready_for_dispatch": "Listo para Despacho",
+      "delivered": "Entregado",
+      "completed": "Completado",
+      "cutting": "Corte",
+      "polishing": "Pulido",
+      "tempered": "Templado",
+      "laminated": "Laminado"
     },
     "orderType": {
       "standard": "Estándar",

@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
+import { formatDate } from '../src/utils/date-format';
 import { repos } from '../src/services/container';
 import { Production, ProductionStatus } from '../src/types';
 import { theme } from '../src/theme';
@@ -257,14 +258,14 @@ export default function ProductionOrdersHistoryScreen() {
                       <View style={styles.metaRow}>
                         <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
                         <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-                          {t('production.dueDate')}: {new Date(production.dueDate).toLocaleDateString()}
+                          {t('production.dueDate')}: {formatDate(production.dueDate)}
                         </Text>
                       </View>
                       {production.createdAt && (
                         <View style={styles.metaRow}>
                           <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
                           <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-                            {new Date(production.createdAt).toLocaleDateString()}
+                            {formatDate(production.createdAt)}
                           </Text>
                         </View>
                       )}

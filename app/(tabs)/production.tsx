@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, TextInput } from 'react-native';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, TextInput, Animated, Easing } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,10 +8,110 @@ import { ScreenWrapper } from '../../src/components/shared/ScreenWrapper';
 import { DropdownOption } from '../../src/components/shared/Dropdown';
 import { PermissionGuard } from '../../src/components/shared/PermissionGuard';
 import { repos } from '../../src/services/container';
+import { supabase } from '../../src/services/supabase';
 import { Production, ProductionCompany, ProductionStatus, InventoryItem } from '../../src/types';
 import { theme } from '../../src/theme';
 import { useThemeColors } from '../../src/hooks/use-theme-colors';
 import { useAuth } from '../../src/store/auth-store';
+import { formatDate } from '../../src/utils/date-format';
+
+// Alert levels for waiting status cards
+// 0 = no alert, 1 = >8h slow pulse, 2 = >24h pulse+darker, 3 = >48h pulse+alert
+type WaitingAlertLevel = 0 | 1 | 2 | 3;
+
+const WAITING_STATUSES: ProductionStatus[] = [
+  'waiting_to_cnc_wjet',
+  'waiting_to_drill',
+  'waiting_to_paint_cabin',
+  'waiting_for_schmelz',
+  'waiting_for_tempering',
+  'waiting_for_packing',
+];
+
+/** Compute alert level based on hours waiting */
+function getAlertLevel(hours: number): WaitingAlertLevel {
+  if (hours > 48) return 3;
+  if (hours > 24) return 2;
+  if (hours > 8) return 1;
+  return 0;
+}
+
+/** Pulse speed per alert level (ms per half-cycle) */
+function getPulseDuration(level: WaitingAlertLevel): number {
+  switch (level) {
+    case 1: return 1800; // slow
+    case 2: return 1200; // medium
+    case 3: return 800;  // fast
+    default: return 1800;
+  }
+}
+
+/** Color for pulse — always the same vivid yellow */
+function getPulseColor(_level: WaitingAlertLevel): string {
+  return '#eab308'; // yellow-500 vivid for all levels
+}
+
+/** Animated wrapper that adds a pulse glow effect for waiting cards */
+function WaitingPulseCard({ children, alertLevel }: { children: React.ReactNode; alertLevel: WaitingAlertLevel }) {
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (alertLevel > 0) {
+      const duration = getPulseDuration(alertLevel);
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: false,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 0,
+            duration,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: false,
+          }),
+        ]),
+      );
+      loop.start();
+      return () => loop.stop();
+    }
+  }, [alertLevel]);
+
+  if (alertLevel === 0) {
+    return <>{children}</>;
+  }
+
+  const color = getPulseColor(alertLevel);
+
+  const borderColor = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [`${color}00`, `${color}90`],
+  });
+
+  const shadowOpacity = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, alertLevel >= 2 ? 0.5 : 0.3],
+  });
+
+  return (
+    <Animated.View
+      style={{
+        borderRadius: theme.borderRadius.md,
+        borderWidth: alertLevel >= 2 ? 2 : 1.5,
+        borderColor,
+        shadowColor: color,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity,
+        shadowRadius: alertLevel >= 3 ? 12 : 8,
+        elevation: alertLevel >= 2 ? 6 : 4,
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
 
 export default function ProductionScreen() {
   const { t } = useI18n();
@@ -26,20 +126,20 @@ export default function ProductionScreen() {
   const [companyFilterModalVisible, setCompanyFilterModalVisible] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<ProductionCompany | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showFinished, setShowFinished] = useState(false); // false = oculta cancelled/packed/dispatch/delivered/completed
   const [glassItems, setGlassItems] = useState<Map<string, InventoryItem>>(new Map());
+  const [waitingHoursMap, setWaitingHoursMap] = useState<Map<string, number>>(new Map());
 
   const loadProductions = useCallback(async () => {
     setIsLoading(true);
     try {
       const status = selectedStatus === 'all' ? undefined : selectedStatus;
       const fetchedProductions = await repos.productionRepo.getAllProductions(status);
-      // Filter out completed productions - they go to history only
-      const activeProductions = fetchedProductions.filter(p => p.status !== 'completed');
-      setAllProductions(activeProductions);
+      setAllProductions(fetchedProductions);
       
       // Load glass items for all productions
       const glassIds = new Set<string>();
-      activeProductions.forEach(prod => {
+      fetchedProductions.forEach(prod => {
         prod.items.forEach(item => {
           if (item.glassId) {
             glassIds.add(item.glassId);
@@ -59,6 +159,46 @@ export default function ProductionScreen() {
         }
       }
       setGlassItems(glassMap);
+
+      // Load waiting hours for productions in waiting statuses
+      const waitingProds = fetchedProductions.filter(p =>
+        WAITING_STATUSES.includes(p.status)
+      );
+      if (waitingProds.length > 0) {
+        const waitingIds = waitingProds.map(p => p.id);
+        try {
+          const { data: historyData } = await supabase
+            .from('production_status_history')
+            .select('production_id, changed_at')
+            .in('production_id', waitingIds)
+            .order('changed_at', { ascending: false });
+
+          // Pick latest change per production
+          const latestChangeMap = new Map<string, string>();
+          for (const entry of historyData || []) {
+            if (!latestChangeMap.has(entry.production_id)) {
+              latestChangeMap.set(entry.production_id, entry.changed_at);
+            }
+          }
+
+          const now = Date.now();
+          const hoursMap = new Map<string, number>();
+          for (const prod of waitingProds) {
+            const changedAt = latestChangeMap.get(prod.id);
+            const timestamp = changedAt || prod.createdAt;
+            if (timestamp) {
+              const diff = now - new Date(timestamp).getTime();
+              hoursMap.set(prod.id, diff / (1000 * 60 * 60));
+            }
+          }
+          setWaitingHoursMap(hoursMap);
+        } catch (err) {
+          console.error('Error loading waiting hours:', err);
+          setWaitingHoursMap(new Map());
+        }
+      } else {
+        setWaitingHoursMap(new Map());
+      }
     } catch (error) {
       console.error('Error loading productions:', error);
     } finally {
@@ -82,113 +222,103 @@ export default function ProductionScreen() {
 
   const statusOptions: DropdownOption[] = [
     { label: t('production.status.all'), value: 'all' },
+    // Red group
     { label: t('production.status.not_authorized'), value: 'not_authorized' },
-    { label: t('production.status.authorized'), value: 'authorized' },
-    { label: t('production.status.cutting'), value: 'cutting' },
-    { label: t('production.status.polishing'), value: 'polishing' },
+    { label: t('production.status.cancelled'), value: 'cancelled' },
+    { label: t('production.status.rework_needed'), value: 'rework_needed' },
+    // Green (entry)
+    { label: `${t('production.status.authorized')} 🔔`, value: 'authorized' },
+    // Orange group (active processes)
+    { label: t('production.status.on_cutting_process'), value: 'on_cutting_process' },
+    { label: t('production.status.on_polishing_process'), value: 'on_polishing_process' },
     { label: t('production.status.on_paint_cabin'), value: 'on_paint_cabin' },
     { label: t('production.status.on_laminating_machine'), value: 'on_laminating_machine' },
     { label: t('production.status.on_schmelz_oven'), value: 'on_schmelz_oven' },
-    { label: t('production.status.waiting_for_tempering'), value: 'waiting_for_tempering' },
-    { label: t('production.status.waiting_for_schmelz'), value: 'waiting_for_schmelz' },
+    { label: t('production.status.on_banding_oven'), value: 'on_banding_oven' },
     { label: t('production.status.tempering_in_progress'), value: 'tempering_in_progress' },
-    { label: t('production.status.tempered'), value: 'tempered' },
+    // Yellow group (waiting)
+    { label: t('production.status.waiting_to_cnc_wjet'), value: 'waiting_to_cnc_wjet' },
+    { label: t('production.status.waiting_to_drill'), value: 'waiting_to_drill' },
+    { label: t('production.status.waiting_to_paint_cabin'), value: 'waiting_to_paint_cabin' },
+    { label: t('production.status.waiting_for_schmelz'), value: 'waiting_for_schmelz' },
+    { label: t('production.status.waiting_for_tempering'), value: 'waiting_for_tempering' },
     { label: t('production.status.waiting_for_packing'), value: 'waiting_for_packing' },
+    // Blue group
     { label: t('production.status.packed'), value: 'packed' },
     { label: t('production.status.ready_for_dispatch'), value: 'ready_for_dispatch' },
+    // Green (exit)
     { label: t('production.status.delivered'), value: 'delivered' },
     { label: t('production.status.completed'), value: 'completed' },
   ];
 
   const getStatusColor = (status: ProductionStatus): string => {
     switch (status) {
+      // Red group
       case 'not_authorized':
+      case 'cancelled':
+      case 'rework_needed':
         return colors.error; // vermelho
+      // Green (entry)
       case 'authorized':
         return colors.success; // verde
-      case 'cutting':
-        return colors.info; // azul
-      case 'polishing':
-        return colors.info; // azul
+      // Orange group (active processes)
+      case 'on_cutting_process':
+      case 'on_polishing_process':
       case 'on_paint_cabin':
-        return '#f97316'; // laranja
       case 'on_laminating_machine':
-        return '#f97316'; // laranja
       case 'on_schmelz_oven':
-        return '#f97316'; // laranja
-      case 'waiting_for_tempering':
-        return colors.warning; // Amarelo
-      case 'waiting_for_schmelz':
-        return colors.warning; // Amarelo
+      case 'on_banding_oven':
       case 'tempering_in_progress':
-        return '#8b5cf6'; // Roxo
-      case 'tempered':
-        return '#8b5cf6'; // Roxo
+        return '#f97316'; // laranja
+      // Yellow group (waiting)
+      case 'waiting_to_cnc_wjet':
+      case 'waiting_to_drill':
+      case 'waiting_to_paint_cabin':
+      case 'waiting_for_schmelz':
+      case 'waiting_for_tempering':
       case 'waiting_for_packing':
-        return colors.warning; // Amarelo
+        return '#eab308'; // amarelo
+      // Blue group
       case 'packed':
-        return colors.info; // azul
       case 'ready_for_dispatch':
-        return '#34d399'; // verde claro
+        return colors.info; // azul
+      // Green (exit)
       case 'delivered':
-        return '#059669'; // verde escuro
       case 'completed':
         return '#059669'; // verde escuro
       // Compatibilidade com status antigos
+      case 'cutting':
+      case 'polishing':
+        return '#f97316'; // laranja (mapeado para on_cutting/polishing_process)
+      case 'tempered':
+        return '#059669'; // verde
       case 'on_cabin':
-        return '#f97316'; // laranja (mapeado para on_paint_cabin)
+        return '#f97316'; // laranja
       case 'laminating':
-        return '#f97316'; // laranja (mapeado para on_laminating_machine)
+        return '#f97316'; // laranja
       case 'laminated':
-        return colors.info; // azul (mantido para compatibilidade)
+        return colors.info; // azul
       case 'on_oven':
-        return '#f97316'; // laranja (mapeado para on_schmelz_oven)
+        return '#f97316'; // laranja
       default:
         return colors.textSecondary;
     }
   };
 
   const getStatusLabel = (status: ProductionStatus): string => {
+    // Try to get translation key directly
+    const key = `production.status.${status}`;
+    const translated = t(key);
+    // If translation returns the key itself, it means no translation exists — fallback
+    if (translated && translated !== key) {
+      return translated;
+    }
+    // Compatibility fallback for old statuses
     switch (status) {
-      case 'not_authorized':
-        return t('production.status.not_authorized');
-      case 'authorized':
-        return t('production.status.authorized');
-      case 'cutting':
-        return t('production.status.cutting');
-      case 'polishing':
-        return t('production.status.polishing');
-      case 'on_paint_cabin':
-        return t('production.status.on_paint_cabin');
-      case 'on_laminating_machine':
-        return t('production.status.on_laminating_machine');
-      case 'on_schmelz_oven':
-        return t('production.status.on_schmelz_oven');
-      case 'waiting_for_tempering':
-        return t('production.status.waiting_for_tempering');
-      case 'waiting_for_schmelz':
-        return t('production.status.waiting_for_schmelz');
-      case 'tempering_in_progress':
-        return t('production.status.tempering_in_progress');
-      case 'tempered':
-        return t('production.status.tempered');
-      case 'waiting_for_packing':
-        return t('production.status.waiting_for_packing');
-      case 'packed':
-        return t('production.status.packed');
-      case 'ready_for_dispatch':
-        return t('production.status.ready_for_dispatch');
-      case 'delivered':
-        return t('production.status.delivered');
-      case 'completed':
-        return t('production.status.completed');
-      // Compatibilidade com status antigos
       case 'on_cabin':
         return t('production.status.on_paint_cabin');
       case 'laminating':
         return t('production.status.on_laminating_machine');
-      case 'laminated':
-        return t('production.status.laminated') || 'Laminated';
       case 'on_oven':
         return t('production.status.on_schmelz_oven');
       default:
@@ -243,9 +373,19 @@ export default function ProductionScreen() {
     setCompanyFilterModalVisible(false);
   };
 
+  // Statuses hidden by default when showFinished is off
+  const HIDDEN_STATUSES: ProductionStatus[] = [
+    'cancelled', 'packed', 'ready_for_dispatch', 'delivered', 'completed',
+  ];
+
   // Filter and sort productions based on search term, company and due date
   const filteredProductions = useMemo(() => {
     let filtered = allProductions;
+
+    // Hide finished/archived statuses unless toggle is active
+    if (!showFinished) {
+      filtered = filtered.filter(p => !HIDDEN_STATUSES.includes(p.status));
+    }
 
     // Apply company filter
     if (selectedCompany !== 'all') {
@@ -298,7 +438,7 @@ export default function ProductionScreen() {
       const dateB = new Date(b.dueDate).getTime();
       return dateA - dateB;
     });
-  }, [allProductions, searchTerm, selectedCompany, glassItems]);
+  }, [allProductions, searchTerm, selectedCompany, showFinished, glassItems]);
 
   // Update productions when filtered list changes
   useEffect(() => {
@@ -333,11 +473,18 @@ export default function ProductionScreen() {
               )}
             </View>
             <TouchableOpacity
-              style={[styles.historyButton, { backgroundColor: colors.backgroundSecondary }]}
-              onPress={() => router.push('/production-orders-history')}
+              style={[
+                styles.filterButton,
+                { backgroundColor: showFinished ? colors.primary + '30' : colors.backgroundSecondary },
+              ]}
+              onPress={() => setShowFinished(!showFinished)}
               activeOpacity={0.7}
             >
-              <Ionicons name="checkbox-outline" size={20} color={colors.text} />
+              <Ionicons
+                name={showFinished ? 'eye' : 'eye-off'}
+                size={20}
+                color={showFinished ? colors.primary : colors.text}
+              />
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.filterButton, { backgroundColor: colors.backgroundSecondary }]}
@@ -484,53 +631,69 @@ export default function ProductionScreen() {
             </View>
           ) : (
             <View style={styles.ordersList}>
-              {productions.map((production) => (
-                <TouchableOpacity
-                  key={production.id}
-                  style={[styles.orderCard, { backgroundColor: colors.cardBackground }]}
-                  activeOpacity={0.7}
-                  onPress={() => router.push({
-                    pathname: '/production-detail',
-                    params: { productionId: production.id },
-                  })}
-                >
-                  <View style={styles.cardContent}>
-                    <View style={styles.orderDetails}>
-                      <View style={styles.clientRow}>
-                        <Text style={[styles.clientName, { color: colors.text }]}>{production.clientName}</Text>
-                        <Text style={[styles.separator, { color: colors.textSecondary }]}>•</Text>
-                        <Text style={[styles.orderNumber, { color: colors.textSecondary }]}>{production.orderNumber}</Text>
+              {productions.map((production) => {
+                const statusColor = getStatusColor(production.status);
+                const isWaiting = WAITING_STATUSES.includes(production.status);
+                const waitingHours = waitingHoursMap.get(production.id) || 0;
+                const alertLevel: WaitingAlertLevel = isWaiting ? getAlertLevel(waitingHours) : 0;
+                const badgeColor = statusColor;
+
+                return (
+                  <WaitingPulseCard key={production.id} alertLevel={alertLevel}>
+                    <TouchableOpacity
+                      style={[styles.orderCard, { backgroundColor: colors.cardBackground }]}
+                      activeOpacity={0.7}
+                      onPress={() => router.push({
+                        pathname: '/production-detail',
+                        params: { productionId: production.id },
+                      })}
+                    >
+                      <View style={styles.cardContent}>
+                        <View style={styles.orderDetails}>
+                          <View style={styles.clientRow}>
+                            <Text style={[styles.clientName, { color: colors.text }]}>{production.clientName}</Text>
+                            <Text style={[styles.separator, { color: colors.textSecondary }]}>•</Text>
+                            <Text style={[styles.orderNumber, { color: colors.textSecondary }]}>{production.orderNumber}</Text>
+                          </View>
+                          <Text style={[styles.orderType, { color: colors.textSecondary }]}>
+                            {getOrderTypeLabel(production.orderType)}
+                          </Text>
+                          <Text style={[styles.glassName, { color: colors.textSecondary }]}>
+                            {getGlassNames(production)}
+                          </Text>
+                        </View>
+                        <View style={styles.statusColumn}>
+                          <View
+                            style={[
+                              styles.statusBadge,
+                              { backgroundColor: badgeColor + '20' },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.statusText,
+                                { color: badgeColor },
+                              ]}
+                            >
+                              {alertLevel >= 3 ? '⚠️ ' : ''}{getStatusLabel(production.status)}
+                            </Text>
+                          </View>
+                          {isWaiting && waitingHours > 0 && (
+                            <Text style={[styles.waitingTime, { color: badgeColor }]}>
+                              {waitingHours >= 24
+                                ? `${Math.floor(waitingHours / 24)}d ${Math.floor(waitingHours % 24)}h`
+                                : `${Math.floor(waitingHours)}h`}
+                            </Text>
+                          )}
+                          <Text style={[styles.dueDate, { color: colors.textSecondary }]}>
+                            {formatDate(production.dueDate)}
+                          </Text>
+                        </View>
                       </View>
-                      <Text style={[styles.orderType, { color: colors.textSecondary }]}>
-                        {getOrderTypeLabel(production.orderType)}
-                      </Text>
-                      <Text style={[styles.glassName, { color: colors.textSecondary }]}>
-                        {getGlassNames(production)}
-                      </Text>
-                    </View>
-                    <View style={styles.statusColumn}>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: getStatusColor(production.status) + '20' },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.statusText,
-                            { color: getStatusColor(production.status) },
-                          ]}
-                        >
-                          {getStatusLabel(production.status)}
-                        </Text>
-                      </View>
-                      <Text style={[styles.dueDate, { color: colors.textSecondary }]}>
-                        {new Date(production.dueDate).toLocaleDateString()}
-                      </Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              ))}
+                    </TouchableOpacity>
+                  </WaitingPulseCard>
+                );
+              })}
             </View>
           )}
         </View>
@@ -709,6 +872,12 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: theme.typography.fontSize.xs,
     fontWeight: theme.typography.fontWeight.semibold,
+  },
+  waitingTime: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.semibold,
+    textAlign: 'right',
+    marginBottom: 2,
   },
   dueDate: {
     fontSize: theme.typography.fontSize.xs,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useI18n } from '../src/hooks/use-i18n';
@@ -11,6 +11,7 @@ import { useNotificationsQuery } from '../src/services/queries';
 import { Notification } from '../src/types';
 import { triggerNotificationAlert } from '../src/utils/notification-alert';
 import { formatNotificationText } from '../src/utils/notification-formatter';
+import { formatDateTime } from '../src/utils/date-format';
 
 export default function NotificationsScreen() {
   const { t } = useI18n();
@@ -78,64 +79,71 @@ export default function NotificationsScreen() {
     }
   };
 
+  const executeClearAll = async () => {
+    if (!user) return;
+
+    // Set flag to prevent realtime from invalidating during clear
+    clearingRef.current = true;
+
+    // Optimistic update: remove all notifications from view immediately
+    queryClient.setQueryData<Notification[]>(['notifications', user.id], () => []);
+
+    // Update unread count optimistically
+    queryClient.setQueryData<number>(['notifications', 'unreadCount', user.id], () => 0);
+
+    try {
+      console.log('Clearing all notifications for user:', user.id);
+      await repos.notificationsRepo.clearUserNotifications(user.id);
+      console.log('All notifications cleared successfully');
+
+      // Wait a bit before allowing realtime updates again
+      setTimeout(() => {
+        clearingRef.current = false;
+      }, 2000);
+    } catch (error: any) {
+      clearingRef.current = false;
+      console.error('Error clearing notifications:', error);
+      // Revert optimistic update on error by refetching
+      queryClient.refetchQueries({
+        queryKey: ['notifications', user.id],
+        exact: true,
+      });
+      queryClient.refetchQueries({
+        queryKey: ['notifications', 'unreadCount', user.id],
+        exact: true,
+      });
+
+      const errorMessage = error?.message || t('notifications.clearError') || 'Failed to clear notifications';
+      if (Platform.OS === 'web') {
+        window.alert(errorMessage);
+      } else {
+        Alert.alert(t('common.error'), errorMessage);
+      }
+    }
+  };
+
   const handleClearAll = () => {
-    Alert.alert(
-      t('notifications.clearAll'),
-      t('notifications.clearAllConfirm'),
-      [
-        {
-          text: t('common.cancel'),
-          style: 'cancel',
-        },
-        {
-          text: t('notifications.clearAll'),
-          style: 'destructive',
-          onPress: async () => {
-            if (!user) return;
-            
-            // Set flag to prevent realtime from invalidating during clear
-            clearingRef.current = true;
-            
-            // Optimistic update: remove all notifications from view immediately
-            queryClient.setQueryData<Notification[]>(['notifications', user.id], () => []);
-
-            // Update unread count optimistically
-            queryClient.setQueryData<number>(['notifications', 'unreadCount', user.id], () => 0);
-
-            try {
-              console.log('Clearing all notifications for user:', user.id);
-              await repos.notificationsRepo.clearUserNotifications(user.id);
-              console.log('All notifications cleared successfully');
-              
-              // Wait a bit before allowing realtime updates again
-              // This prevents notifications from reappearing immediately
-              setTimeout(() => {
-                clearingRef.current = false;
-              }, 2000);
-              
-              // Don't refetch - optimistic update is already applied
-              // The realtime subscription will handle updates if needed
-              // Refetching here causes notifications to reappear
-            } catch (error: any) {
-              clearingRef.current = false;
-              console.error('Error clearing notifications:', error);
-              // Revert optimistic update on error by refetching
-              queryClient.refetchQueries({ 
-                queryKey: ['notifications', user.id],
-                exact: true 
-              });
-              queryClient.refetchQueries({ 
-                queryKey: ['notifications', 'unreadCount', user.id],
-                exact: true 
-              });
-              
-              const errorMessage = error?.message || t('notifications.clearError') || 'Failed to clear notifications';
-              Alert.alert(t('common.error'), errorMessage);
-            }
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(
+        t('notifications.clearAllConfirm') || 'Are you sure you want to clear all notifications?'
+      );
+      if (confirmed) {
+        executeClearAll();
+      }
+    } else {
+      Alert.alert(
+        t('notifications.clearAll'),
+        t('notifications.clearAllConfirm'),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('notifications.clearAll'),
+            style: 'destructive',
+            onPress: executeClearAll,
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   if (isLoading) {
@@ -199,7 +207,7 @@ export default function NotificationsScreen() {
                   {formatNotificationText(notification, t)}
                 </Text>
                 <Text style={[styles.notificationDate, { color: colors.textSecondary }]}>
-                  {new Date(notification.createdAt).toLocaleString()}
+                  {formatDateTime(notification.createdAt)}
                 </Text>
                 {!notification.readAt && (
                   <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>

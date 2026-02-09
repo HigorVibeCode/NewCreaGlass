@@ -1,7 +1,7 @@
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { Button } from '../src/components/shared/Button';
 import { Input } from '../src/components/shared/Input';
 import { useI18n } from '../src/hooks/use-i18n';
@@ -19,23 +19,41 @@ export default function LoginScreen() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [rememberLogin, setRememberLogin] = useState(false);
+  const [keepLoggedIn, setKeepLoggedIn] = useState(false);
+  const [autoLoggingIn, setAutoLoggingIn] = useState(true); // Show loading while checking auto-login
 
-  // Load saved credentials on mount
+  // On mount: try auto-login if "keep logged in" was enabled
   useEffect(() => {
-    const loadSavedCredentials = async () => {
+    const tryAutoLogin = async () => {
       try {
         const saved = await getSavedLogin();
         if (saved.username && saved.password) {
           setUsername(saved.username);
           setPassword(saved.password);
-          setRememberLogin(true);
+          setKeepLoggedIn(true);
+
+          // Attempt automatic login
+          try {
+            setLoading(true);
+            const session = await repos.authRepo.login(saved.username, saved.password);
+            setSession(session);
+            router.replace('/(tabs)/production');
+            return; // Success — don't show form
+          } catch (loginErr) {
+            // Auto-login failed (password changed, account disabled, etc.)
+            console.warn('Auto-login failed, showing login form:', loginErr);
+            await clearSavedLogin();
+            setKeepLoggedIn(false);
+          } finally {
+            setLoading(false);
+          }
         }
-      } catch (error) {
-        console.warn('Error loading saved credentials:', error);
+      } catch (err) {
+        console.warn('Error loading saved credentials:', err);
       }
+      setAutoLoggingIn(false);
     };
-    loadSavedCredentials();
+    tryAutoLogin();
   }, []);
 
   const handleLogin = async () => {
@@ -50,8 +68,8 @@ export default function LoginScreen() {
     try {
       const session = await repos.authRepo.login(username.trim(), password);
       
-      // Save or clear credentials based on rememberLogin checkbox
-      if (rememberLogin) {
+      // Save or clear credentials based on keepLoggedIn toggle
+      if (keepLoggedIn) {
         await saveLogin(username.trim(), password);
       } else {
         await clearSavedLogin();
@@ -67,6 +85,23 @@ export default function LoginScreen() {
       setLoading(false);
     }
   };
+
+  // Show loading screen while attempting auto-login
+  if (autoLoggingIn) {
+    return (
+      <View style={[styles.container, styles.autoLoginContainer, { backgroundColor: colors.background }]}>
+        <ExpoImage
+          source={require('../assets/images/login-logo.png')}
+          style={styles.logo}
+          contentFit="contain"
+          transition={200}
+          cachePolicy="memory-disk"
+          priority="high"
+        />
+        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: theme.spacing.xl }} />
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -103,20 +138,20 @@ export default function LoginScreen() {
             autoCorrect={false}
           />
           
-          {/* Remember Login Checkbox */}
+          {/* Keep Logged In Toggle */}
           <TouchableOpacity
             style={styles.rememberContainer}
-            onPress={() => setRememberLogin(!rememberLogin)}
+            onPress={() => setKeepLoggedIn(!keepLoggedIn)}
             activeOpacity={0.7}
           >
             <Switch
-              value={rememberLogin}
-              onValueChange={setRememberLogin}
+              value={keepLoggedIn}
+              onValueChange={setKeepLoggedIn}
               trackColor={{ false: colors.border, true: colors.primary }}
               thumbColor={Platform.OS === 'android' ? colors.background : undefined}
             />
             <Text style={[styles.rememberText, { color: colors.text }]}>
-              {t('auth.rememberLogin')}
+              {t('auth.keepLoggedIn')}
             </Text>
           </TouchableOpacity>
           
@@ -136,6 +171,10 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  autoLoginContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
     flex: 1,

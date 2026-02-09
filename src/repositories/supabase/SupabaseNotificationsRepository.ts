@@ -203,9 +203,9 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
       console.warn('Failed to trigger notification alert:', err);
     });
 
-    // Dispatch push notifications asynchronously (não bloqueia a criação)
-    this.dispatchPushNotifications(createdNotification).catch(err => {
-      console.error('[SupabaseNotificationsRepository] Error dispatching push notifications:', err);
+    // Dispatch push notifications via Edge Function (server-side, avoids CORS)
+    this.dispatchPushViaEdgeFunction(createdNotification).catch(err => {
+      console.error('[SupabaseNotificationsRepository] Error dispatching push via Edge Function:', err);
       // Não propagar erro - push é secundário à criação da notificação
     });
 
@@ -304,9 +304,55 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
   }
 
   /**
-   * Dispatch push notifications for a created notification
-   * Runs asynchronously and doesn't block notification creation
-   * Uses lazy imports to avoid require cycles
+   * Dispatch push notifications via Supabase Edge Function (server-side).
+   * This avoids CORS issues when called from the web browser and uses
+   * service_role to bypass RLS restrictions.
+   */
+  private async dispatchPushViaEdgeFunction(notification: Notification): Promise<void> {
+    try {
+      // Build the same webhook payload the Edge Function expects
+      const webhookPayload = {
+        type: 'INSERT',
+        table: 'notifications',
+        schema: 'public',
+        record: {
+          id: notification.id,
+          type: notification.type,
+          payload_json: notification.payloadJson || null,
+          target_user_id: notification.targetUserId || null,
+          created_at: notification.createdAt,
+        },
+        old_record: null,
+      };
+
+      console.log('[dispatchPushViaEdgeFunction] Invoking Edge Function for notification:', notification.id, notification.type);
+
+      const { data, error } = await supabase.functions.invoke('send-push-on-notification', {
+        body: webhookPayload,
+      });
+
+      if (error) {
+        console.error('[dispatchPushViaEdgeFunction] Edge Function error:', error);
+        // Fallback to client-side dispatch for native platforms only
+        if (typeof navigator !== 'undefined' && !('serviceWorker' in navigator)) {
+          // Native app - try client-side as fallback
+          console.log('[dispatchPushViaEdgeFunction] Falling back to client-side dispatch...');
+          await this.dispatchPushNotifications(notification);
+        }
+        return;
+      }
+
+      console.log('[dispatchPushViaEdgeFunction] Edge Function response:', JSON.stringify(data));
+    } catch (err: any) {
+      console.error('[dispatchPushViaEdgeFunction] Error:', err?.message || err);
+      // Don't throw - push is secondary
+    }
+  }
+
+  /**
+   * @deprecated Use dispatchPushViaEdgeFunction instead.
+   * Kept as fallback for native platforms if Edge Function is unavailable.
+   * Dispatch push notifications directly via Expo Push API (client-side).
    */
   private async dispatchPushNotifications(notification: Notification): Promise<void> {
     try {

@@ -13,6 +13,7 @@ import {
     TouchableWithoutFeedback,
     View
 } from 'react-native';
+import { formatDate as formatDateUtil, formatDateTime as formatDateTimeUtil } from '../src/utils/date-format';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DropdownOption } from '../src/components/shared/Dropdown';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
@@ -83,46 +84,17 @@ export default function ProductionDetailScreen() {
   };
 
   const getStatusLabel = (status: ProductionStatus): string => {
+    const key = `production.status.${status}`;
+    const translated = t(key);
+    if (translated && translated !== key) {
+      return translated;
+    }
+    // Compatibility fallback for old statuses
     switch (status) {
-      case 'not_authorized':
-        return t('production.status.not_authorized');
-      case 'authorized':
-        return t('production.status.authorized');
-      case 'cutting':
-        return t('production.status.cutting');
-      case 'polishing':
-        return t('production.status.polishing');
-      case 'on_paint_cabin':
-        return t('production.status.on_paint_cabin');
-      case 'on_laminating_machine':
-        return t('production.status.on_laminating_machine');
-      case 'on_schmelz_oven':
-        return t('production.status.on_schmelz_oven');
-      case 'waiting_for_tempering':
-        return t('production.status.waiting_for_tempering');
-      case 'waiting_for_schmelz':
-        return t('production.status.waiting_for_schmelz');
-      case 'tempering_in_progress':
-        return t('production.status.tempering_in_progress');
-      case 'tempered':
-        return t('production.status.tempered');
-      case 'waiting_for_packing':
-        return t('production.status.waiting_for_packing');
-      case 'packed':
-        return t('production.status.packed');
-      case 'ready_for_dispatch':
-        return t('production.status.ready_for_dispatch');
-      case 'delivered':
-        return t('production.status.delivered');
-      case 'completed':
-        return t('production.status.completed');
-      // Compatibilidade com status antigos
       case 'on_cabin':
         return t('production.status.on_paint_cabin');
       case 'laminating':
         return t('production.status.on_laminating_machine');
-      case 'laminated':
-        return t('production.status.laminated') || 'Laminated';
       case 'on_oven':
         return t('production.status.on_schmelz_oven');
       default:
@@ -132,47 +104,51 @@ export default function ProductionDetailScreen() {
 
   const getStatusColor = (status: ProductionStatus): string => {
     switch (status) {
+      // Red group
       case 'not_authorized':
-        return colors.error; // vermelho
+      case 'cancelled':
+      case 'rework_needed':
+        return colors.error;
+      // Green (entry)
       case 'authorized':
-        return colors.success; // verde
-      case 'cutting':
-        return colors.info; // azul
-      case 'polishing':
-        return colors.info; // azul
+        return colors.success;
+      // Orange group (active processes)
+      case 'on_cutting_process':
+      case 'on_polishing_process':
       case 'on_paint_cabin':
-        return '#f97316'; // laranja
       case 'on_laminating_machine':
-        return '#f97316'; // laranja
       case 'on_schmelz_oven':
-        return '#f97316'; // laranja
-      case 'waiting_for_tempering':
-        return colors.warning; // Amarelo
-      case 'waiting_for_schmelz':
-        return colors.warning; // Amarelo
+      case 'on_banding_oven':
       case 'tempering_in_progress':
-        return '#8b5cf6'; // Roxo
-      case 'tempered':
-        return '#8b5cf6'; // Roxo
+        return '#f97316';
+      // Yellow group (waiting)
+      case 'waiting_to_cnc_wjet':
+      case 'waiting_to_drill':
+      case 'waiting_to_paint_cabin':
+      case 'waiting_for_schmelz':
+      case 'waiting_for_tempering':
       case 'waiting_for_packing':
-        return colors.warning; // Amarelo
+        return '#eab308';
+      // Blue group
       case 'packed':
-        return colors.info; // azul
       case 'ready_for_dispatch':
-        return '#34d399'; // verde claro
+        return colors.info;
+      // Green (exit)
       case 'delivered':
-        return '#059669'; // verde escuro
       case 'completed':
-        return '#059669'; // verde escuro
+        return '#059669';
       // Compatibilidade com status antigos
+      case 'cutting':
+      case 'polishing':
+        return '#f97316';
+      case 'tempered':
+        return '#059669';
       case 'on_cabin':
-        return '#f97316'; // laranja (mapeado para on_paint_cabin)
       case 'laminating':
-        return '#f97316'; // laranja (mapeado para on_laminating_machine)
-      case 'laminated':
-        return colors.info; // azul (mantido para compatibilidade)
       case 'on_oven':
-        return '#f97316'; // laranja (mapeado para on_schmelz_oven)
+        return '#f97316';
+      case 'laminated':
+        return colors.info;
       default:
         return colors.textSecondary;
     }
@@ -183,20 +159,31 @@ export default function ProductionDetailScreen() {
   };
 
   const statusOptions: DropdownOption[] = [
+    // Red group
     { label: t('production.status.not_authorized'), value: 'not_authorized' },
+    { label: t('production.status.cancelled'), value: 'cancelled' },
+    { label: t('production.status.rework_needed'), value: 'rework_needed' },
+    // Green (entry)
     { label: `${t('production.status.authorized')} 🔔`, value: 'authorized' },
-    { label: t('production.status.cutting'), value: 'cutting' },
-    { label: t('production.status.polishing'), value: 'polishing' },
+    // Orange group (active processes)
+    { label: t('production.status.on_cutting_process'), value: 'on_cutting_process' },
+    { label: t('production.status.on_polishing_process'), value: 'on_polishing_process' },
     { label: t('production.status.on_paint_cabin'), value: 'on_paint_cabin' },
     { label: t('production.status.on_laminating_machine'), value: 'on_laminating_machine' },
     { label: t('production.status.on_schmelz_oven'), value: 'on_schmelz_oven' },
-    { label: t('production.status.waiting_for_tempering'), value: 'waiting_for_tempering' },
-    { label: t('production.status.waiting_for_schmelz'), value: 'waiting_for_schmelz' },
+    { label: t('production.status.on_banding_oven'), value: 'on_banding_oven' },
     { label: t('production.status.tempering_in_progress'), value: 'tempering_in_progress' },
-    { label: `${t('production.status.tempered')} 🔔`, value: 'tempered' },
+    // Yellow group (waiting)
+    { label: t('production.status.waiting_to_cnc_wjet'), value: 'waiting_to_cnc_wjet' },
+    { label: t('production.status.waiting_to_drill'), value: 'waiting_to_drill' },
+    { label: t('production.status.waiting_to_paint_cabin'), value: 'waiting_to_paint_cabin' },
+    { label: t('production.status.waiting_for_schmelz'), value: 'waiting_for_schmelz' },
+    { label: t('production.status.waiting_for_tempering'), value: 'waiting_for_tempering' },
     { label: t('production.status.waiting_for_packing'), value: 'waiting_for_packing' },
+    // Blue group
     { label: t('production.status.packed'), value: 'packed' },
     { label: t('production.status.ready_for_dispatch'), value: 'ready_for_dispatch' },
+    // Green (exit)
     { label: t('production.status.delivered'), value: 'delivered' },
     { label: t('production.status.completed'), value: 'completed' },
   ];
@@ -254,8 +241,7 @@ export default function ProductionDetailScreen() {
   };
 
   const formatDateTime = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleString();
+    return formatDateTimeUtil(dateString);
   };
 
   const getGlassTypeLabel = (glassType: GlassType): string => {
@@ -318,8 +304,7 @@ export default function ProductionDetailScreen() {
   };
 
   const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString();
+    return formatDateUtil(dateString);
   };
 
   const handleEdit = () => {

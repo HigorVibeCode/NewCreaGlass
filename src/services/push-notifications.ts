@@ -1,5 +1,6 @@
 import { DeviceToken, Notification, NotificationPreferences, PushDeliveryStatus } from '../types';
 import { webPushService, WebPushSubscription } from './web-push';
+import { formatDate as formatDateCentral } from '../utils/date-format';
 
 /**
  * Push Notification Payload structure
@@ -359,28 +360,24 @@ export class PushNotificationService {
             }
             
             if (!isNaN(date.getTime())) {
-              dateText = date.toLocaleDateString('pt-BR', { 
-                day: '2-digit', 
-                month: '2-digit', 
-                year: 'numeric' 
-              });
+              dateText = formatDateCentral(date);
               
               // Add time if available (format: HH:MM or HH:MM:SS)
               if (scheduledTime) {
                 const timeStr = String(scheduledTime).split(':').slice(0, 2).join(':');
-                dateText += ` às ${timeStr}`;
+                dateText += ` ${timeStr}`;
               }
             } else {
               dateText = String(scheduledDate);
               if (scheduledTime) {
                 const timeStr = String(scheduledTime).split(':').slice(0, 2).join(':');
-                dateText += ` às ${timeStr}`;
+                dateText += ` ${timeStr}`;
               }
             }
           } catch (e) {
             dateText = String(scheduledDate);
             if (scheduledTime) {
-              dateText += ` às ${scheduledTime}`;
+              dateText += ` ${scheduledTime}`;
             }
           }
         }
@@ -431,28 +428,24 @@ export class PushNotificationService {
             }
             
             if (!isNaN(date.getTime())) {
-              dateText = date.toLocaleDateString('pt-BR', { 
-                day: '2-digit', 
-                month: '2-digit', 
-                year: 'numeric' 
-              });
+              dateText = formatDateCentral(date);
               
               // Add time if available (format: HH:MM or HH:MM:SS)
               if (startTime) {
                 const timeStr = String(startTime).split(':').slice(0, 2).join(':');
-                dateText += ` às ${timeStr}`;
+                dateText += ` ${timeStr}`;
               }
             } else {
               dateText = String(startDate);
               if (startTime) {
                 const timeStr = String(startTime).split(':').slice(0, 2).join(':');
-                dateText += ` às ${timeStr}`;
+                dateText += ` ${timeStr}`;
               }
             }
           } catch (e) {
             dateText = String(startDate);
             if (startTime) {
-              dateText += ` às ${startTime}`;
+              dateText += ` ${startTime}`;
             }
           }
         }

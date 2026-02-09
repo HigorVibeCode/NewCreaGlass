@@ -13,6 +13,7 @@ import { repos } from '../../src/services/container';
 import { InventoryGroup, InventoryItem } from '../../src/types';
 import { theme } from '../../src/theme';
 import { useThemeColors } from '../../src/hooks/use-theme-colors';
+import { formatDate as formatDateUtil, formatTime as formatTimeUtil } from '../../src/utils/date-format';
 
 export default function InventoryScreen() {
   const { t } = useI18n();
@@ -85,8 +86,8 @@ export default function InventoryScreen() {
       // Generate report ID
       const reportId = `INV-${Date.now()}`;
       const reportDate = new Date();
-      const dateStr = reportDate.toLocaleDateString('pt-BR');
-      const timeStr = reportDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const dateStr = formatDateUtil(reportDate);
+      const timeStr = formatTimeUtil(reportDate);
 
       console.log('Generating HTML for PDF...');
       // Generate HTML for PDF
