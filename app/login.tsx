@@ -20,28 +20,35 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [keepLoggedIn, setKeepLoggedIn] = useState(false);
-  const [autoLoggingIn, setAutoLoggingIn] = useState(true); // Show loading while checking auto-login
+  const [autoLoggingIn, setAutoLoggingIn] = useState(true);
 
-  // On mount: try auto-login if "keep logged in" was enabled
+  // On mount: try auto-login with saved credentials (only if AuthGuard didn't restore session)
   useEffect(() => {
     const tryAutoLogin = async () => {
       try {
+        // 1. Quick check: try Supabase session first (fast, from local storage)
+        const existingSession = await repos.authRepo.getCurrentSession();
+        if (existingSession) {
+          setSession(existingSession);
+          router.replace('/(tabs)/production');
+          return;
+        }
+
+        // 2. No active Supabase session — try saved credentials
         const saved = await getSavedLogin();
         if (saved.username && saved.password) {
           setUsername(saved.username);
           setPassword(saved.password);
           setKeepLoggedIn(true);
 
-          // Attempt automatic login
           try {
             setLoading(true);
             const session = await repos.authRepo.login(saved.username, saved.password);
             setSession(session);
             router.replace('/(tabs)/production');
-            return; // Success — don't show form
+            return;
           } catch (loginErr) {
-            // Auto-login failed (password changed, account disabled, etc.)
-            console.warn('Auto-login failed, showing login form:', loginErr);
+            console.warn('Auto-login failed:', loginErr);
             await clearSavedLogin();
             setKeepLoggedIn(false);
           } finally {
@@ -49,7 +56,7 @@ export default function LoginScreen() {
           }
         }
       } catch (err) {
-        console.warn('Error loading saved credentials:', err);
+        console.warn('Error during auto-login:', err);
       }
       setAutoLoggingIn(false);
     };
