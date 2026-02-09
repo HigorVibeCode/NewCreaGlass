@@ -7,6 +7,7 @@ import { I18nProvider } from '@/src/providers/I18nProvider';
 import { QueryProvider } from '@/src/providers/QueryProvider';
 import { ThemeProvider } from '@/src/providers/ThemeProvider';
 import { usePushNotifications } from '@/src/hooks/use-push-notifications';
+import { NotificationAudioInitializer } from '@/src/components/shared/NotificationAudioInitializer';
 
 // Remove anchor to let AuthGuard control initial navigation
 // export const unstable_settings = {
@@ -26,6 +27,7 @@ export default function RootLayout() {
           <ThemeProvider>
             <AuthGuard>
               <PushNotificationsInitializer />
+              <NotificationAudioInitializer />
               <Stack
                 screenOptions={{
                   animation: 'slide_from_right',

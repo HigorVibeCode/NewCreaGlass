@@ -116,6 +116,21 @@ const matchesPermission = (
     return true;
   }
   
+  // Hierarchical: workOrders.view grants events.history (viewing WO history is part of viewing WOs)
+  if (normalizedRequested === 'events.history' && normalizedAvailable === 'workOrders.view') {
+    return true;
+  }
+  
+  // Hierarchical: workOrders.view grants events.view (viewing WOs implies viewing the events screen)
+  if (normalizedRequested === 'events.view' && normalizedAvailable === 'workOrders.view') {
+    return true;
+  }
+  
+  // Hierarchical: workOrders.create grants workOrders.update (creating implies editing own WOs)
+  if (normalizedRequested === 'workOrders.update' && normalizedAvailable === 'workOrders.create') {
+    return true;
+  }
+  
   return false;
 };
 

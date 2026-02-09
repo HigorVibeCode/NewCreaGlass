@@ -2,8 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     KeyboardAvoidingView,
     Platform,
@@ -21,6 +22,7 @@ import { Input } from '../src/components/shared/Input';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { repos } from '../src/services/container';
+import { supabase } from '../src/services/supabase';
 import { useAuth } from '../src/store/auth-store';
 import { theme } from '../src/theme';
 import {
@@ -33,6 +35,8 @@ import {
     ProductionItem,
     StructureType,
 } from '../src/types';
+
+const CREA_GLASS_START_SEQ = 20; // Sequence starts at 0020
 
 const GLASS_GROUP_ID = 'group-glass';
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
@@ -73,8 +77,62 @@ export default function ProductionCreateScreen() {
   const [isCreating, setIsCreating] = useState(false);
   const [loadingGlassItems, setLoadingGlassItems] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isAutoOrderNumber, setIsAutoOrderNumber] = useState(false);
+  const [loadingOrderNumber, setLoadingOrderNumber] = useState(false);
 
   const isEditing = !!productionId;
+
+  /** Fetch the next available order number for Crea Glass (sequence starting at 0020) */
+  const generateNextCreaGlassOrderNumber = useCallback(async (): Promise<string> => {
+    try {
+      const { data, error } = await supabase
+        .from('productions')
+        .select('order_number')
+        .eq('company', 'Crea Glass')
+        .order('order_number', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching Crea Glass order numbers:', error);
+        return String(CREA_GLASS_START_SEQ).padStart(4, '0');
+      }
+
+      let maxNum = CREA_GLASS_START_SEQ - 1; // start below so first = 0020
+      for (const row of data || []) {
+        const num = parseInt(row.order_number, 10);
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
+        }
+      }
+
+      const nextNum = maxNum + 1;
+      return String(nextNum).padStart(4, '0');
+    } catch (err) {
+      console.error('Error generating Crea Glass order number:', err);
+      return String(CREA_GLASS_START_SEQ).padStart(4, '0');
+    }
+  }, []);
+
+  /** Handle company change — auto-set order number for Crea Glass */
+  const handleCompanyChange = useCallback(async (value: string) => {
+    const newCompany = value as ProductionCompany;
+    setCompany(newCompany);
+
+    if (newCompany === 'Crea Glass' && !isEditing) {
+      setIsAutoOrderNumber(true);
+      setLoadingOrderNumber(true);
+      try {
+        const nextNumber = await generateNextCreaGlassOrderNumber();
+        setOrderNumber(nextNumber);
+      } finally {
+        setLoadingOrderNumber(false);
+      }
+    } else {
+      setIsAutoOrderNumber(false);
+      if (!isEditing) {
+        setOrderNumber('');
+      }
+    }
+  }, [isEditing, generateNextCreaGlassOrderNumber]);
 
   useEffect(() => {
     loadGlassItems();
@@ -92,7 +150,9 @@ export default function ProductionCreateScreen() {
         setOrderNumber(productionData.orderNumber);
         setClientName(productionData.clientName);
         setOrderType(productionData.orderType);
-        setCompany(productionData.company || '3S');
+        const loadedCompany = productionData.company || '3S';
+        setCompany(loadedCompany);
+        setIsAutoOrderNumber(loadedCompany === 'Crea Glass');
         setDueDate(productionData.dueDate);
         setAttachments(productionData.attachments);
         if (productionData.items.length > 0) {
@@ -311,34 +371,48 @@ export default function ProductionCreateScreen() {
     setAttachments(attachments.filter((att) => att.id !== id));
   };
 
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === 'web') {
+      window.alert(message);
+    } else {
+      Alert.alert(title, message);
+    }
+  };
+
   const validateForm = (): boolean => {
-    if (!orderNumber.trim()) {
-      Alert.alert(t('common.error'), t('production.fillRequiredFields'));
+    if (!company || (company !== '3S' && company !== 'Crea Glass')) {
+      showAlert(t('common.error'), 'Selecione a Company (3S ou Crea Glass).');
+      return false;
+    }
+
+    // Order number: required for 3S (manual), auto-generated for Crea Glass
+    if (company === '3S' && !orderNumber.trim()) {
+      showAlert(t('common.error'), t('production.fillRequiredFields'));
+      return false;
+    }
+
+    if (company === 'Crea Glass' && !orderNumber.trim()) {
+      showAlert(t('common.error'), 'Erro ao gerar número do pedido. Tente novamente.');
       return false;
     }
 
     if (!clientName.trim()) {
-      Alert.alert(t('common.error'), t('production.fillRequiredFields'));
+      showAlert(t('common.error'), t('production.fillRequiredFields'));
       return false;
     }
 
     if (!orderType.trim()) {
-      Alert.alert(t('common.error'), t('production.fillRequiredFields'));
-      return false;
-    }
-
-    if (!company || (company !== '3S' && company !== 'Crea Glass')) {
-      Alert.alert(t('common.error'), 'Selecione a Company (3S ou Crea Glass).');
+      showAlert(t('common.error'), t('production.fillRequiredFields'));
       return false;
     }
 
     if (!dueDate.trim()) {
-      Alert.alert(t('common.error'), t('production.fillRequiredFields'));
+      showAlert(t('common.error'), t('production.fillRequiredFields'));
       return false;
     }
 
     if (!productionItem.glassId || !productionItem.glassType || !productionItem.quantity.trim() || !productionItem.areaM2.trim()) {
-      Alert.alert(t('common.error'), t('production.fillRequiredFields'));
+      showAlert(t('common.error'), t('production.fillRequiredFields'));
       return false;
     }
 
@@ -373,9 +447,14 @@ export default function ProductionCreateScreen() {
           items: [item],
           attachments,
         });
-        Alert.alert(t('common.success'), 'Order updated successfully', [
-          { text: t('common.confirm'), onPress: () => router.back() },
-        ]);
+        if (Platform.OS === 'web') {
+          window.alert('Order updated successfully');
+          router.back();
+        } else {
+          Alert.alert(t('common.success'), 'Order updated successfully', [
+            { text: t('common.confirm'), onPress: () => router.back() },
+          ]);
+        }
       } else {
         // Create new production
         const newProduction: Omit<Production, 'id' | 'createdAt'> = {
@@ -391,13 +470,18 @@ export default function ProductionCreateScreen() {
         };
 
         await repos.productionRepo.createProduction(newProduction);
-        Alert.alert(t('common.success'), t('production.orderCreated'), [
-          { text: t('common.confirm'), onPress: () => router.back() },
-        ]);
+        if (Platform.OS === 'web') {
+          window.alert(t('production.orderCreated') || 'Production order created');
+          router.back();
+        } else {
+          Alert.alert(t('common.success'), t('production.orderCreated'), [
+            { text: t('common.confirm'), onPress: () => router.back() },
+          ]);
+        }
       }
     } catch (error) {
       console.error(`Error ${isEditing ? 'updating' : 'creating'} production order:`, error);
-      Alert.alert(t('common.error'), isEditing ? 'Failed to update order' : t('production.createOrderError'));
+      showAlert(t('common.error'), isEditing ? 'Failed to update order' : t('production.createOrderError'));
     } finally {
       setIsCreating(false);
     }
@@ -442,12 +526,50 @@ export default function ProductionCreateScreen() {
           }
         ]}
       >
+        {/* 1. Client & Company */}
         <Input
           label="Client Name"
           value={clientName}
           onChangeText={setClientName}
           placeholder={t('production.clientNamePlaceholder')}
         />
+
+        <Dropdown
+          label="Company *"
+          value={company}
+          options={companyOptions}
+          onSelect={handleCompanyChange}
+        />
+
+        {/* 2. Order Number (manual for 3S, auto for Crea Glass) */}
+        {isAutoOrderNumber ? (
+          <View style={styles.autoOrderRow}>
+            <View style={styles.autoOrderField}>
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                {t('production.orderNumber')}
+              </Text>
+              <View style={[styles.autoOrderValueBox, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+                {loadingOrderNumber ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Text style={[styles.autoOrderValue, { color: colors.text }]}>
+                    {orderNumber || '—'}
+                  </Text>
+                )}
+                <View style={[styles.autoOrderBadge, { backgroundColor: colors.primary + '20' }]}>
+                  <Text style={[styles.autoOrderBadgeText, { color: colors.primary }]}>Auto</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        ) : (
+          <Input
+            label={t('production.orderNumber')}
+            value={orderNumber}
+            onChangeText={setOrderNumber}
+            placeholder={t('production.orderNumberPlaceholder')}
+          />
+        )}
 
         <Input
           label="Order Type"
@@ -456,20 +578,7 @@ export default function ProductionCreateScreen() {
           placeholder={t('production.orderTypePlaceholder')}
         />
 
-        <Dropdown
-          label="Company *"
-          value={company}
-          options={companyOptions}
-          onSelect={(value) => setCompany(value as ProductionCompany)}
-        />
-
-        <Input
-          label={t('production.orderNumber')}
-          value={orderNumber}
-          onChangeText={setOrderNumber}
-          placeholder={t('production.orderNumberPlaceholder')}
-        />
-
+        {/* 3. Schedule */}
         <DatePicker
           label={t('production.dueDate')}
           value={dueDate}
@@ -699,6 +808,41 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: theme.typography.fontSize.md,
     marginRight: theme.spacing.sm,
+  },
+  autoOrderRow: {
+    marginBottom: theme.spacing.md,
+  },
+  autoOrderField: {
+    gap: theme.spacing.xs,
+  },
+  fieldLabel: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+    marginBottom: 4,
+  },
+  autoOrderValueBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm + 2,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    minHeight: 48,
+  },
+  autoOrderValue: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.semibold,
+    letterSpacing: 1,
+  },
+  autoOrderBadge: {
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 2,
+    borderRadius: theme.borderRadius.sm,
+  },
+  autoOrderBadgeText: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.bold,
   },
   buttonContainer: {
     flexDirection: 'row',

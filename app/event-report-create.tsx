@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,9 +24,19 @@ import { TimePicker } from '../src/components/shared/TimePicker';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { PermissionGuard } from '../src/components/shared/PermissionGuard';
 import { repos } from '../src/services/container';
+import { supabase } from '../src/services/supabase';
 import { WorkOrder, WorkOrderServiceType } from '../src/types';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+
+interface WOAttachment {
+  id: string;
+  filename: string;
+  uri: string;
+  mimeType: string;
+}
+
+const MAX_ATTACHMENTS = 10;
 
 export default function WorkOrderCreateScreen() {
   const { t } = useI18n();
@@ -48,6 +59,7 @@ export default function WorkOrderCreateScreen() {
   const [isCreating, setIsCreating] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [attachments, setAttachments] = useState<WOAttachment[]>([]);
 
   // Load work order data if in edit mode
   useEffect(() => {
@@ -81,9 +93,14 @@ export default function WorkOrderCreateScreen() {
           : '';
         setTeam(teamText);
       } else {
-        Alert.alert(t('common.error'), 'Work order not found', [
-          { text: t('common.confirm'), onPress: () => router.back() },
-        ]);
+        if (Platform.OS === 'web') {
+          window.alert('Work order not found');
+          router.back();
+        } else {
+          Alert.alert(t('common.error'), 'Work order not found', [
+            { text: t('common.confirm'), onPress: () => router.back() },
+          ]);
+        }
       }
     } catch (error) {
       console.error('Error loading work order:', error);
@@ -100,6 +117,124 @@ export default function WorkOrderCreateScreen() {
     { label: t('workOrders.serviceTypeOptions.internal'), value: 'internal' },
     { label: t('workOrders.serviceTypeOptions.external'), value: 'external' },
   ];
+
+  // ---------- Attachment handlers (same pattern as Production) ----------
+  const handleTakePhoto = async () => {
+    if (attachments.length >= MAX_ATTACHMENTS) {
+      Alert.alert(t('common.error'), t('production.maxAttachments') || `Máximo de ${MAX_ATTACHMENTS} anexos`);
+      return;
+    }
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(t('common.error'), t('production.cameraPermissionDenied') || 'Permissão da câmera negada');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets[0]) return;
+      const asset = result.assets[0];
+      setAttachments((prev) => [
+        ...prev,
+        {
+          id: 'att-' + Date.now(),
+          filename: asset.uri.split('/').pop() || `photo_${Date.now()}.jpg`,
+          uri: asset.uri,
+          mimeType: asset.mimeType || 'image/jpeg',
+        },
+      ]);
+    } catch (error) {
+      console.error('Error taking photo:', error);
+    }
+  };
+
+  const handleChooseFromLibrary = async () => {
+    if (attachments.length >= MAX_ATTACHMENTS) {
+      Alert.alert(t('common.error'), t('production.maxAttachments') || `Máximo de ${MAX_ATTACHMENTS} anexos`);
+      return;
+    }
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(t('common.error'), t('production.mediaPermissionDenied') || 'Permissão da galeria negada');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets[0]) return;
+      const asset = result.assets[0];
+      setAttachments((prev) => [
+        ...prev,
+        {
+          id: 'att-' + Date.now(),
+          filename: asset.uri.split('/').pop() || `image_${Date.now()}.jpg`,
+          uri: asset.uri,
+          mimeType: asset.mimeType || 'image/jpeg',
+        },
+      ]);
+    } catch (error) {
+      console.error('Error choosing from library:', error);
+    }
+  };
+
+  const handleRemoveAttachment = (id: string) => {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
+  };
+
+  /** Upload local attachments as work order evidences after creation */
+  const uploadAttachments = async (workOrderId: string, userId: string) => {
+    const bucketName = 'documents';
+
+    for (const att of attachments) {
+      try {
+        const timestamp = Date.now();
+        const uniqueFilename = `${timestamp}_${att.filename}`;
+
+        // Upload to Supabase Storage (same pattern as Production)
+        let fileData: Blob | Uint8Array;
+
+        if (Platform.OS === 'web') {
+          // Web: fetch blob directly
+          const response = await fetch(att.uri);
+          fileData = await response.blob();
+        } else {
+          // Mobile: fetch blob and convert
+          const response = await fetch(att.uri);
+          const blob = await response.blob();
+          const arrayBuffer = await new Response(blob).arrayBuffer();
+          fileData = new Uint8Array(arrayBuffer);
+        }
+
+        const { error: uploadError } = await supabase.storage
+          .from(bucketName)
+          .upload(uniqueFilename, fileData, { contentType: att.mimeType, upsert: false });
+
+        if (uploadError) {
+          console.error('Error uploading attachment:', uploadError);
+          continue;
+        }
+
+        // Store only the filename (not URL) - same pattern as Production.
+        // The detail screen resolves it to a signed URL when displaying.
+        const photoPath = uniqueFilename;
+
+        // Create evidence record linked to the work order
+        await repos.workOrdersRepo.createEvidence(workOrderId, {
+          type: 'antes',
+          photoPath,
+          createdBy: userId,
+        });
+      } catch (err) {
+        console.error('Error uploading attachment:', err);
+      }
+    }
+  };
 
   const validateForm = (): boolean => {
     if (!clientName.trim()) {
@@ -194,15 +329,29 @@ export default function WorkOrderCreateScreen() {
         };
 
         await repos.workOrdersRepo.updateWorkOrder(workOrderId, updates);
-        Alert.alert(t('common.success'), t('workOrders.orderUpdated') || 'Ordem de serviço atualizada com sucesso', [
-          { 
-            text: t('common.confirm'), 
-            onPress: () => router.replace({
-              pathname: '/work-order-detail',
-              params: { workOrderId },
-            }),
-          },
-        ]);
+
+        // Upload new attachments as evidences
+        if (attachments.length > 0) {
+          await uploadAttachments(workOrderId, user.id);
+        }
+
+        if (Platform.OS === 'web') {
+          window.alert(t('workOrders.orderUpdated') || 'Ordem de serviço atualizada com sucesso');
+          router.replace({
+            pathname: '/work-order-detail',
+            params: { workOrderId },
+          });
+        } else {
+          Alert.alert(t('common.success'), t('workOrders.orderUpdated') || 'Ordem de serviço atualizada com sucesso', [
+            { 
+              text: t('common.confirm'), 
+              onPress: () => router.replace({
+                pathname: '/work-order-detail',
+                params: { workOrderId },
+              }),
+            },
+          ]);
+        }
       } else {
         // Create new work order
         const newWorkOrder: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'> = {
@@ -227,22 +376,40 @@ export default function WorkOrderCreateScreen() {
         };
 
         const createdWorkOrder = await repos.workOrdersRepo.createWorkOrder(newWorkOrder);
-        Alert.alert(t('common.success'), t('workOrders.orderCreated') || 'Ordem de serviço criada com sucesso', [
-          { 
-            text: t('common.confirm'), 
-            onPress: () => router.replace({
-              pathname: '/work-order-detail',
-              params: { workOrderId: createdWorkOrder.id },
-            }),
-          },
-        ]);
+
+        // Upload attachments as evidences
+        if (attachments.length > 0) {
+          await uploadAttachments(createdWorkOrder.id, user.id);
+        }
+
+        if (Platform.OS === 'web') {
+          window.alert(t('workOrders.orderCreated') || 'Ordem de serviço criada com sucesso');
+          router.replace({
+            pathname: '/work-order-detail',
+            params: { workOrderId: createdWorkOrder.id },
+          });
+        } else {
+          Alert.alert(t('common.success'), t('workOrders.orderCreated') || 'Ordem de serviço criada com sucesso', [
+            { 
+              text: t('common.confirm'), 
+              onPress: () => router.replace({
+                pathname: '/work-order-detail',
+                params: { workOrderId: createdWorkOrder.id },
+              }),
+            },
+          ]);
+        }
       }
     } catch (error: any) {
       console.error('Error saving work order:', error);
       const errorMessage = error?.message || (isEditMode 
         ? (t('workOrders.updateOrderError') || 'Falha ao atualizar ordem de serviço')
         : (t('workOrders.createOrderError') || 'Falha ao criar ordem de serviço'));
-      Alert.alert(t('common.error'), errorMessage, [{ text: t('common.confirm') }]);
+      if (Platform.OS === 'web') {
+        window.alert(errorMessage);
+      } else {
+        Alert.alert(t('common.error'), errorMessage, [{ text: t('common.confirm') }]);
+      }
     } finally {
       setIsCreating(false);
     }
@@ -295,11 +462,19 @@ export default function WorkOrderCreateScreen() {
           style={styles.scrollView} 
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + theme.spacing.md }]}
         >
+          {/* 1. Client Info */}
           <Input
             label={t('workOrders.clientName') || 'Nome do Cliente'}
             value={clientName}
             onChangeText={setClientName}
             placeholder={t('workOrders.clientNamePlaceholder') || 'Digite o nome do cliente'}
+          />
+
+          <Input
+            label={t('workOrders.clientContact') || 'Contato do Cliente'}
+            value={clientContact}
+            onChangeText={setClientContact}
+            placeholder={t('workOrders.clientContactPlaceholder') || 'Telefone, email, etc.'}
           />
 
           <Input
@@ -311,13 +486,7 @@ export default function WorkOrderCreateScreen() {
             numberOfLines={2}
           />
 
-          <Input
-            label={t('workOrders.clientContact') || 'Contato do Cliente'}
-            value={clientContact}
-            onChangeText={setClientContact}
-            placeholder={t('workOrders.clientContactPlaceholder') || 'Telefone, email, etc.'}
-          />
-
+          {/* 2. Service Info */}
           <Dropdown
             label={t('workOrders.serviceType') || 'Service Type'}
             value={serviceType}
@@ -344,13 +513,12 @@ export default function WorkOrderCreateScreen() {
             </View>
           </View>
 
+          {/* 3. Team & Materials */}
           <Input
-            label={t('workOrders.internalNotes') || 'Observações Internas (Opcional)'}
-            value={internalNotes}
-            onChangeText={setInternalNotes}
-            placeholder={t('workOrders.internalNotesPlaceholder') || 'Digite observações internas (não visíveis ao cliente)'}
-            multiline
-            numberOfLines={4}
+            label={t('workOrders.team') || 'Equipe (Opcional)'}
+            value={team}
+            onChangeText={setTeam}
+            placeholder={t('workOrders.teamPlaceholder') || 'Digite os IDs dos membros da equipe separados por vírgula'}
           />
 
           <Input
@@ -363,15 +531,67 @@ export default function WorkOrderCreateScreen() {
             }}
             placeholder={t('workOrders.plannedMaterialsPlaceholder') || 'Digite os materiais planejados (até 1000 caracteres)'}
             multiline
-            numberOfLines={6}
+            numberOfLines={4}
             maxLength={1000}
           />
 
+          {/* 4. Attachments (same pattern as Production) */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              {t('production.attachments') || 'Anexos'} ({attachments.length}/{MAX_ATTACHMENTS})
+            </Text>
+            {attachments.length < MAX_ATTACHMENTS && (
+              <View style={styles.attachmentOptions}>
+                <TouchableOpacity
+                  style={[styles.attachmentOption, { backgroundColor: colors.backgroundSecondary }]}
+                  onPress={handleTakePhoto}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="camera" size={28} color={colors.primary} />
+                  <Text style={[styles.attachmentOptionLabel, { color: colors.text }]}>
+                    {t('production.takePhoto') || 'Tirar Foto'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.attachmentOption, { backgroundColor: colors.backgroundSecondary }]}
+                  onPress={handleChooseFromLibrary}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="image" size={28} color={colors.primary} />
+                  <Text style={[styles.attachmentOptionLabel, { color: colors.text }]}>
+                    {t('production.chooseFromLibrary') || 'Galeria'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {attachments.map((att) => (
+              <View
+                key={att.id}
+                style={[styles.attachmentCard, { backgroundColor: colors.cardBackground }]}
+              >
+                <Ionicons name="image-outline" size={20} color={colors.textSecondary} />
+                <Text style={[styles.attachmentName, { color: colors.text }]} numberOfLines={1}>
+                  {att.filename}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => handleRemoveAttachment(att.id)}
+                  style={[styles.removeButton, { backgroundColor: colors.error + '20' }]}
+                >
+                  <Ionicons name="close" size={20} color={colors.error} />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+
+          {/* 5. Notes (optional, last) */}
           <Input
-            label={t('workOrders.team') || 'Equipe (Opcional)'}
-            value={team}
-            onChangeText={setTeam}
-            placeholder={t('workOrders.teamPlaceholder') || 'Digite os IDs dos membros da equipe separados por vírgula'}
+            label={t('workOrders.internalNotes') || 'Observações Internas (Opcional)'}
+            value={internalNotes}
+            onChangeText={setInternalNotes}
+            placeholder={t('workOrders.internalNotesPlaceholder') || 'Digite observações internas (não visíveis ao cliente)'}
+            multiline
+            numberOfLines={3}
           />
 
           <View style={styles.buttonContainer}>
@@ -437,6 +657,53 @@ const styles = StyleSheet.create({
   },
   dateTimeColumn: {
     flex: 1,
+  },
+  section: {
+    marginTop: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+  },
+  sectionTitle: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.semibold,
+    marginBottom: theme.spacing.sm,
+  },
+  attachmentOptions: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+  },
+  attachmentOption: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    minHeight: 80,
+    gap: theme.spacing.xs,
+  },
+  attachmentOptionLabel: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.medium,
+    textAlign: 'center',
+  },
+  attachmentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: theme.spacing.sm,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: theme.spacing.xs,
+    gap: theme.spacing.sm,
+  },
+  attachmentName: {
+    fontSize: theme.typography.fontSize.sm,
+    flex: 1,
+  },
+  removeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   buttonContainer: {
     flexDirection: 'row',

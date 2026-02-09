@@ -25,6 +25,12 @@ import { WorkOrder, User, TimeStatus, ServiceLog, Evidence, ChecklistItem } from
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { confirmDelete } from '../src/utils/confirm-dialog';
+import { downloadAndOpenAttachment } from '../src/utils/attachments';
+
+// Web-specific signature pad (loaded only on web)
+const WebSignaturePad = Platform.OS === 'web'
+  ? require('../src/components/shared/WebSignaturePad').WebSignaturePad
+  : null;
 
 export default function WorkOrderDetailScreen() {
   const { t } = useI18n();
@@ -46,6 +52,15 @@ export default function WorkOrderDetailScreen() {
   const [checkInAddress, setCheckInAddress] = useState<string | null>(null);
   const [signatureAddress, setSignatureAddress] = useState<string | null>(null);
 
+  /** Web-safe alert helper */
+  const showMsg = (message: string) => {
+    if (Platform.OS === 'web') {
+      window.alert(message);
+    } else {
+      Alert.alert('', message);
+    }
+  };
+
   const handleEdit = () => {
     if (!workOrderId) return;
     router.push({
@@ -59,46 +74,55 @@ export default function WorkOrderDetailScreen() {
 
     setIsProcessing(true);
     try {
-      // Request location permissions
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert(
-          t('common.error') || 'Error',
-          t('workOrders.locationPermissionRequired')
-        );
-        setIsProcessing(false);
-        return;
+      // Get current location (optional on web)
+      let latitude = 0;
+      let longitude = 0;
+
+      if (Platform.OS === 'web') {
+        // Web: use browser Geolocation API directly (more reliable than expo-location on web)
+        try {
+          if ('geolocation' in navigator) {
+            const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+              navigator.geolocation.getCurrentPosition(resolve, reject, {
+                enableHighAccuracy: false,
+                timeout: 5000,
+                maximumAge: 60000,
+              });
+            });
+            latitude = pos.coords.latitude;
+            longitude = pos.coords.longitude;
+          }
+        } catch (geoErr) {
+          console.log('[handleStartService] Web geolocation unavailable, using (0,0)');
+        }
+      } else {
+        // Native: use expo-location
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const loc = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.High,
+            });
+            latitude = loc.coords.latitude;
+            longitude = loc.coords.longitude;
+          } else {
+            Alert.alert(
+              t('common.error') || 'Error',
+              t('workOrders.locationPermissionRequired')
+            );
+            setIsProcessing(false);
+            return;
+          }
+        } catch (locationError) {
+          console.error('Error getting location:', locationError);
+          Alert.alert(
+            t('common.error') || 'Error',
+            t('workOrders.locationError')
+          );
+          // Continue with fallback (0, 0)
+        }
       }
 
-      // Get current location
-      let location;
-      try {
-        location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-        });
-      } catch (locationError) {
-        console.error('Error getting location:', locationError);
-        Alert.alert(
-          t('common.error') || 'Error',
-          t('workOrders.locationError')
-        );
-        // Fallback to default coordinates if location fails
-        location = {
-          coords: {
-            latitude: 0,
-            longitude: 0,
-            accuracy: 0,
-            altitude: null,
-            altitudeAccuracy: null,
-            heading: null,
-            speed: null,
-          },
-          timestamp: Date.now(),
-        };
-      }
-
-      const latitude = location.coords.latitude;
-      const longitude = location.coords.longitude;
       const timestamp = new Date().toISOString();
 
       // 1. Create check-in
@@ -126,16 +150,24 @@ export default function WorkOrderDetailScreen() {
       // Reload work order to show updated data
       await loadWorkOrder();
 
-      Alert.alert(
-        t('common.success') || 'Success',
-        t('workOrders.serviceStarted')
-      );
+      if (Platform.OS === 'web') {
+        window.alert(t('workOrders.serviceStarted') || 'Serviço iniciado com sucesso');
+      } else {
+        Alert.alert(
+          t('common.success') || 'Success',
+          t('workOrders.serviceStarted')
+        );
+      }
     } catch (error) {
       console.error('Error starting service:', error);
-      Alert.alert(
-        t('common.error') || 'Error',
-        t('workOrders.startServiceError')
-      );
+      if (Platform.OS === 'web') {
+        window.alert(t('workOrders.startServiceError') || 'Erro ao iniciar serviço');
+      } else {
+        Alert.alert(
+          t('common.error') || 'Error',
+          t('workOrders.startServiceError')
+        );
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -162,7 +194,7 @@ export default function WorkOrderDetailScreen() {
     if (pendingSignature !== null) {
       setPendingSignature(null);
       setIsProcessing(false);
-      Alert.alert(t('common.error'), t('workOrders.signatureDrawingRequired'));
+      showMsg(t('workOrders.signatureDrawingRequired') || 'Desenhe a assinatura antes de confirmar');
     }
   };
 
@@ -183,20 +215,20 @@ export default function WorkOrderDetailScreen() {
     if (!clientName || !clientName.trim()) {
       setPendingSignature(null);
       setIsProcessing(false);
-      Alert.alert(t('common.error'), t('workOrders.clientNameRequired'));
+      showMsg(t('workOrders.clientNameRequired') || 'Preencha o nome do cliente');
       return;
     }
 
     setIsProcessing(true);
     
     try {
-      // Get current location for signature
-      let location;
+      // Get current location for signature (optional on web)
+      let location: { coords?: { latitude: number; longitude: number } } | undefined;
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') {
           const locationData = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.High,
+            accuracy: Platform.OS === 'web' ? Location.Accuracy.Balanced : Location.Accuracy.High,
           });
           location = locationData;
         }
@@ -260,16 +292,10 @@ export default function WorkOrderDetailScreen() {
       // Reload work order to show updated data
       await loadWorkOrder();
 
-      Alert.alert(
-        t('common.success') || 'Success',
-        t('workOrders.signatureCreated')
-      );
+      showMsg(t('workOrders.signatureCreated') || 'Assinatura criada com sucesso');
     } catch (error) {
       console.error('Error creating signature:', error);
-      Alert.alert(
-        t('common.error') || 'Error',
-        t('workOrders.signatureError')
-      );
+      showMsg(t('workOrders.signatureError') || 'Erro ao criar assinatura');
     } finally {
       setIsProcessing(false);
       setPendingSignature(null);
@@ -280,7 +306,7 @@ export default function WorkOrderDetailScreen() {
     if (!workOrderId || !user || !workOrder) return;
 
     if (!clientName || !clientName.trim()) {
-      Alert.alert(t('common.error'), t('workOrders.clientNameRequired'));
+      showMsg(t('workOrders.clientNameRequired') || 'Preencha o nome do cliente');
       return;
     }
 
@@ -301,7 +327,7 @@ export default function WorkOrderDetailScreen() {
     } else {
       setIsProcessing(false);
       setPendingSignature(null);
-      Alert.alert(t('common.error'), t('workOrders.signatureDrawingRequired'));
+      showMsg(t('workOrders.signatureDrawingRequired') || 'Desenhe a assinatura antes de confirmar');
     }
   };
 
@@ -310,10 +336,7 @@ export default function WorkOrderDetailScreen() {
 
     // Check if signature exists
     if (!workOrder.signature) {
-      Alert.alert(
-        t('common.error') || 'Error',
-        t('workOrders.signatureRequired')
-      );
+      showMsg(t('workOrders.signatureRequired') || 'Assinatura necessária antes de finalizar');
       return;
     }
 
@@ -345,16 +368,10 @@ export default function WorkOrderDetailScreen() {
       // Reload work order to show updated data
       await loadWorkOrder();
 
-      Alert.alert(
-        t('common.success') || 'Success',
-        t('workOrders.serviceCompleted')
-      );
+      showMsg(t('workOrders.serviceCompleted') || 'Serviço finalizado com sucesso');
     } catch (error) {
       console.error('Error finishing service:', error);
-      Alert.alert(
-        t('common.error') || 'Error',
-        t('workOrders.finishServiceError')
-      );
+      showMsg(t('workOrders.finishServiceError') || 'Erro ao finalizar serviço');
     } finally {
       setIsProcessing(false);
     }
@@ -498,16 +515,60 @@ export default function WorkOrderDetailScreen() {
           evidences: workOrderData.evidences?.length || 0,
           signature: workOrderData.signature ? 'yes' : 'no',
         });
+
+        // Resolve evidence photoPath to signed URLs (bucket is private)
+        if (workOrderData.evidences && workOrderData.evidences.length > 0) {
+          const resolvedEvidences = await Promise.all(
+            workOrderData.evidences.map(async (ev: Evidence) => {
+              if (!ev.photoPath) return ev;
+              // Already a full URL (http/https) — leave as-is
+              if (ev.photoPath.startsWith('http://') || ev.photoPath.startsWith('https://')) {
+                return ev;
+              }
+              // Local file URI — leave as-is
+              if (ev.photoPath.startsWith('file://') || ev.photoPath.startsWith('content://')) {
+                return ev;
+              }
+              try {
+                // Strip bucket prefix if present
+                let filename = ev.photoPath;
+                if (filename.startsWith('documents/')) {
+                  filename = filename.replace('documents/', '');
+                }
+                const { data, error } = await supabase.storage
+                  .from('documents')
+                  .createSignedUrl(filename, 3600); // 1 hour
+                if (data?.signedUrl && !error) {
+                  return { ...ev, photoPath: data.signedUrl };
+                }
+              } catch (e) {
+                console.warn('Error creating signed URL for evidence:', e);
+              }
+              return ev;
+            })
+          );
+          workOrderData.evidences = resolvedEvidences;
+        }
+
         setWorkOrder(workOrderData);
         await loadUsers(workOrderData);
       } else {
-        Alert.alert(t('common.error'), 'Work order not found', [
-          { text: t('common.confirm'), onPress: () => router.back() },
-        ]);
+        if (Platform.OS === 'web') {
+          window.alert('Work order not found');
+          router.back();
+        } else {
+          Alert.alert(t('common.error'), 'Work order not found', [
+            { text: t('common.confirm'), onPress: () => router.back() },
+          ]);
+        }
       }
     } catch (error) {
       console.error('Error loading work order:', error);
-      Alert.alert(t('common.error'), 'Failed to load work order');
+      if (Platform.OS === 'web') {
+        window.alert('Failed to load work order');
+      } else {
+        Alert.alert(t('common.error'), 'Failed to load work order');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -904,13 +965,24 @@ export default function WorkOrderDetailScreen() {
                   </View>
                 </View>
                 {workOrder.checkIn.photoPath && (
-                  <View style={styles.photoContainer}>
+                  <TouchableOpacity
+                    style={styles.photoContainer}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      if (Platform.OS === 'web') {
+                        window.open(workOrder!.checkIn!.photoPath!, '_blank');
+                      } else {
+                        const fname = workOrder!.checkIn!.photoPath!.split('/').pop()?.split('?')[0] || 'checkin.jpg';
+                        downloadAndOpenAttachment(workOrder!.checkIn!.photoPath!, fname, 'image/jpeg');
+                      }
+                    }}
+                  >
                     <Image
                       source={{ uri: workOrder.checkIn.photoPath }}
                       style={styles.photo}
                       contentFit="cover"
                     />
-                  </View>
+                  </TouchableOpacity>
                 )}
               </View>
             </View>
@@ -984,13 +1056,24 @@ export default function WorkOrderDetailScreen() {
                       By {getUserName(log.author)}
                     </Text>
                     {log.photoPath && (
-                      <View style={styles.photoContainer}>
+                      <TouchableOpacity
+                        style={styles.photoContainer}
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          if (Platform.OS === 'web') {
+                            window.open(log.photoPath!, '_blank');
+                          } else {
+                            const fname = log.photoPath!.split('/').pop()?.split('?')[0] || 'log.jpg';
+                            downloadAndOpenAttachment(log.photoPath!, fname, 'image/jpeg');
+                          }
+                        }}
+                      >
                         <Image
                           source={{ uri: log.photoPath }}
                           style={styles.photo}
                           contentFit="cover"
                         />
-                      </View>
+                      </TouchableOpacity>
                     )}
                     {log.videoPath && (
                       <View style={styles.videoContainer}>
@@ -1019,13 +1102,24 @@ export default function WorkOrderDetailScreen() {
                       {evidences.map((evidence) => (
                         <View key={evidence.id} style={styles.evidenceRow}>
                           {evidence.photoPath && (
-                            <View style={styles.photoContainer}>
+                            <TouchableOpacity
+                              style={styles.photoContainer}
+                              activeOpacity={0.8}
+                              onPress={() => {
+                                if (Platform.OS === 'web') {
+                                  window.open(evidence.photoPath, '_blank');
+                                } else {
+                                  const filename = evidence.photoPath.split('/').pop()?.split('?')[0] || 'evidence.jpg';
+                                  downloadAndOpenAttachment(evidence.photoPath, filename, 'image/jpeg');
+                                }
+                              }}
+                            >
                               <Image
                                 source={{ uri: evidence.photoPath }}
                                 style={styles.photo}
                                 contentFit="cover"
                               />
-                            </View>
+                            </TouchableOpacity>
                           )}
                           {evidence.internalNotes && (
                             <View style={styles.notesContainer}>
@@ -1248,41 +1342,56 @@ export default function WorkOrderDetailScreen() {
               {t('workOrders.signatureDrawing')}
             </Text>
             
-            <View style={[styles.signatureCanvasContainer, { backgroundColor: '#ffffff', borderColor: colors.border }]}>
-              <SignatureCanvas
+            {Platform.OS === 'web' && WebSignaturePad ? (
+              <WebSignaturePad
                 ref={signatureRef}
                 onOK={handleSignatureOK}
                 onEmpty={handleSignatureEmpty}
-                descriptionText=""
-                clearText={t('workOrders.clearSignature')}
-                confirmText={t('workOrders.saveSignature')}
                 penColor="#000000"
                 backgroundColor="#ffffff"
-                minWidth={2}
-                maxWidth={3}
-                webStyle={`
-                  .m-signature-pad {
-                    box-shadow: none;
-                    border: 1px solid ${colors.border};
-                  }
-                  .m-signature-pad--body {
-                    border: none;
-                  }
-                  .m-signature-pad--footer {
-                    display: flex;
-                    justify-content: space-between;
-                    padding: 10px;
-                  }
-                  .m-signature-pad--footer button {
-                    background-color: ${colors.primary};
-                    color: ${colors.background};
-                    border: none;
-                    padding: 10px 20px;
-                    border-radius: 5px;
-                  }
-                `}
+                clearText={t('workOrders.clearSignature')}
+                confirmText={t('workOrders.saveSignature')}
+                borderColor={colors.border}
+                primaryColor={colors.primary}
+                textColor={colors.background}
               />
-            </View>
+            ) : (
+              <View style={[styles.signatureCanvasContainer, { backgroundColor: '#ffffff', borderColor: colors.border }]}>
+                <SignatureCanvas
+                  ref={signatureRef}
+                  onOK={handleSignatureOK}
+                  onEmpty={handleSignatureEmpty}
+                  descriptionText=""
+                  clearText={t('workOrders.clearSignature')}
+                  confirmText={t('workOrders.saveSignature')}
+                  penColor="#000000"
+                  backgroundColor="#ffffff"
+                  minWidth={2}
+                  maxWidth={3}
+                  webStyle={`
+                    .m-signature-pad {
+                      box-shadow: none;
+                      border: 1px solid ${colors.border};
+                    }
+                    .m-signature-pad--body {
+                      border: none;
+                    }
+                    .m-signature-pad--footer {
+                      display: flex;
+                      justify-content: space-between;
+                      padding: 10px;
+                    }
+                    .m-signature-pad--footer button {
+                      background-color: ${colors.primary};
+                      color: ${colors.background};
+                      border: none;
+                      padding: 10px 20px;
+                      border-radius: 5px;
+                    }
+                  `}
+                />
+              </View>
+            )}
 
             <View style={styles.modalButtons}>
               <TouchableOpacity

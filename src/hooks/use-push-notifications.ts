@@ -161,6 +161,13 @@ export const usePushNotifications = () => {
       if (responseListener.current && Notifications) {
         Notifications.removeNotificationSubscription(responseListener.current);
       }
+      // Cleanup web Realtime channel
+      if (Platform.OS === 'web' && (window as any).__webPushChannel) {
+        import('../services/supabase').then(({ supabase }) => {
+          supabase.removeChannel((window as any).__webPushChannel);
+          (window as any).__webPushChannel = null;
+        }).catch(() => {});
+      }
     };
   }, [user]);
 
@@ -235,53 +242,127 @@ export const usePushNotifications = () => {
   };
 
   /**
-   * Inicializar Web Push Notifications para web
+   * Inicializar Web Push Notifications para web.
+   * Estratégia principal: Supabase Realtime + browser Notification API.
+   * Fallback: Web Push API com VAPID quando configurada.
    */
   const initializeWebPushNotifications = async () => {
-    if (Platform.OS !== 'web') return;
+    if (Platform.OS !== 'web' || !user) return;
 
     try {
-      // Verificar suporte
-      if (!webPushService.isSupported()) {
-        console.warn('[usePushNotifications] Web Push não é suportado neste navegador');
+      // 1. Solicitar permissão de notificação do browser
+      if (!('Notification' in window)) {
+        console.warn('[usePushNotifications] Browser não suporta Notification API');
         return;
       }
 
-      // Inicializar serviço
-      const initialized = await webPushService.initialize();
-      if (!initialized) {
-        console.warn('[usePushNotifications] Falha ao inicializar Web Push Service');
-        return;
-      }
-
-      // Verificar permissão
-      let permission = await webPushService.getPermissionStatus();
-      setNotificationPermission(permission === 'granted');
-
+      let permission = Notification.permission;
       if (permission === 'default') {
-        // Solicitar permissão automaticamente
-        permission = await webPushService.requestPermission();
-        setNotificationPermission(permission === 'granted');
+        permission = await Notification.requestPermission();
       }
+      setNotificationPermission(permission === 'granted');
 
       if (permission !== 'granted') {
         console.warn('[usePushNotifications] Permissão de notificação não concedida');
         return;
       }
 
-      // Criar subscription
-      const subscription = await webPushService.subscribe();
-      if (subscription) {
-        const token = webPushService.subscriptionToToken(subscription);
-        setExpoPushToken(token);
-        registerDeviceToken(token);
-        console.log('[usePushNotifications] Web Push subscription criada');
+      console.log('[usePushNotifications] Browser notification permission granted');
+
+      // 2. Subscrever no Supabase Realtime para notificações do usuário atual
+      const { supabase } = await import('../services/supabase');
+      const { pushNotificationService } = await import('../services/push-notifications');
+
+      const channel = supabase
+        .channel('web-push-' + user.id)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+          },
+          (payload: any) => {
+            const newNotification = payload.new;
+            if (!newNotification) return;
+
+            // Verificar se esta notificação é para o usuário atual
+            // (targetUserIds contém o user.id ou é broadcast para todos)
+            const targetUserIds: string[] = newNotification.target_user_ids || [];
+            if (targetUserIds.length > 0 && !targetUserIds.includes(user.id)) {
+              return; // Não é para este usuário
+            }
+
+            // Não mostrar notificações criadas pelo próprio usuário
+            if (newNotification.created_by === user.id) return;
+
+            // Gerar conteúdo da notificação
+            const payloadJson = typeof newNotification.payload_json === 'string'
+              ? JSON.parse(newNotification.payload_json)
+              : newNotification.payload_json || {};
+
+            const mappedNotification = {
+              id: newNotification.id,
+              type: newNotification.type,
+              payloadJson,
+              targetUserIds,
+              createdBy: newNotification.created_by,
+              createdAt: newNotification.created_at,
+            } as any;
+
+            const { title, body } = pushNotificationService.generateNotificationContent(mappedNotification);
+            const deepLink = pushNotificationService.generateDeepLink(mappedNotification);
+
+            // Mostrar notificação nativa do browser
+            try {
+              const notification = new Notification(title, {
+                body,
+                icon: '/assets/images/icon.png',
+                tag: 'crea-glass-' + newNotification.id,
+                data: { deepLink, notificationId: newNotification.id },
+              });
+
+              notification.onclick = () => {
+                window.focus();
+                notification.close();
+                handleWebNotificationClick({ deepLink, notificationId: newNotification.id });
+              };
+
+              console.log('[usePushNotifications] Browser notification shown:', title);
+            } catch (notifError) {
+              console.error('[usePushNotifications] Error showing browser notification:', notifError);
+            }
+          }
+        )
+        .subscribe((status: string) => {
+          console.log('[usePushNotifications] Supabase Realtime subscription status:', status);
+        });
+
+      // Armazenar canal para cleanup
+      (window as any).__webPushChannel = channel;
+
+      // 3. Tentar também Web Push com VAPID (opcional, funciona se configurado)
+      try {
+        if (webPushService.isSupported()) {
+          const initialized = await webPushService.initialize();
+          if (initialized) {
+            const subscription = await webPushService.subscribe();
+            if (subscription) {
+              const token = webPushService.subscriptionToToken(subscription);
+              setExpoPushToken(token);
+              registerDeviceToken(token);
+              console.log('[usePushNotifications] Web Push VAPID subscription também ativa');
+            }
+          }
+        }
+      } catch (vapidError) {
+        // VAPID não configurada - não é problema, Realtime cobre
+        console.log('[usePushNotifications] Web Push VAPID não disponível (OK, usando Realtime):', (vapidError as any)?.message);
       }
 
-      // Listener para notificações recebidas (via Service Worker message)
+      // 4. Listener para notificações recebidas (via Service Worker message)
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.addEventListener('message', (event) => {
-          console.log('[usePushNotifications] Message from Service Worker:', event.data);
           if (event.data && event.data.type === 'NOTIFICATION_CLICK') {
             handleWebNotificationClick(event.data);
           }

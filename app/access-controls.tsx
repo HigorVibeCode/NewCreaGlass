@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, Alert, Switch, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
@@ -14,13 +14,56 @@ import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { User, UserType } from '../src/types';
 import { confirmDialog } from '../src/utils/confirm-dialog';
 
+// All permission keys that must exist in the database.
+// When a Master user opens Access Control the app auto-creates any missing ones.
+const REQUIRED_PERMISSIONS: { key: string; descriptionI18nKey: string }[] = [
+  { key: 'documents.upload', descriptionI18nKey: 'permissions.documents.upload' },
+  { key: 'documents.create', descriptionI18nKey: 'permissions.documents.create' },
+  { key: 'documents.view', descriptionI18nKey: 'permissions.documents.view' },
+  { key: 'documents.download', descriptionI18nKey: 'permissions.documents.download' },
+  { key: 'documents.delete', descriptionI18nKey: 'permissions.documents.delete' },
+  { key: 'inventory.create', descriptionI18nKey: 'permissions.inventory.create' },
+  { key: 'inventory.update', descriptionI18nKey: 'permissions.inventory.update' },
+  { key: 'inventory.delete', descriptionI18nKey: 'permissions.inventory.delete' },
+  { key: 'inventory.group.create', descriptionI18nKey: 'permissions.inventory.group.create' },
+  { key: 'inventory.item.create', descriptionI18nKey: 'permissions.inventory.item.create' },
+  { key: 'inventory.item.update', descriptionI18nKey: 'permissions.inventory.item.update' },
+  { key: 'inventory.item.delete', descriptionI18nKey: 'permissions.inventory.item.delete' },
+  { key: 'inventory.item.adjustStock', descriptionI18nKey: 'permissions.inventory.item.adjustStock' },
+  { key: 'inventory.viewHistory', descriptionI18nKey: 'permissions.inventory.viewHistory' },
+  { key: 'notifications.view', descriptionI18nKey: 'permissions.notifications.view' },
+  { key: 'bloodPriority.view', descriptionI18nKey: 'permissions.bloodPriority.view' },
+  { key: 'bloodPriority.confirmRead', descriptionI18nKey: 'permissions.bloodPriority.confirmRead' },
+  { key: 'bloodPriority.create', descriptionI18nKey: 'permissions.bloodPriority.create' },
+  { key: 'accessControls.view', descriptionI18nKey: 'permissions.accessControls.view' },
+  { key: 'accessControls.manageUsers', descriptionI18nKey: 'permissions.accessControls.manageUsers' },
+  { key: 'accessControls.managePermissions', descriptionI18nKey: 'permissions.accessControls.managePermissions' },
+  { key: 'users.activateDeactivate', descriptionI18nKey: 'permissions.users.activateDeactivate' },
+  { key: 'users.create', descriptionI18nKey: 'permissions.users.create' },
+  { key: 'qr.scan', descriptionI18nKey: 'permissions.qr.scan' },
+  { key: 'nfc.read', descriptionI18nKey: 'permissions.nfc.read' },
+  { key: 'production.create', descriptionI18nKey: 'permissions.production.create' },
+  { key: 'production.update', descriptionI18nKey: 'permissions.production.update' },
+  { key: 'production.delete', descriptionI18nKey: 'permissions.production.delete' },
+  { key: 'events.view', descriptionI18nKey: 'permissions.events.view' },
+  { key: 'events.create', descriptionI18nKey: 'permissions.events.create' },
+  { key: 'events.update', descriptionI18nKey: 'permissions.events.update' },
+  { key: 'events.delete', descriptionI18nKey: 'permissions.events.delete' },
+  { key: 'events.history', descriptionI18nKey: 'permissions.events.history' },
+  { key: 'events.report.create', descriptionI18nKey: 'permissions.events.report.create' },
+  { key: 'workOrders.view', descriptionI18nKey: 'permissions.workOrders.view' },
+  { key: 'workOrders.create', descriptionI18nKey: 'permissions.workOrders.create' },
+  { key: 'workOrders.update', descriptionI18nKey: 'permissions.workOrders.update' },
+  { key: 'workOrders.delete', descriptionI18nKey: 'permissions.workOrders.delete' },
+];
+
 export default function AccessControlsScreen() {
   const { t } = useI18n();
   const { user } = useAuth();
   const colors = useThemeColors();
   const queryClient = useQueryClient();
   const { data: users = [] } = useUsersQuery();
-  const { data: allPermissions = [] } = useAllPermissionsQuery();
+  const { data: allPermissions = [], isSuccess: permissionsLoaded } = useAllPermissionsQuery();
 
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
   const [showUserPermissionsModal, setShowUserPermissionsModal] = useState<string | null>(null);
@@ -31,6 +74,33 @@ export default function AccessControlsScreen() {
   const [changePasswordValue, setChangePasswordValue] = useState('');
 
   const isMaster = user?.userType === 'Master';
+  const permsSyncedRef = useRef(false);
+
+  // Auto-sync: ensure all required permissions exist in the database (runs once per mount)
+  useEffect(() => {
+    if (!isMaster || permsSyncedRef.current || !permissionsLoaded) return;
+    permsSyncedRef.current = true;
+
+    const syncPermissions = async () => {
+      const existingKeys = new Set(allPermissions.map(p => p.key));
+      const missing = REQUIRED_PERMISSIONS.filter(rp => !existingKeys.has(rp.key));
+      if (missing.length === 0) return;
+      console.log('[AccessControl] Creating missing permissions:', missing.map(m => m.key));
+      for (const perm of missing) {
+        try {
+          await repos.permissionsRepo.createPermission({
+            key: perm.key,
+            descriptionI18nKey: perm.descriptionI18nKey,
+          });
+        } catch (err) {
+          console.warn('[AccessControl] Failed to create permission:', perm.key, err);
+        }
+      }
+      // Refresh the permissions list
+      queryClient.invalidateQueries({ queryKey: ['allPermissions'] });
+    };
+    syncPermissions();
+  }, [isMaster, allPermissions]);
 
   const userTypeOptions: DropdownOption[] = [
     { label: 'Manager', value: 'Manager' },
