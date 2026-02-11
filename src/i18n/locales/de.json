@@ -383,6 +383,12 @@
     "editEvent": "Ereignis bearbeiten",
     "eventUpdated": "Ereignis erfolgreich aktualisiert",
     "updateEventError": "Fehler beim Aktualisieren des Ereignisses",
+    "statusActive": "Aktiv",
+    "statusCompleted": "Abgeschlossen",
+    "completeEvent": "Abschließen",
+    "reactivateEvent": "Reaktivieren",
+    "eventCompleted": "Ereignis als abgeschlossen markiert",
+    "eventReactivated": "Ereignis reaktiviert",
     "types": {
       "meeting": "Besprechung",
       "training": "Schulung",
@@ -443,6 +449,9 @@
       "internal": "Intern",
       "external": "Extern"
     },
+    "totalTime": "Gesamtzeit",
+    "serviceStartedAt": "Beginn",
+    "serviceCompletedAt": "Abschluss",
     "status": {
       "planned": "Geplant",
       "in_progress": "In Bearbeitung",

@@ -175,6 +175,11 @@ export default function PointScreen() {
 
   const handleRegisterPress = useCallback(async () => {
     if (!user) return;
+    // On web (mobile browser), skip biometric — go straight to password
+    if (Platform.OS === 'web') {
+      setShowPasswordModal(true);
+      return;
+    }
     const ok = await tryBiometricAuth(t('point.biometricPrompt'));
     if (ok) {
       await performRegister();

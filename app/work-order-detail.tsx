@@ -704,10 +704,11 @@ export default function WorkOrderDetailScreen() {
   const formatDuration = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
     if (hours > 0) {
-      return `${hours}h ${minutes}m`;
+      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
-    return `${minutes}m`;
+    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   const getUserName = (userId: string): string => {
@@ -989,19 +990,31 @@ export default function WorkOrderDetailScreen() {
           {((workOrder.timeStatuses && workOrder.timeStatuses.length > 0) || activeTimeStatus) && (
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>Time Tracking</Text>
+              
+              {/* Timer card grande - estilo treinamento */}
+              {activeTimeStatus && (
+                <View style={[styles.timerCard, { backgroundColor: colors.primary + '10', borderColor: colors.primary }]}>
+                  <View style={styles.timerHeader}>
+                    <Ionicons name="timer" size={24} color={colors.primary} />
+                    <Text style={[styles.timerTitle, { color: colors.primary }]}>
+                      {t('workOrders.status.in_progress')}
+                    </Text>
+                  </View>
+                  <Text style={[styles.timerValue, { color: colors.primary }]}>
+                    {formatDuration(currentElapsedTime)}
+                  </Text>
+                  <Text style={[styles.timerDescription, { color: colors.textSecondary }]}>
+                    {t('workOrders.totalTime') || 'Tempo total'}: {formatDuration(totalTimeWithActive)}
+                  </Text>
+                </View>
+              )}
+
               <View style={[styles.infoCard, { backgroundColor: colors.cardBackground }]}>
                 <View style={styles.totalTimeRow}>
                   <Ionicons name="time" size={20} color={colors.primary} />
                   <Text style={[styles.totalTimeText, { color: colors.text }]}>
-                    Total Time: {formatDuration(totalTimeWithActive)}
+                    Total: {formatDuration(totalTimeWithActive)}
                   </Text>
-                  {activeTimeStatus && (
-                    <View style={[styles.activeTimerBadge, { backgroundColor: colors.success + '20' }]}>
-                      <Text style={[styles.activeTimerText, { color: colors.success }]}>
-                        ⏱️ {formatDuration(currentElapsedTime)}
-                      </Text>
-                    </View>
-                  )}
                 </View>
                 {workOrder.timeStatuses && workOrder.timeStatuses.map((timeStatus) => (
                   <View key={timeStatus.id} style={styles.timeStatusRow}>
@@ -1569,15 +1582,30 @@ const styles = StyleSheet.create({
     height: 200,
     backgroundColor: '#f3f4f6',
   },
-  activeTimerBadge: {
-    marginLeft: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs,
-    borderRadius: theme.borderRadius.sm,
+  timerCard: {
+    padding: theme.spacing.lg,
+    borderRadius: theme.borderRadius.lg,
+    borderWidth: 2,
+    alignItems: 'center' as const,
+    gap: theme.spacing.sm,
   },
-  activeTimerText: {
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.semibold,
+  timerHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: theme.spacing.sm,
+  },
+  timerTitle: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  timerValue: {
+    fontSize: 36,
+    fontWeight: theme.typography.fontWeight.bold,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  timerDescription: {
+    fontSize: theme.typography.fontSize.xs,
+    textAlign: 'center' as const,
   },
   signatureButton: {
     flexDirection: 'row',

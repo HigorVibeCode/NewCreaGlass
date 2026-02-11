@@ -439,6 +439,12 @@
     "editEvent": "Editar Evento",
     "eventUpdated": "Evento atualizado com sucesso",
     "updateEventError": "Falha ao atualizar evento",
+    "statusActive": "Ativo",
+    "statusCompleted": "Concluído",
+    "completeEvent": "Concluir",
+    "reactivateEvent": "Reativar",
+    "eventCompleted": "Evento marcado como concluído",
+    "eventReactivated": "Evento reativado",
     "types": {
       "meeting": "Reunião",
       "training": "Treinamento",
@@ -499,6 +505,9 @@
       "internal": "Interno",
       "external": "Externo"
     },
+    "totalTime": "Tempo total",
+    "serviceStartedAt": "Início",
+    "serviceCompletedAt": "Conclusão",
     "status": {
       "planned": "Planejado",
       "in_progress": "Em Andamento",

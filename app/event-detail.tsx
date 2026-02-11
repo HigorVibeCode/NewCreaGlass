@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,6 +29,35 @@ export default function EventDetailScreen() {
 
   const [event, setEvent] = useState<Event | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const showMsg = (message: string) => {
+    if (Platform.OS === 'web') {
+      window.alert(message);
+    } else {
+      Alert.alert('', message);
+    }
+  };
+
+  const handleToggleCompleted = async () => {
+    if (!eventId || !event) return;
+    const newStatus = event.status === 'completed' ? 'active' : 'completed';
+    setIsProcessing(true);
+    try {
+      await repos.eventsRepo.updateEvent(eventId, { status: newStatus } as any);
+      await loadEvent();
+      showMsg(
+        newStatus === 'completed'
+          ? (t('events.eventCompleted') || 'Evento marcado como concluído')
+          : (t('events.eventReactivated') || 'Evento reativado')
+      );
+    } catch (error) {
+      console.error('Error updating event status:', error);
+      showMsg(t('events.updateEventError') || 'Falha ao atualizar evento');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const handleEdit = () => {
     if (!eventId) return;
@@ -134,9 +164,33 @@ export default function EventDetailScreen() {
       <ScrollView style={[styles.scrollView, { backgroundColor: colors.background }]}>
         <View style={styles.content}>
           <View style={[styles.headerCard, { backgroundColor: colors.cardBackground }]}>
-            <Text style={[styles.eventTitle, { color: colors.text }]}>{event.title}</Text>
+            <View style={styles.headerRow}>
+              <Text style={[styles.eventTitle, { color: colors.text, flex: 1 }]}>{event.title}</Text>
+              <View
+                style={[
+                  styles.statusBadge,
+                  { backgroundColor: event.status === 'completed' ? '#10b981' + '20' : '#ea580c' + '20' },
+                ]}
+              >
+                <Ionicons
+                  name={event.status === 'completed' ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={12}
+                  color={event.status === 'completed' ? '#10b981' : '#ea580c'}
+                />
+                <Text
+                  style={[
+                    styles.statusText,
+                    { color: event.status === 'completed' ? '#10b981' : '#ea580c' },
+                  ]}
+                >
+                  {event.status === 'completed'
+                    ? (t('events.statusCompleted') || 'Concluído')
+                    : (t('events.statusActive') || 'Ativo')}
+                </Text>
+              </View>
+            </View>
             <View style={styles.typeBadge}>
-              <Text style={[styles.typeText, { color: '#2563eb' }]}>
+              <Text style={[styles.typeText, { color: '#ea580c' }]}>
                 {getTypeLabel(event.type)}
               </Text>
             </View>
@@ -226,6 +280,33 @@ export default function EventDetailScreen() {
 
         <View style={styles.buttonContainer}>
           <TouchableOpacity
+            style={[
+              styles.actionButton,
+              { backgroundColor: event.status === 'completed' ? '#ea580c' : '#10b981' },
+            ]}
+            onPress={handleToggleCompleted}
+            disabled={isProcessing}
+            activeOpacity={0.7}
+          >
+            {isProcessing ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <>
+                <Ionicons
+                  name={event.status === 'completed' ? 'refresh-outline' : 'checkmark-circle'}
+                  size={20}
+                  color="#ffffff"
+                />
+                <Text style={[styles.actionButtonText, { color: '#ffffff' }]}>
+                  {event.status === 'completed'
+                    ? (t('events.reactivateEvent') || 'Reativar')
+                    : (t('events.completeEvent') || 'Concluir')}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.iconButton, { backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border }]}
             onPress={handleEdit}
             activeOpacity={0.7}
@@ -287,10 +368,30 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.md,
     ...theme.shadows.sm,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: theme.spacing.xs,
+    gap: theme.spacing.sm,
+  },
   eventTitle: {
     fontSize: theme.typography.fontSize.xl,
     fontWeight: theme.typography.fontWeight.bold,
     marginBottom: theme.spacing.sm,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.borderRadius.sm,
+    flexShrink: 0,
+  },
+  statusText: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
   typeBadge: {
     alignSelf: 'flex-start',
@@ -344,9 +445,24 @@ const styles = StyleSheet.create({
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'center',
     gap: theme.spacing.md,
     marginTop: theme.spacing.xl,
     marginBottom: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.md,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.borderRadius.md,
+    ...theme.shadows.sm,
+  },
+  actionButtonText: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
   iconButton: {
     width: 48,

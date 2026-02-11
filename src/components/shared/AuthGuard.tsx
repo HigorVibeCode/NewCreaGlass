@@ -1,6 +1,6 @@
 import { useRouter, useSegments } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { useRealtime } from '../../hooks/use-realtime';
 import { useThemeColors } from '../../hooks/use-theme-colors';
 import { repos } from '../../services/container';
@@ -12,7 +12,8 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
   const router = useRouter();
   const colors = useThemeColors();
   const [isReady, setIsReady] = useState(false);
-  const isProcessingRef = useRef(false);
+  const isNavigatingRef = useRef(false);
+  const hasNavigatedRef = useRef(false);
 
   // Ativar Realtime subscriptions quando o usuário estiver autenticado
   useRealtime();
@@ -23,18 +24,24 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
 
     const restoreSession = async () => {
       try {
-        // getCurrentSession → supabase.auth.getSession()
-        // This reads from local storage first (instant), only refreshes if token expired
         const existingSession = await repos.authRepo.getCurrentSession();
         if (isMounted && existingSession) {
           console.log('[AuthGuard] Session restored from Supabase (fast path)');
           setSession(existingSession);
+        } else {
+          console.log('[AuthGuard] No existing session found');
         }
       } catch (err) {
         console.warn('[AuthGuard] Could not restore session:', err);
       }
+
+      // Wait a frame to ensure children have time to mount
       if (isMounted) {
-        setIsReady(true);
+        // On native, give extra time for the navigation container to initialize
+        const delay = Platform.OS === 'web' ? 100 : 300;
+        setTimeout(() => {
+          if (isMounted) setIsReady(true);
+        }, delay);
       }
     };
 
@@ -42,9 +49,10 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
     return () => { isMounted = false; };
   }, []); // Only once on mount
 
-  // ---- Navigation guard: redirect based on session state ----
+  // ---- Navigation guard ----
   useEffect(() => {
-    if (!isReady || isProcessingRef.current) return;
+    if (!isReady) return;
+    if (isNavigatingRef.current) return;
     if (!segments || segments.length === 0) return;
 
     const currentRoute = segments[0] || '';
@@ -52,23 +60,34 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
 
     if (!session && !inAuthGroup) {
       // No session & not on login → go to login
-      isProcessingRef.current = true;
-      console.log('[AuthGuard] No session, redirecting to /login');
-      try { router.replace('/login'); } catch {}
-      // Reset processing flag after a short delay to allow navigation to settle
-      setTimeout(() => { isProcessingRef.current = false; }, 300);
+      navigateSafely('/login');
       return;
     }
 
     if (session && inAuthGroup) {
       // Has session but still on login → go to app
-      isProcessingRef.current = true;
-      console.log('[AuthGuard] Session exists, redirecting to /(tabs)/production');
-      try { router.replace('/(tabs)/production'); } catch {}
-      setTimeout(() => { isProcessingRef.current = false; }, 300);
+      navigateSafely('/(tabs)/production');
       return;
     }
   }, [session, isReady, segments]);
+
+  /**
+   * Navigate safely — prevent concurrent navigations and handle errors.
+   */
+  const navigateSafely = (route: string) => {
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
+
+    try {
+      console.log(`[AuthGuard] Navigating to ${route}`);
+      router.replace(route as any);
+    } catch (err) {
+      console.warn('[AuthGuard] Navigation error:', err);
+    }
+
+    // Reset after navigation settles
+    setTimeout(() => { isNavigatingRef.current = false; }, 800);
+  };
 
   // Show loading only during initial session restoration
   if (!isReady) {

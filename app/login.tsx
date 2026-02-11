@@ -1,5 +1,4 @@
 import { Image as ExpoImage } from 'expo-image';
-import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { Button } from '../src/components/shared/Button';
@@ -13,8 +12,7 @@ import { clearSavedLogin, getSavedLogin, saveLogin } from '../src/utils/saved-lo
 
 export default function LoginScreen() {
   const { t } = useI18n();
-  const router = useRouter();
-  const { setSession, setLoading, isLoading } = useAuth();
+  const { session, setSession, setLoading, isLoading } = useAuth();
   const colors = useThemeColors();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -22,20 +20,20 @@ export default function LoginScreen() {
   const [keepLoggedIn, setKeepLoggedIn] = useState(false);
   const [autoLoggingIn, setAutoLoggingIn] = useState(true);
 
-  // On mount: try auto-login with saved credentials (only if AuthGuard didn't restore session)
+  // If AuthGuard already restored a session, just wait for redirect (don't do anything)
   useEffect(() => {
+    if (session) {
+      // AuthGuard will handle navigation — just show loading
+      return;
+    }
+
+    // No session from AuthGuard — try saved credentials only
+    let isMounted = true;
     const tryAutoLogin = async () => {
       try {
-        // 1. Quick check: try Supabase session first (fast, from local storage)
-        const existingSession = await repos.authRepo.getCurrentSession();
-        if (existingSession) {
-          setSession(existingSession);
-          router.replace('/(tabs)/production');
-          return;
-        }
-
-        // 2. No active Supabase session — try saved credentials
         const saved = await getSavedLogin();
+        if (!isMounted) return;
+
         if (saved.username && saved.password) {
           setUsername(saved.username);
           setPassword(saved.password);
@@ -43,25 +41,28 @@ export default function LoginScreen() {
 
           try {
             setLoading(true);
-            const session = await repos.authRepo.login(saved.username, saved.password);
-            setSession(session);
-            router.replace('/(tabs)/production');
+            const loginSession = await repos.authRepo.login(saved.username, saved.password);
+            if (!isMounted) return;
+            setSession(loginSession);
+            // AuthGuard navigation guard will redirect to production
             return;
           } catch (loginErr) {
             console.warn('Auto-login failed:', loginErr);
+            if (!isMounted) return;
             await clearSavedLogin();
             setKeepLoggedIn(false);
           } finally {
-            setLoading(false);
+            if (isMounted) setLoading(false);
           }
         }
       } catch (err) {
         console.warn('Error during auto-login:', err);
       }
-      setAutoLoggingIn(false);
+      if (isMounted) setAutoLoggingIn(false);
     };
     tryAutoLogin();
-  }, []);
+    return () => { isMounted = false; };
+  }, [session]);
 
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) {
@@ -73,7 +74,7 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      const session = await repos.authRepo.login(username.trim(), password);
+      const loginSession = await repos.authRepo.login(username.trim(), password);
       
       // Save or clear credentials based on keepLoggedIn toggle
       if (keepLoggedIn) {
@@ -82,8 +83,8 @@ export default function LoginScreen() {
         await clearSavedLogin();
       }
       
-      setSession(session);
-      router.replace('/(tabs)/production');
+      setSession(loginSession);
+      // AuthGuard navigation guard will redirect to production
     } catch (error: any) {
       console.error('Login error:', error);
       setError(t('auth.invalidCredentials'));

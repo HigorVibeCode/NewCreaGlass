@@ -148,6 +148,7 @@ export class SupabaseEventsRepository implements EventsRepository {
     if (updates.location !== undefined) updateData.location = updates.location;
     if (updates.people !== undefined) updateData.people = updates.people || '';
     if (updates.description !== undefined) updateData.description = updates.description || null;
+    if (updates.status !== undefined) updateData.status = updates.status;
 
     const { data, error } = await supabase
       .from('events')
@@ -261,6 +262,7 @@ export class SupabaseEventsRepository implements EventsRepository {
       people: data.people || '',
       attachments: data.attachments || [],
       description: data.description || '',
+      status: data.status || 'active',
       createdAt: data.created_at,
       createdBy: data.created_by,
     };

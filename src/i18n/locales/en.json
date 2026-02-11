@@ -442,6 +442,12 @@
     "editEvent": "Edit Event",
     "eventUpdated": "Event updated successfully",
     "updateEventError": "Failed to update event",
+    "statusActive": "Active",
+    "statusCompleted": "Completed",
+    "completeEvent": "Complete",
+    "reactivateEvent": "Reactivate",
+    "eventCompleted": "Event marked as completed",
+    "eventReactivated": "Event reactivated",
     "types": {
       "meeting": "Meeting",
       "training": "Training",
@@ -502,6 +508,9 @@
       "internal": "Internal",
       "external": "External"
     },
+    "totalTime": "Total time",
+    "serviceStartedAt": "Started",
+    "serviceCompletedAt": "Completed",
     "status": {
       "planned": "Planned",
       "in_progress": "In Progress",

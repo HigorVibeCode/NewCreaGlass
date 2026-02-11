@@ -167,10 +167,13 @@ export interface BloodPriorityRead {
 }
 
 // Event types (placeholder)
+export type EventStatus = 'active' | 'completed';
+
 export interface Event {
   id: string;
   title: string;
   description: string;
+  status?: EventStatus;
   createdAt: string;
   createdBy: string;
 }
