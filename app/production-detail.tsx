@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
     Alert,
     Dimensions,
+    Image,
     Modal,
     Platform,
     ScrollView,
@@ -23,9 +24,104 @@ import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { repos } from '../src/services/container';
 import { useAuth } from '../src/store/auth-store';
 import { theme } from '../src/theme';
-import { downloadAndOpenAttachment } from '../src/utils/attachments';
+import { downloadAndOpenAttachment, getSignedUrlFromStorage } from '../src/utils/attachments';
 import { confirmDelete } from '../src/utils/confirm-dialog';
 import { GlassType, InventoryItem, PaintType, Production, ProductionStatus, ProductionStatusHistory, StructureType, User } from '../src/types';
+/** Resolve signed URL for a thumbnail — uses same robust logic as downloadAndOpenAttachment */
+function AttachmentThumbnail({ storagePath, filename, index }: { storagePath: string; filename: string; index: number }) {
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const colors = useThemeColors();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const resolve = async () => {
+      try {
+        // Extract a usable storage key from the URL (same approach as downloadAndOpenAttachment)
+        let storageKey = storagePath;
+        if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
+          const match = storagePath.match(/\/([^\/]+\.(jpg|jpeg|png|gif|webp|bmp|tiff|svg))(\?|$)/i);
+          if (match && match[1]) {
+            storageKey = match[1];
+          } else {
+            storageKey = filename;
+          }
+        } else if (!storagePath.includes('/') && !storagePath.includes('.')) {
+          storageKey = filename;
+        }
+
+        const freshUrl = await getSignedUrlFromStorage(storageKey, filename);
+        if (!cancelled && freshUrl && (freshUrl.startsWith('http://') || freshUrl.startsWith('https://'))) {
+          setImageUri(freshUrl);
+        } else if (!cancelled) {
+          setFailed(true);
+        }
+      } catch {
+        if (!cancelled) setFailed(true);
+      }
+    };
+
+    resolve();
+    return () => { cancelled = true; };
+  }, [storagePath, filename]);
+
+  if (failed || !imageUri) {
+    return (
+      <View style={[thumbnailStyles.fallback, { backgroundColor: colors.backgroundSecondary }]}>
+        <Ionicons name="image-outline" size={32} color={colors.textSecondary} />
+        <View style={thumbnailStyles.badge}>
+          <Text style={thumbnailStyles.badgeText}>{index + 1}</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View>
+      <Image
+        source={{ uri: imageUri }}
+        style={thumbnailStyles.image}
+        resizeMode="cover"
+        onError={() => setFailed(true)}
+      />
+      <View style={thumbnailStyles.badge}>
+        <Text style={thumbnailStyles.badgeText}>{index + 1}</Text>
+      </View>
+    </View>
+  );
+}
+
+const thumbnailStyles = StyleSheet.create({
+  image: {
+    width: 100,
+    height: 100,
+    borderRadius: theme.borderRadius.md,
+  },
+  fallback: {
+    width: 100,
+    height: 100,
+    borderRadius: theme.borderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badge: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+});
 
 export default function ProductionDetailScreen() {
   const { t } = useI18n();
@@ -262,6 +358,8 @@ export default function ProductionDetailScreen() {
         return t('production.glassTypes.cuted');
       case 'insulated':
         return t('production.glassTypes.insulated');
+      case 'lavabo':
+        return t('production.glassTypes.lavabo');
       default:
         return glassType;
     }
@@ -479,23 +577,39 @@ export default function ProductionDetailScreen() {
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
               {t('production.attachments')}
             </Text>
-            {production.attachments.map((attachment) => (
-              <TouchableOpacity
-                key={attachment.id}
-                style={[styles.attachmentCard, { backgroundColor: colors.cardBackground }]}
-                onPress={() => handleAttachmentPress(attachment)}
-                activeOpacity={0.7}
-              >
-                <Ionicons 
-                  name={attachment.mimeType.startsWith('image/') ? 'image' : 'document-text'} 
-                  size={20} 
-                  color={colors.textSecondary} 
-                />
-                <Text style={[styles.attachmentName, { color: colors.text }]}>
-                  {attachment.filename}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {/* Image thumbnails grid */}
+            {production.attachments.some((a) => a.mimeType.startsWith('image/')) && (
+              <View style={styles.thumbnailGrid}>
+                {production.attachments
+                  .filter((a) => a.mimeType.startsWith('image/'))
+                  .map((attachment, idx) => (
+                    <TouchableOpacity
+                      key={attachment.id}
+                      style={[styles.thumbnailCard, { backgroundColor: colors.cardBackground }]}
+                      onPress={() => handleAttachmentPress(attachment)}
+                      activeOpacity={0.7}
+                    >
+                      <AttachmentThumbnail storagePath={attachment.storagePath} filename={attachment.filename} index={idx} />
+                    </TouchableOpacity>
+                  ))}
+              </View>
+            )}
+            {/* PDF attachments (unchanged) */}
+            {production.attachments
+              .filter((a) => !a.mimeType.startsWith('image/'))
+              .map((attachment) => (
+                <TouchableOpacity
+                  key={attachment.id}
+                  style={[styles.attachmentCard, { backgroundColor: colors.cardBackground }]}
+                  onPress={() => handleAttachmentPress(attachment)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="document-text" size={20} color={colors.textSecondary} />
+                  <Text style={[styles.attachmentName, { color: colors.text }]}>
+                    {attachment.filename}
+                  </Text>
+                </TouchableOpacity>
+              ))}
           </View>
         )}
 
@@ -772,6 +886,17 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.fontWeight.medium,
     flex: 1,
     textAlign: 'right',
+  },
+  thumbnailGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
+  },
+  thumbnailCard: {
+    borderRadius: theme.borderRadius.md,
+    overflow: 'hidden',
+    ...theme.shadows.sm,
   },
   attachmentCard: {
     flexDirection: 'row',

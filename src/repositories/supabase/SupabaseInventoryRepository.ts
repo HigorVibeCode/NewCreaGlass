@@ -387,25 +387,7 @@ export class SupabaseInventoryRepository implements InventoryRepository {
       // Don't throw - stock was updated successfully, history is secondary
     }
 
-    // Check if stock reached minimum level and create notification
-    if (newValue <= item.lowStockThreshold && previousValue > item.lowStockThreshold) {
-      // Stock just reached or went below minimum threshold
-      try {
-        const { repos } = await import('../../services/container');
-        await repos.notificationsRepo.createNotification({
-          type: 'inventory.lowStock',
-          payloadJson: {
-            itemName: updatedItem.name,
-            itemId: updatedItem.id,
-            stock: newValue,
-            threshold: item.lowStockThreshold,
-          },
-          createdBySystem: true,
-        });
-      } catch (notifError) {
-        console.error('Error creating low stock notification:', notifError);
-      }
-    }
+    // Low stock notification is already handled by updateItem() above — no need to duplicate here
 
     return updatedItem;
   }

@@ -7,6 +7,7 @@ export interface User {
   username: string;
   userType: UserType;
   isActive: boolean;
+  preferredLanguage?: string;
   createdAt: string;
 }
 
@@ -217,7 +218,7 @@ export type ProductionStatus =
   | 'on_oven'
   | 'on_oven';
 export type OrderType = 'standard' | 'urgent' | 'custom';
-export type GlassType = 'tempered' | 'strengthened' | 'float' | 'laminated' | 'textured' | 'sandblasted' | 'cuted' | 'insulated';
+export type GlassType = 'tempered' | 'strengthened' | 'float' | 'laminated' | 'textured' | 'sandblasted' | 'cuted' | 'insulated' | 'lavabo';
 export type StructureType = 'none' | 'linear' | 'abstract' | 'organic' | 'check_project';
 export type PaintType = 'none' | 'solid' | 'gradient' | 'printed' | 'satiniert' | 'check_project';
 

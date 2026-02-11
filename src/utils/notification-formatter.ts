@@ -51,6 +51,12 @@ export function formatNotificationText(notification: Notification, t?: (key: str
       return `${clientName} | ${orderType} | ${orderNumber} - ${translate('production.status.tempered') || 'Entrou na fase de temperamento'}`;
     }
 
+    case 'production.dailySummary': {
+      const totalOrders = payloadJson?.totalOrders ?? 0;
+      const message = translate('notifications.dailySummaryMessage') || `Bom dia, hoje temos ${totalOrders} pedidos no painel de produção.`;
+      return message.replace('{{count}}', String(totalOrders));
+    }
+
     case 'workOrder.created': {
       const scheduledDate = payloadJson?.scheduledDate;
       const scheduledTime = payloadJson?.scheduledTime;

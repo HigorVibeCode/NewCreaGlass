@@ -87,7 +87,9 @@
     "clearAllConfirm": "Tem certeza que deseja limpar todas as notificações?",
     "workOrderCreated": "Nova Ordem de Serviço criada",
     "workOrderUpdated": "Ordem de Serviço Atualizada",
-    "eventCreated": "Novo Evento criado"
+    "eventCreated": "Novo Evento criado",
+    "dailySummaryTitle": "Resumo Diário - Produção",
+    "dailySummaryMessage": "Bom dia, hoje temos {{count}} pedidos no painel de produção."
   },
   "bloodPriority": {
     "title": "Blood Priority",
@@ -382,7 +384,8 @@
       "textured": "Schmelzglas + ESG",
       "sandblasted": "Jateado",
       "cuted": "Cortado",
-      "insulated": "Isolante"
+      "insulated": "Isolante",
+      "lavabo": "Lavabo"
     },
     "structureTypes": {
       "none": "Nenhuma",
@@ -472,6 +475,8 @@
     "internalNotesPlaceholder": "Digite observações internas (não visíveis ao cliente)",
     "plannedMaterials": "Materiais Planejados (Opcional)",
     "plannedMaterialsPlaceholder": "Digite os materiais planejados (até 1000 caracteres)",
+    "extraInfo": "Info Extra (Opcional)",
+    "extraInfoPlaceholder": "Informações adicionais (até 1000 caracteres)",
     "team": "Equipe (Opcional)",
     "teamPlaceholder": "Digite os IDs dos membros da equipe separados por vírgula",
     "fillRequiredFields": "Por favor, preencha todos os campos obrigatórios",

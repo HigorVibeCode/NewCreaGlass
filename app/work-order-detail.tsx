@@ -853,13 +853,15 @@ export default function WorkOrderDetailScreen() {
 
           {workOrder.plannedMaterials && workOrder.plannedMaterials.length > 0 && (
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Planned Materials</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                {t('workOrders.extraInfo') || 'Extra Info'}
+              </Text>
               <View style={[styles.infoCard, { backgroundColor: colors.cardBackground }]}>
                 {workOrder.plannedMaterials.map((material) => (
                   <View key={material.id} style={styles.materialRow}>
-                    <Ionicons name="cube-outline" size={20} color={colors.textSecondary} />
+                    <Ionicons name="information-circle-outline" size={20} color={colors.textSecondary} />
                     <Text style={[styles.materialText, { color: colors.text }]}>
-                      {material.name} - {material.quantity} {material.unit}
+                      {material.name}
                     </Text>
                   </View>
                 ))}
@@ -1239,16 +1241,7 @@ export default function WorkOrderDetailScreen() {
             </View>
           )}
 
-          {workOrder.internalNotes && (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Internal Notes</Text>
-              <View style={[styles.infoCard, { backgroundColor: colors.cardBackground }]}>
-                <Text style={[styles.descriptionText, { color: colors.text }]}>
-                  {workOrder.internalNotes}
-                </Text>
-              </View>
-            </View>
-          )}
+          {/* Internal Notes removed */}
         </View>
 
         <View style={styles.buttonContainer}>
@@ -1578,8 +1571,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   photo: {
-    width: '100%',
-    height: 200,
+    width: 64,
+    height: 64,
+    borderRadius: 6,
     backgroundColor: '#f3f4f6',
   },
   timerCard: {

@@ -53,6 +53,7 @@ export interface UsersRepository {
   activateUser(userId: string): Promise<void>;
   deactivateUser(userId: string): Promise<void>;
   changeUserPassword(userId: string, newPassword: string): Promise<void>;
+  updatePreferredLanguage(userId: string, language: string): Promise<void>;
 }
 
 // Permissions Repository

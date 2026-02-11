@@ -25,7 +25,7 @@ import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { PermissionGuard } from '../src/components/shared/PermissionGuard';
 import { repos } from '../src/services/container';
 import { supabase } from '../src/services/supabase';
-import { WorkOrder, WorkOrderServiceType } from '../src/types';
+import { User, WorkOrder, WorkOrderServiceType } from '../src/types';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 
@@ -53,13 +53,26 @@ export default function WorkOrderCreateScreen() {
   const [serviceType, setServiceType] = useState<WorkOrderServiceType | ''>('');
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
-  const [internalNotes, setInternalNotes] = useState('');
   const [plannedMaterials, setPlannedMaterials] = useState('');
-  const [team, setTeam] = useState('');
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [attachments, setAttachments] = useState<WOAttachment[]>([]);
+
+  // Load active users for team selection
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const users = await repos.usersRepo.getAllUsers();
+        setAllUsers(users);
+      } catch (error) {
+        console.error('Error loading users:', error);
+      }
+    };
+    loadUsers();
+  }, []);
 
   // Load work order data if in edit mode
   useEffect(() => {
@@ -81,17 +94,15 @@ export default function WorkOrderCreateScreen() {
         setServiceType(workOrderData.serviceType || '');
         setScheduledDate(workOrderData.scheduledDate || '');
         setScheduledTime(workOrderData.scheduledTime || '');
-        setInternalNotes(workOrderData.internalNotes || '');
         // Convert plannedMaterials array to string
         const materialsText = workOrderData.plannedMaterials && workOrderData.plannedMaterials.length > 0
           ? workOrderData.plannedMaterials.map((m: any) => m.name || '').join(', ')
           : '';
         setPlannedMaterials(materialsText);
-        // Convert teamMembers array to string (comma-separated)
-        const teamText = workOrderData.teamMembers && workOrderData.teamMembers.length > 0
-          ? workOrderData.teamMembers.join(', ')
-          : '';
-        setTeam(teamText);
+        // Load team members
+        if (workOrderData.teamMembers && workOrderData.teamMembers.length > 0) {
+          setSelectedTeamMembers(workOrderData.teamMembers);
+        }
       } else {
         if (Platform.OS === 'web') {
           window.alert('Work order not found');
@@ -302,18 +313,6 @@ export default function WorkOrderCreateScreen() {
           }]
         : [];
 
-      // Helper function to validate UUID format
-      const isValidUUID = (str: string): boolean => {
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-        return uuidRegex.test(str);
-      };
-
-      // Convert team text to array of UUIDs only if valid UUIDs are provided
-      // If text contains non-UUID values, store empty array (text is just for reference)
-      const teamMembersArray: string[] = team.trim()
-        ? team.split(',').map(id => id.trim()).filter(id => id.length > 0 && isValidUUID(id))
-        : [];
-
       if (isEditMode && workOrderId) {
         // Update existing work order
         const updates: Partial<WorkOrder> = {
@@ -324,8 +323,7 @@ export default function WorkOrderCreateScreen() {
           scheduledDate,
           scheduledTime,
           plannedMaterials: plannedMaterialsArray,
-          internalNotes: internalNotes.trim() || undefined,
-          teamMembers: teamMembersArray,
+          teamMembers: selectedTeamMembers,
         };
 
         await repos.workOrdersRepo.updateWorkOrder(workOrderId, updates);
@@ -364,8 +362,7 @@ export default function WorkOrderCreateScreen() {
           status: 'planned',
           plannedChecklist: [],
           plannedMaterials: plannedMaterialsArray,
-          internalNotes: internalNotes.trim() || undefined,
-          teamMembers: teamMembersArray,
+          teamMembers: selectedTeamMembers,
           responsible: user.id,
           isLocked: false,
           timeStatuses: [],
@@ -513,23 +510,69 @@ export default function WorkOrderCreateScreen() {
             </View>
           </View>
 
-          {/* 3. Team & Materials */}
-          <Input
-            label={t('workOrders.team') || 'Equipe (Opcional)'}
-            value={team}
-            onChangeText={setTeam}
-            placeholder={t('workOrders.teamPlaceholder') || 'Digite os IDs dos membros da equipe separados por vírgula'}
-          />
+          {/* 3. Team Selection */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              {t('workOrders.team') || 'Equipe (Opcional)'}
+            </Text>
+            {allUsers.length === 0 ? (
+              <Text style={{ color: colors.textSecondary, fontSize: theme.typography.fontSize.sm }}>
+                {t('common.loading') || 'Carregando...'}
+              </Text>
+            ) : (
+              <View style={styles.checkboxGrid}>
+                {allUsers.map((u) => {
+                  const isSelected = selectedTeamMembers.includes(u.id);
+                  return (
+                    <TouchableOpacity
+                      key={u.id}
+                      style={[
+                        styles.checkboxChip,
+                        {
+                          backgroundColor: isSelected ? colors.primary + '15' : colors.backgroundSecondary,
+                          borderColor: isSelected ? colors.primary : colors.border,
+                        },
+                      ]}
+                      onPress={() => {
+                        setSelectedTeamMembers((prev) =>
+                          isSelected
+                            ? prev.filter((id) => id !== u.id)
+                            : [...prev, u.id]
+                        );
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={isSelected ? 'checkbox' : 'square-outline'}
+                        size={16}
+                        color={isSelected ? colors.primary : colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.checkboxLabel,
+                          { color: isSelected ? colors.primary : colors.text },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {u.username}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </View>
 
+          {/* 4. Extra Info */}
           <Input
-            label={t('workOrders.plannedMaterials') || 'Materiais Planejados (Opcional)'}
+            label={t('workOrders.extraInfo') || 'Info Extra (Opcional)'}
             value={plannedMaterials}
             onChangeText={(text) => {
               if (text.length <= 1000) {
                 setPlannedMaterials(text);
               }
             }}
-            placeholder={t('workOrders.plannedMaterialsPlaceholder') || 'Digite os materiais planejados (até 1000 caracteres)'}
+            placeholder={t('workOrders.extraInfoPlaceholder') || 'Informações adicionais (até 1000 caracteres)'}
             multiline
             numberOfLines={4}
             maxLength={1000}
@@ -583,16 +626,6 @@ export default function WorkOrderCreateScreen() {
               </View>
             ))}
           </View>
-
-          {/* 5. Notes (optional, last) */}
-          <Input
-            label={t('workOrders.internalNotes') || 'Observações Internas (Opcional)'}
-            value={internalNotes}
-            onChangeText={setInternalNotes}
-            placeholder={t('workOrders.internalNotesPlaceholder') || 'Digite observações internas (não visíveis ao cliente)'}
-            multiline
-            numberOfLines={3}
-          />
 
           <View style={styles.buttonContainer}>
             <Button
@@ -704,6 +737,26 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  checkboxGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+  },
+  checkboxChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.sm,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    width: '31%',
+    height: 40,
+  },
+  checkboxLabel: {
+    fontSize: theme.typography.fontSize.sm,
+    flexShrink: 1,
   },
   buttonContainer: {
     flexDirection: 'row',

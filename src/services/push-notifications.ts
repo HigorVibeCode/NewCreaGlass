@@ -279,6 +279,10 @@ export class PushNotificationService {
       return `/production-detail?productionId=${payloadJson.productionId}`;
     }
     
+    if (type === 'production.dailySummary') {
+      return '/(tabs)/production';
+    }
+    
     if (type === 'workOrder.created' && payloadJson.workOrderId) {
       return `/work-order-detail?workOrderId=${payloadJson.workOrderId}`;
     }
@@ -335,6 +339,15 @@ export class PushNotificationService {
           return {
             title: 'Pedido Temperado',
             body: `${clientName} | ${orderType} | ${orderNumber} - Entrou na fase de temperamento`,
+          };
+        }
+      
+      case 'production.dailySummary':
+        {
+          const totalOrders = payloadJson.totalOrders ?? 0;
+          return {
+            title: 'Resumo Diário - Produção',
+            body: `Bom dia, hoje temos ${totalOrders} pedidos no painel de produção.`,
           };
         }
       

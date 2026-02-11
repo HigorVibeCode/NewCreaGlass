@@ -90,7 +90,9 @@
     "clearAllConfirm": "Are you sure you want to clear all notifications?",
     "workOrderCreated": "New Work Order created",
     "workOrderUpdated": "Work Order Updated",
-    "eventCreated": "New Event created"
+    "eventCreated": "New Event created",
+    "dailySummaryTitle": "Daily Summary - Production",
+    "dailySummaryMessage": "Good morning, today we have {{count}} orders on the production panel."
   },
   "bloodPriority": {
     "title": "Blood Priority",
@@ -385,7 +387,8 @@
       "textured": "Schmelzglas + ESG",
       "sandblasted": "Sandblasted",
       "cuted": "Cuted",
-      "insulated": "Insulated"
+      "insulated": "Insulated",
+      "lavabo": "Lavabo"
     },
     "structureTypes": {
       "none": "None",
@@ -475,6 +478,8 @@
     "internalNotesPlaceholder": "Enter internal notes (not visible to client)",
     "plannedMaterials": "Planned Materials (Optional)",
     "plannedMaterialsPlaceholder": "Enter planned materials (up to 1000 characters)",
+    "extraInfo": "Extra Info (Optional)",
+    "extraInfoPlaceholder": "Additional information (up to 1000 characters)",
     "team": "Team (Optional)",
     "teamPlaceholder": "Enter team member IDs separated by comma",
     "fillRequiredFields": "Please fill all required fields",

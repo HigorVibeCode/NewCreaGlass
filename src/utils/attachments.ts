@@ -55,7 +55,7 @@ function sanitizeFilename(filename: string): string {
 /**
  * Obtém a URL assinada do Supabase Storage para um arquivo
  */
-async function getSignedUrlFromStorage(storagePath: string, fallbackFilename?: string): Promise<string> {
+export async function getSignedUrlFromStorage(storagePath: string, fallbackFilename?: string): Promise<string> {
   const BUCKET_NAME = 'documents';
   
   // Se já for uma URL, retornar diretamente

@@ -198,9 +198,7 @@ export default function ProductionCreateScreen() {
     { label: t('production.glassTypes.strengthened'), value: 'strengthened' },
     { label: t('production.glassTypes.textured'), value: 'textured' },
     { label: t('production.glassTypes.laminated'), value: 'laminated' },
-    { label: t('production.glassTypes.sandblasted'), value: 'sandblasted' },
-    { label: t('production.glassTypes.cuted'), value: 'cuted' },
-    { label: t('production.glassTypes.insulated'), value: 'insulated' },
+    { label: t('production.glassTypes.lavabo'), value: 'lavabo' },
   ];
 
   const structureTypeOptions: DropdownOption[] = [
