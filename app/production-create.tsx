@@ -194,9 +194,16 @@ export default function ProductionCreateScreen() {
 
   const glassTypeOptions: DropdownOption[] = [
     { label: t('common.select'), value: '' },
+    { label: t('production.glassTypes.client_service'), value: 'client_service' },
+    { label: t('production.glassTypes.polish_only'), value: 'polish_only' },
+    { label: t('production.glassTypes.cutting_only'), value: 'cutting_only' },
     { label: t('production.glassTypes.tempered'), value: 'tempered' },
     { label: t('production.glassTypes.strengthened'), value: 'strengthened' },
+    { label: t('production.glassTypes.schmelzglas_only'), value: 'schmelzglas_only' },
     { label: t('production.glassTypes.textured'), value: 'textured' },
+    { label: t('production.glassTypes.schmelzglas_tvg'), value: 'schmelzglas_tvg' },
+    { label: t('production.glassTypes.float_esg'), value: 'float_esg' },
+    { label: t('production.glassTypes.float_tvg'), value: 'float_tvg' },
     { label: t('production.glassTypes.laminated'), value: 'laminated' },
     { label: t('production.glassTypes.lavabo'), value: 'lavabo' },
   ];

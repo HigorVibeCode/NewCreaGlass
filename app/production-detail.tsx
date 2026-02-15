@@ -360,6 +360,20 @@ export default function ProductionDetailScreen() {
         return t('production.glassTypes.insulated');
       case 'lavabo':
         return t('production.glassTypes.lavabo');
+      case 'client_service':
+        return t('production.glassTypes.client_service');
+      case 'polish_only':
+        return t('production.glassTypes.polish_only');
+      case 'cutting_only':
+        return t('production.glassTypes.cutting_only');
+      case 'schmelzglas_only':
+        return t('production.glassTypes.schmelzglas_only');
+      case 'float_esg':
+        return t('production.glassTypes.float_esg');
+      case 'schmelzglas_tvg':
+        return t('production.glassTypes.schmelzglas_tvg');
+      case 'float_tvg':
+        return t('production.glassTypes.float_tvg');
       default:
         return glassType;
     }

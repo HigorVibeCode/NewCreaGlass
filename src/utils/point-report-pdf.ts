@@ -59,7 +59,8 @@ function minutesToHoursLabel(minutes: number): string {
 
 /**
  * Agrupa registros por usuário e por dia; usa horário ajustado quando existir.
- * Para cada dia forma pares Entrada/Saída e calcula total do dia.
+ * Usa entry_type (clock_in / clock_out) quando disponível; caso contrário faz
+ * fallback para a lógica anterior baseada em posição par/ímpar.
  */
 export function buildDayRows(entries: TimeEntry[]): DayRow[] {
   if (!Array.isArray(entries) || entries.length === 0) return [];
@@ -84,7 +85,6 @@ export function buildDayRows(entries: TimeEntry[]): DayRow[] {
     const dateKey = toDateKey(effectiveFirst);
     const dateLabel = formatDateLabel(effectiveFirst);
     const local = first.locationAddress?.trim() || '—';
-    const entrada = formatTime(effectiveFirst);
     const anyAdjusted = dayEntries.some((e) => e.isAdjusted);
     const justificativas = dayEntries
       .filter((e) => e.isAdjusted && e.adjustDescription?.trim())
@@ -92,49 +92,100 @@ export function buildDayRows(entries: TimeEntry[]): DayRow[] {
       .filter((s, i, arr) => arr.indexOf(s) === i);
     const adjustDescription = justificativas.length ? justificativas.join('; ') : undefined;
 
-    if (dayEntries.length % 2 !== 0) {
+    // Tentar usar entry_type para determinar entrada/saída
+    const hasEntryTypes = dayEntries.some((e) => e.entryType === 'clock_in' || e.entryType === 'clock_out');
+
+    if (hasEntryTypes) {
+      const clockIn = dayEntries.find((e) => e.entryType === 'clock_in');
+      const clockOut = dayEntries.find((e) => e.entryType === 'clock_out');
+      const entradaTime = clockIn ? formatTime(getEffectiveRecordedAt(clockIn)) : INCOMPLETO;
+      const saidaTime = clockOut ? formatTime(getEffectiveRecordedAt(clockOut)) : INCOMPLETO;
+      const incomplete = !clockIn || !clockOut;
+
+      // Calcular tempo de pausa do dia
+      let pauseMinutes = 0;
+      const coffeeStart = dayEntries.find((e) => e.entryType === 'coffee_start');
+      const coffeeEnd = dayEntries.find((e) => e.entryType === 'coffee_end');
+      const lunchStart = dayEntries.find((e) => e.entryType === 'lunch_start');
+      const lunchEnd = dayEntries.find((e) => e.entryType === 'lunch_end');
+      if (coffeeStart && coffeeEnd) {
+        const cs = new Date(getEffectiveRecordedAt(coffeeStart)).getTime();
+        const ce = new Date(getEffectiveRecordedAt(coffeeEnd)).getTime();
+        if (ce > cs) pauseMinutes += (ce - cs) / 60000;
+      }
+      if (lunchStart && lunchEnd) {
+        const ls = new Date(getEffectiveRecordedAt(lunchStart)).getTime();
+        const le = new Date(getEffectiveRecordedAt(lunchEnd)).getTime();
+        if (le > ls) pauseMinutes += (le - ls) / 60000;
+      }
+
+      let totalMinutes = 0;
+      if (clockIn && clockOut) {
+        const ent = new Date(getEffectiveRecordedAt(clockIn)).getTime();
+        const sai = new Date(getEffectiveRecordedAt(clockOut)).getTime();
+        if (Number.isFinite(ent) && Number.isFinite(sai) && sai > ent) {
+          totalMinutes = Math.max(0, (sai - ent) / 60000 - pauseMinutes);
+        }
+      }
+      rows.push({
+        date: dateKey,
+        dateLabel,
+        entrada: entradaTime,
+        saida: saidaTime,
+        totalDay: incomplete ? INCOMPLETO : minutesToHoursLabel(totalMinutes),
+        local,
+        incomplete,
+        totalMinutes: incomplete ? 0 : totalMinutes,
+        adjusted: anyAdjusted,
+        adjustDescription,
+      });
+    } else {
+      // Fallback: lógica legada baseada em posição par/ímpar
+      const entrada = formatTime(effectiveFirst);
+      if (dayEntries.length % 2 !== 0) {
+        rows.push({
+          date: dateKey,
+          dateLabel,
+          entrada,
+          saida: INCOMPLETO,
+          totalDay: INCOMPLETO,
+          local,
+          incomplete: true,
+          totalMinutes: 0,
+          adjusted: anyAdjusted,
+          adjustDescription,
+        });
+        continue;
+      }
+
+      let totalMinutes = 0;
+      let invalid = false;
+      for (let i = 0; i < dayEntries.length; i += 2) {
+        const ent = new Date(getEffectiveRecordedAt(dayEntries[i])).getTime();
+        const sai = new Date(getEffectiveRecordedAt(dayEntries[i + 1])).getTime();
+        if (!Number.isFinite(ent) || !Number.isFinite(sai) || sai <= ent) {
+          invalid = true;
+          break;
+        }
+        totalMinutes += (sai - ent) / 60000;
+      }
+      const safeTotal = Number.isFinite(totalMinutes) ? totalMinutes : 0;
+
+      const lastEffective = getEffectiveRecordedAt(dayEntries[dayEntries.length - 1]);
+      const lastTime = formatTime(lastEffective);
       rows.push({
         date: dateKey,
         dateLabel,
         entrada,
-        saida: INCOMPLETO,
-        totalDay: INCOMPLETO,
+        saida: invalid ? INCOMPLETO : lastTime,
+        totalDay: invalid ? INCOMPLETO : minutesToHoursLabel(safeTotal),
         local,
-        incomplete: true,
-        totalMinutes: 0,
+        incomplete: invalid,
+        totalMinutes: invalid ? 0 : safeTotal,
         adjusted: anyAdjusted,
         adjustDescription,
       });
-      continue;
     }
-
-    let totalMinutes = 0;
-    let invalid = false;
-    for (let i = 0; i < dayEntries.length; i += 2) {
-      const ent = new Date(getEffectiveRecordedAt(dayEntries[i])).getTime();
-      const sai = new Date(getEffectiveRecordedAt(dayEntries[i + 1])).getTime();
-      if (!Number.isFinite(ent) || !Number.isFinite(sai) || sai <= ent) {
-        invalid = true;
-        break;
-      }
-      totalMinutes += (sai - ent) / 60000;
-    }
-    const safeTotal = Number.isFinite(totalMinutes) ? totalMinutes : 0;
-
-    const lastEffective = getEffectiveRecordedAt(dayEntries[dayEntries.length - 1]);
-    const lastTime = formatTime(lastEffective);
-    rows.push({
-      date: dateKey,
-      dateLabel,
-      entrada,
-      saida: invalid ? INCOMPLETO : lastTime,
-      totalDay: invalid ? INCOMPLETO : minutesToHoursLabel(safeTotal),
-      local,
-      incomplete: invalid,
-      totalMinutes: invalid ? 0 : safeTotal,
-      adjusted: anyAdjusted,
-      adjustDescription,
-    });
   }
 
   rows.sort((a, b) => a.date.localeCompare(b.date));

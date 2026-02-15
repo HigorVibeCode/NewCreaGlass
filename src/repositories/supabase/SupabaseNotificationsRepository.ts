@@ -203,11 +203,9 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
       console.warn('Failed to trigger notification alert:', err);
     });
 
-    // Dispatch push notifications via Edge Function (server-side, avoids CORS)
-    this.dispatchPushViaEdgeFunction(createdNotification).catch(err => {
-      console.error('[SupabaseNotificationsRepository] Error dispatching push via Edge Function:', err);
-      // Não propagar erro - push é secundário à criação da notificação
-    });
+    // Push notification é disparada automaticamente pelo Database Webhook
+    // (INSERT na tabela notifications → Edge Function send-push-on-notification).
+    // Não chamar dispatchPushViaEdgeFunction aqui para evitar notificação duplicada.
 
     return createdNotification;
   }

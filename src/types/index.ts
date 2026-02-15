@@ -218,7 +218,7 @@ export type ProductionStatus =
   | 'on_oven'
   | 'on_oven';
 export type OrderType = 'standard' | 'urgent' | 'custom';
-export type GlassType = 'tempered' | 'strengthened' | 'float' | 'laminated' | 'textured' | 'sandblasted' | 'cuted' | 'insulated' | 'lavabo';
+export type GlassType = 'tempered' | 'strengthened' | 'float' | 'laminated' | 'textured' | 'sandblasted' | 'cuted' | 'insulated' | 'lavabo' | 'client_service' | 'polish_only' | 'cutting_only' | 'schmelzglas_only' | 'float_esg' | 'schmelzglas_tvg' | 'float_tvg';
 export type StructureType = 'none' | 'linear' | 'abstract' | 'organic' | 'check_project';
 export type PaintType = 'none' | 'solid' | 'gradient' | 'printed' | 'satiniert' | 'check_project';
 
@@ -426,12 +426,14 @@ export interface EquipmentDocument {
 
 // Time entries (Controle de Ponto)
 export type GpsSource = 'gps' | 'network';
+export type EntryType = 'clock_in' | 'clock_out' | 'coffee_start' | 'coffee_end' | 'lunch_start' | 'lunch_end';
 
 export interface TimeEntry {
   id: string;
   userId: string;
   userName: string;
   recordedAt: string;
+  entryType?: EntryType | null;
   locationAddress: string | null;
   gpsAccuracy: number | null;
   gpsSource: GpsSource | null;

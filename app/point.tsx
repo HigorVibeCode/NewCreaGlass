@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { formatDateTime as formatDateTimeUtil } from '../src/utils/date-format';
+import { formatDate as formatDateUtil, formatTime as formatTimeUtil } from '../src/utils/date-format';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useI18n } from '../src/hooks/use-i18n';
@@ -31,7 +31,95 @@ import { repos } from '../src/services/container';
 import { tryBiometricAuth } from '../src/utils/point-auth';
 import { getCurrentLocationForEntry } from '../src/utils/point-location';
 import { theme } from '../src/theme';
-import { TimeEntry } from '../src/types';
+import { TimeEntry, EntryType } from '../src/types';
+
+// Lazy import expo-notifications
+let Notifications: typeof import('expo-notifications') | null = null;
+try { Notifications = require('expo-notifications'); } catch { /* noop */ }
+
+/* ─── Constantes de pausa ─── */
+const COFFEE_DURATION_MS = 15 * 60 * 1000; // 15 min
+const LUNCH_DURATION_MS = 45 * 60 * 1000;  // 45 min
+const WARN_BEFORE_MS = 3 * 60 * 1000;      // 3 min antes
+
+/* ─── Tipos auxiliares ─── */
+interface DayGroup {
+  dateKey: string;            // YYYY-MM-DD
+  dateLabel: string;          // "11 Feb 2026"
+  weekday: string;            // "Tue"
+  clockIn: TimeEntry | null;
+  clockOut: TimeEntry | null;
+  coffeeStart: TimeEntry | null;
+  coffeeEnd: TimeEntry | null;
+  lunchStart: TimeEntry | null;
+  lunchEnd: TimeEntry | null;
+  isToday: boolean;
+  isAutomatic: boolean;       // qualquer entry com locationAddress === 'Automático'
+}
+
+const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function toDateKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function isWeekend(dateKey: string): boolean {
+  const d = new Date(dateKey + 'T12:00:00');
+  const dow = d.getDay();
+  return dow === 0 || dow === 6;
+}
+
+function formatHourMin(totalMs: number): string {
+  if (!Number.isFinite(totalMs) || totalMs < 0) return '00:00';
+  const totalMin = Math.floor(totalMs / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+/* ─── Timer hook (subtrai pausas completas + pausa ativa em andamento) ─── */
+function useLiveTimer(
+  startIso: string | null,
+  completedPauseMs: number,
+  activePauseStartIso: string | null,
+): string {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!startIso) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [startIso]);
+  if (!startIso) return '00:00:00';
+  const elapsed = Math.max(0, now - new Date(startIso).getTime());
+  let totalPause = completedPauseMs;
+  // Incluir tempo da pausa ativa em andamento
+  if (activePauseStartIso) {
+    totalPause += Math.max(0, now - new Date(activePauseStartIso).getTime());
+  }
+  const effective = Math.max(0, elapsed - totalPause);
+  const s = Math.floor(effective / 1000) % 60;
+  const m = Math.floor(effective / 60000) % 60;
+  const h = Math.floor(effective / 3600000);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+/* ─── Countdown hook para pausas ─── */
+function usePauseCountdown(startIso: string | null, durationMs: number): { remaining: string; finished: boolean } {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!startIso) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [startIso]);
+  if (!startIso) return { remaining: '00:00', finished: true };
+  const elapsed = now - new Date(startIso).getTime();
+  const left = Math.max(0, durationMs - elapsed);
+  const finished = left <= 0;
+  const m = Math.floor(left / 60000);
+  const s = Math.floor((left % 60000) / 1000);
+  return { remaining: `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`, finished };
+}
 
 export default function PointScreen() {
   const { t } = useI18n();
@@ -47,6 +135,7 @@ export default function PointScreen() {
 
   const { data: entries = [], isLoading } = useMyTimeEntriesQuery(user?.id);
   const [registering, setRegistering] = useState(false);
+  const [pendingEntryType, setPendingEntryType] = useState<EntryType>('clock_in');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [password, setPassword] = useState('');
   const [showAdjustModal, setShowAdjustModal] = useState(false);
@@ -55,22 +144,166 @@ export default function PointScreen() {
   const [adjustDescription, setAdjustDescription] = useState('');
   const [savingAdjust, setSavingAdjust] = useState(false);
   const [nfcMode, setNfcMode] = useState(false);
+  const [adjustTarget, setAdjustTarget] = useState<'clock_in' | 'clock_out'>('clock_in');
+  // Estado local para ativar o timer do botão imediatamente (sem esperar refetch)
+  const [localCoffeePauseStart, setLocalCoffeePauseStart] = useState<string | null>(null);
+  const [localLunchPauseStart, setLocalLunchPauseStart] = useState<string | null>(null);
+
+  /* ─── Agrupar entries por dia ─── */
+  const todayKey = new Date().toISOString().slice(0, 10);
+
+  const dayGroups: DayGroup[] = useMemo(() => {
+    const map = new Map<string, {
+      clockIn: TimeEntry | null; clockOut: TimeEntry | null;
+      coffeeStart: TimeEntry | null; coffeeEnd: TimeEntry | null;
+      lunchStart: TimeEntry | null; lunchEnd: TimeEntry | null;
+    }>();
+    for (const e of entries) {
+      const eff = getEffectiveRecordedAt(e);
+      if (!eff) continue;
+      const dk = toDateKey(eff);
+      if (!map.has(dk)) map.set(dk, { clockIn: null, clockOut: null, coffeeStart: null, coffeeEnd: null, lunchStart: null, lunchEnd: null });
+      const group = map.get(dk)!;
+      if (e.entryType === 'clock_in') group.clockIn = e;
+      else if (e.entryType === 'clock_out') group.clockOut = e;
+      else if (e.entryType === 'coffee_start') group.coffeeStart = e;
+      else if (e.entryType === 'coffee_end') group.coffeeEnd = e;
+      else if (e.entryType === 'lunch_start') group.lunchStart = e;
+      else if (e.entryType === 'lunch_end') group.lunchEnd = e;
+      else {
+        // Fallback legado: sem entry_type
+        if (!group.clockIn) group.clockIn = e;
+        else if (!group.clockOut) group.clockOut = e;
+      }
+    }
+    const result: DayGroup[] = [];
+    for (const [dk, g] of map) {
+      const hasManualEntry = (g.clockIn && g.clockIn.locationAddress !== 'Automático') ||
+                             (g.clockOut && g.clockOut.locationAddress !== 'Automático');
+      if (isWeekend(dk) && !hasManualEntry) continue;
+
+      const refEntry = g.clockIn || g.clockOut;
+      const refIso = refEntry ? getEffectiveRecordedAt(refEntry) : dk;
+      const d = new Date(refIso || dk);
+      result.push({
+        dateKey: dk,
+        dateLabel: formatDateUtil(refIso || dk),
+        weekday: WEEKDAY_SHORT[d.getDay()] || '',
+        clockIn: g.clockIn,
+        clockOut: g.clockOut,
+        coffeeStart: g.coffeeStart,
+        coffeeEnd: g.coffeeEnd,
+        lunchStart: g.lunchStart,
+        lunchEnd: g.lunchEnd,
+        isToday: dk === todayKey,
+        isAutomatic:
+          (g.clockIn?.locationAddress === 'Automático') ||
+          (g.clockOut?.locationAddress === 'Automático') || false,
+      });
+    }
+    result.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+    return result;
+  }, [entries, todayKey]);
+
+  const todayGroup = dayGroups.find((g) => g.isToday) || null;
+  const hasTodayClockIn = todayGroup?.clockIn != null;
+  const hasTodayClockOut = todayGroup?.clockOut != null;
+
+  // Pausas de hoje (estado do banco OU estado local imediato)
+  const dbCoffeeActive = !!(todayGroup?.coffeeStart && !todayGroup?.coffeeEnd);
+  const dbLunchActive = !!(todayGroup?.lunchStart && !todayGroup?.lunchEnd);
+  const coffeeActive = dbCoffeeActive || !!localCoffeePauseStart;
+  const lunchActive = dbLunchActive || !!localLunchPauseStart;
+  const anyPauseActive = coffeeActive || lunchActive;
+  const hasCoffeeToday = todayGroup?.coffeeStart != null || !!localCoffeePauseStart;
+  const hasLunchToday = todayGroup?.lunchStart != null || !!localLunchPauseStart;
+
+  // Sincronizar: quando o banco confirmar a pausa, limpar estado local
+  useEffect(() => {
+    if (todayGroup?.coffeeStart && localCoffeePauseStart) setLocalCoffeePauseStart(null);
+  }, [todayGroup?.coffeeStart, localCoffeePauseStart]);
+  useEffect(() => {
+    if (todayGroup?.lunchStart && localLunchPauseStart) setLocalLunchPauseStart(null);
+  }, [todayGroup?.lunchStart, localLunchPauseStart]);
+  // Limpar se a pausa encerrou
+  useEffect(() => {
+    if (todayGroup?.coffeeEnd) setLocalCoffeePauseStart(null);
+  }, [todayGroup?.coffeeEnd]);
+  useEffect(() => {
+    if (todayGroup?.lunchEnd) setLocalLunchPauseStart(null);
+  }, [todayGroup?.lunchEnd]);
+
+  // Calcular total de ms em pausa completa hoje (para subtrair do timer)
+  const todayPauseMs = useMemo(() => {
+    if (!todayGroup) return 0;
+    let total = 0;
+    if (todayGroup.coffeeStart && todayGroup.coffeeEnd) {
+      const s = new Date(getEffectiveRecordedAt(todayGroup.coffeeStart)).getTime();
+      const e = new Date(getEffectiveRecordedAt(todayGroup.coffeeEnd)).getTime();
+      if (e > s) total += (e - s);
+    }
+    if (todayGroup.lunchStart && todayGroup.lunchEnd) {
+      const s = new Date(getEffectiveRecordedAt(todayGroup.lunchStart)).getTime();
+      const e = new Date(getEffectiveRecordedAt(todayGroup.lunchEnd)).getTime();
+      if (e > s) total += (e - s);
+    }
+    return total;
+  }, [todayGroup]);
+
+  // Countdowns das pausas ativas (usa dado do banco se disponível, senão o estado local)
+  const coffeeStartIso = coffeeActive
+    ? (todayGroup?.coffeeStart ? getEffectiveRecordedAt(todayGroup.coffeeStart) : localCoffeePauseStart)
+    : null;
+  const lunchStartIso = lunchActive
+    ? (todayGroup?.lunchStart ? getEffectiveRecordedAt(todayGroup.lunchStart) : localLunchPauseStart)
+    : null;
+
+  // ISO de início da pausa ativa (para o timer subtrair em tempo real)
+  const activePauseStartIso = coffeeStartIso || lunchStartIso;
+
+  // Timer ao vivo
+  const liveTimerStartIso =
+    todayGroup?.clockIn && !todayGroup?.clockOut
+      ? getEffectiveRecordedAt(todayGroup.clockIn)
+      : null;
+  const liveTimerLabel = useLiveTimer(liveTimerStartIso, todayPauseMs, activePauseStartIso);
+  const coffeeCountdown = usePauseCountdown(coffeeStartIso, COFFEE_DURATION_MS);
+  const lunchCountdown = usePauseCountdown(lunchStartIso, LUNCH_DURATION_MS);
+
+  // Auto-encerrar pausa quando o tempo acabar
+  const coffeeAutoEndRef = useRef(false);
+  const lunchAutoEndRef = useRef(false);
+
+  useEffect(() => {
+    if (coffeeCountdown.finished && coffeeActive && !coffeeAutoEndRef.current) {
+      coffeeAutoEndRef.current = true;
+      setLocalCoffeePauseStart(null);
+      performRegister('coffee_end');
+    }
+    if (!coffeeActive) coffeeAutoEndRef.current = false;
+  }, [coffeeCountdown.finished, coffeeActive]);
+
+  useEffect(() => {
+    if (lunchCountdown.finished && lunchActive && !lunchAutoEndRef.current) {
+      lunchAutoEndRef.current = true;
+      setLocalLunchPauseStart(null);
+      performRegister('lunch_end');
+    }
+    if (!lunchActive) lunchAutoEndRef.current = false;
+  }, [lunchCountdown.finished, lunchActive]);
 
   // NFC auto-trigger: when opened via NFC tag (?nfc=1), auto-open password modal
   useEffect(() => {
     if (params.nfc === '1' && user && !nfcHandledRef.current) {
       nfcHandledRef.current = true;
       setNfcMode(true);
-      // Small delay to let the screen render first
       const timer = setTimeout(() => {
-        // On web, skip biometric and go straight to password
         if (Platform.OS === 'web') {
           setShowPasswordModal(true);
         } else {
-          // On mobile, try biometric first then fallback to password
           tryBiometricAuth(t('point.biometricPrompt')).then((ok) => {
             if (ok) {
-              performRegister();
+              performRegister('clock_in');
             } else {
               setShowPasswordModal(true);
             }
@@ -83,8 +316,8 @@ export default function PointScreen() {
 
   const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
   const canAdjustEntry = useCallback(
-    (entry: TimeEntry) => {
-      if (!user) return false;
+    (entry: TimeEntry | null) => {
+      if (!entry || !user) return false;
       if (entry.isAdjusted) return false;
       const isOwner = entry.userId === user.id;
       if (!isOwner && !isMaster) return false;
@@ -95,11 +328,12 @@ export default function PointScreen() {
     [user, isMaster]
   );
 
-  const openAdjustModal = useCallback((entry: TimeEntry) => {
+  const openAdjustModal = useCallback((entry: TimeEntry, target: 'clock_in' | 'clock_out') => {
     const d = new Date(getEffectiveRecordedAt(entry));
     const h = String(d.getHours()).padStart(2, '0');
     const m = String(d.getMinutes()).padStart(2, '0');
     setAdjustEntry(entry);
+    setAdjustTarget(target);
     setAdjustTime(`${h}:${m}`);
     setAdjustDescription('');
     setShowAdjustModal(true);
@@ -141,25 +375,88 @@ export default function PointScreen() {
     }
   }, [adjustEntry, adjustTime, adjustDescription, t, queryClient, buildAdjustedIso]);
 
-  const performRegister = useCallback(async () => {
+  /* ─── Agendar notificação local para fim de pausa ─── */
+  const schedulePauseNotification = useCallback(async (pauseType: 'coffee' | 'lunch') => {
+    if (Platform.OS === 'web' || !Notifications) return;
+    const durationMs = pauseType === 'coffee' ? COFFEE_DURATION_MS : LUNCH_DURATION_MS;
+    const triggerMs = durationMs - WARN_BEFORE_MS; // 12min (café) ou 42min (almoço)
+    const title = pauseType === 'coffee' ? t('point.coffeeEndingSoon') : t('point.lunchEndingSoon');
+    const body = t('point.pauseEndingIn3Min');
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: { title, body, sound: 'default' },
+        trigger: { seconds: Math.floor(triggerMs / 1000), type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL },
+      });
+    } catch (err) {
+      console.warn('Failed to schedule pause notification:', err);
+    }
+  }, [t]);
+
+  const performRegister = useCallback(async (entryType: EntryType) => {
     if (!user) return;
     setRegistering(true);
+    const isPauseEntry = ['coffee_start', 'coffee_end', 'lunch_start', 'lunch_end'].includes(entryType);
+
+    // Ativar timer local IMEDIATAMENTE (otimista, antes do DB)
+    const nowIso = new Date().toISOString();
+    if (entryType === 'coffee_start') setLocalCoffeePauseStart(nowIso);
+    if (entryType === 'lunch_start') setLocalLunchPauseStart(nowIso);
+
     try {
       const serverTime = await repos.timeEntriesRepo.getServerTime();
-      const location = await getCurrentLocationForEntry();
+      let locationAddress: string | null = null;
+      let gpsAccuracy: number | null = null;
+      let gpsSource: string | null = null;
+
+      if (!isPauseEntry) {
+        if (Platform.OS === 'web') {
+          try {
+            const location = await getCurrentLocationForEntry();
+            locationAddress = location.locationAddress;
+            gpsAccuracy = location.gpsAccuracy;
+            gpsSource = location.gpsSource;
+          } catch {
+            // Prosseguir sem localização na web
+          }
+        } else {
+          const location = await getCurrentLocationForEntry();
+          locationAddress = location.locationAddress;
+          gpsAccuracy = location.gpsAccuracy;
+          gpsSource = location.gpsSource;
+        }
+      }
+
       await repos.timeEntriesRepo.createTimeEntry({
         userId: user.id,
         userName: user.username,
         recordedAt: serverTime,
-        locationAddress: location.locationAddress,
-        gpsAccuracy: location.gpsAccuracy,
-        gpsSource: location.gpsSource,
+        entryType,
+        locationAddress,
+        gpsAccuracy,
+        gpsSource,
       });
+
+      // Atualizar o ISO local com o server time real (mais preciso)
+      if (entryType === 'coffee_start') setLocalCoffeePauseStart(serverTime);
+      if (entryType === 'lunch_start') setLocalLunchPauseStart(serverTime);
+
       queryClient.invalidateQueries({ queryKey: ['timeEntries'] });
       setShowPasswordModal(false);
       setPassword('');
-      Alert.alert(t('common.success'), t('point.registered'));
+
+      if (entryType === 'coffee_start') {
+        schedulePauseNotification('coffee');
+      } else if (entryType === 'lunch_start') {
+        schedulePauseNotification('lunch');
+      }
+      if (!isPauseEntry) {
+        Alert.alert(t('common.success'), t('point.registered'));
+      }
     } catch (err: any) {
+      // Rollback: reverter estado local otimista se o DB falhou
+      if (entryType === 'coffee_start') setLocalCoffeePauseStart(null);
+      if (entryType === 'lunch_start') setLocalLunchPauseStart(null);
+
       if (err?.message === 'LOCATION_PERMISSION_DENIED') {
         Alert.alert(
           t('point.locationRequired'),
@@ -171,18 +468,36 @@ export default function PointScreen() {
     } finally {
       setRegistering(false);
     }
-  }, [user, t, queryClient]);
+  }, [user, t, queryClient, schedulePauseNotification]);
 
-  const handleRegisterPress = useCallback(async () => {
+  const handleRegisterPress = useCallback(async (entryType: EntryType) => {
     if (!user) return;
-    // On web (mobile browser), skip biometric — go straight to password
+    setPendingEntryType(entryType);
     if (Platform.OS === 'web') {
       setShowPasswordModal(true);
       return;
     }
     const ok = await tryBiometricAuth(t('point.biometricPrompt'));
     if (ok) {
-      await performRegister();
+      await performRegister(entryType);
+      return;
+    }
+    setShowPasswordModal(true);
+  }, [user, t, performRegister]);
+
+  const handlePausePress = useCallback(async (pauseType: 'coffee' | 'lunch') => {
+    if (!user) return;
+    const startType: EntryType = pauseType === 'coffee' ? 'coffee_start' : 'lunch_start';
+    setPendingEntryType(startType);
+    if (Platform.OS === 'web') {
+      // Na web, exigir senha como nos outros botões
+      setShowPasswordModal(true);
+      return;
+    }
+    // Em mobile, tentar biometria primeiro
+    const ok = await tryBiometricAuth(t('point.biometricPrompt'));
+    if (ok) {
+      await performRegister(startType);
       return;
     }
     setShowPasswordModal(true);
@@ -197,8 +512,8 @@ export default function PointScreen() {
     }
     setShowPasswordModal(false);
     setPassword('');
-    await performRegister();
-  }, [password, t, performRegister]);
+    await performRegister(pendingEntryType);
+  }, [password, t, performRegister, pendingEntryType]);
 
   useFocusEffect(
     useCallback(() => {
@@ -206,8 +521,185 @@ export default function PointScreen() {
     }, [queryClient])
   );
 
-  const formatDateTime = (iso: string) => {
-    return formatDateTimeUtil(iso);
+  /* ─── Render helpers ─── */
+  const renderDayCard = (group: DayGroup) => {
+    const { clockIn, clockOut, coffeeStart, coffeeEnd, lunchStart, lunchEnd, dateLabel, weekday, isToday, isAutomatic, dateKey } = group;
+    const clockInTime = clockIn ? formatTimeUtil(getEffectiveRecordedAt(clockIn)) : '—';
+    const clockOutTime = clockOut ? formatTimeUtil(getEffectiveRecordedAt(clockOut)) : '—';
+
+    // Calcular pausas do dia
+    let dayPauseMs = 0;
+    if (coffeeStart && coffeeEnd) {
+      const cs = new Date(getEffectiveRecordedAt(coffeeStart)).getTime();
+      const ce = new Date(getEffectiveRecordedAt(coffeeEnd)).getTime();
+      if (ce > cs) dayPauseMs += (ce - cs);
+    }
+    if (lunchStart && lunchEnd) {
+      const ls = new Date(getEffectiveRecordedAt(lunchStart)).getTime();
+      const le = new Date(getEffectiveRecordedAt(lunchEnd)).getTime();
+      if (le > ls) dayPauseMs += (le - ls);
+    }
+
+    // Calcular total (subtraindo pausas)
+    let totalLabel = '—';
+    if (clockIn && clockOut) {
+      const inMs = new Date(getEffectiveRecordedAt(clockIn)).getTime();
+      const outMs = new Date(getEffectiveRecordedAt(clockOut)).getTime();
+      if (outMs > inMs) totalLabel = formatHourMin(outMs - inMs - dayPauseMs);
+    }
+
+    const canAdjustIn = canAdjustEntry(clockIn);
+    const canAdjustOut = canAdjustEntry(clockOut);
+    const hasAnyAdjust = canAdjustIn || canAdjustOut;
+
+    return (
+      <View
+        key={dateKey}
+        style={[
+          styles.dayCard,
+          { backgroundColor: colors.cardBackground },
+          isToday && { borderLeftWidth: 3, borderLeftColor: colors.primary },
+        ]}
+      >
+        {/* Cabeçalho do dia */}
+        <View style={styles.dayCardHeader}>
+          <View style={styles.dayDateWrap}>
+            <Text style={[styles.dayDateText, { color: colors.text }]}>
+              {dateLabel}
+            </Text>
+            <Text style={[styles.dayWeekday, { color: colors.textTertiary }]}>
+              {weekday}
+            </Text>
+            {isToday && (
+              <View style={[styles.todayBadge, { backgroundColor: colors.primary + '20' }]}>
+                <Text style={[styles.todayBadgeText, { color: colors.primary }]}>
+                  {t('point.today')}
+                </Text>
+              </View>
+            )}
+          </View>
+          {isAutomatic && (
+            <View style={styles.autoBadge}>
+              <Ionicons name="flash-outline" size={12} color="#f59e0b" />
+              <Text style={styles.autoBadgeText}>{t('point.automatic')}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Linha: Entrada | Saída | Total */}
+        <View style={styles.dayRow}>
+          <View style={styles.dayCol}>
+            <Text style={[styles.dayColLabel, { color: colors.textTertiary }]}>
+              {t('point.clockIn')}
+            </Text>
+            <View style={styles.dayTimeRow}>
+              <Ionicons name="log-in-outline" size={16} color="#22c55e" />
+              <Text style={[styles.dayTimeText, { color: colors.text }]}>
+                {clockInTime}
+              </Text>
+              {clockIn?.isAdjusted && (
+                <Text style={[styles.adjustedTag, { color: colors.textTertiary }]}>
+                  ({t('point.adjusted')})
+                </Text>
+              )}
+            </View>
+          </View>
+
+          <View style={[styles.daySep, { backgroundColor: colors.border }]} />
+
+          <View style={styles.dayCol}>
+            <Text style={[styles.dayColLabel, { color: colors.textTertiary }]}>
+              {t('point.clockOut')}
+            </Text>
+            <View style={styles.dayTimeRow}>
+              <Ionicons name="log-out-outline" size={16} color="#ef4444" />
+              <Text style={[styles.dayTimeText, { color: colors.text }]}>
+                {clockOutTime}
+              </Text>
+              {clockOut?.isAdjusted && (
+                <Text style={[styles.adjustedTag, { color: colors.textTertiary }]}>
+                  ({t('point.adjusted')})
+                </Text>
+              )}
+            </View>
+          </View>
+
+          <View style={[styles.daySep, { backgroundColor: colors.border }]} />
+
+          <View style={styles.dayCol}>
+            <Text style={[styles.dayColLabel, { color: colors.textTertiary }]}>
+              {t('point.totalHours')}
+            </Text>
+            {isToday && liveTimerStartIso && !clockOut ? (
+              <View style={styles.dayTimeRow}>
+                <Ionicons name="timer-outline" size={16} color={colors.primary} />
+                <Text style={[styles.dayTimeText, { color: colors.primary, fontVariant: ['tabular-nums'] }]}>
+                  {liveTimerLabel}
+                </Text>
+              </View>
+            ) : (
+              <Text style={[styles.dayTimeText, { color: colors.text }]}>
+                {totalLabel}
+              </Text>
+            )}
+          </View>
+        </View>
+
+        {/* Info de pausas do dia */}
+        {(coffeeStart || lunchStart) && (
+          <View style={styles.pauseInfoRow}>
+            {coffeeStart && (
+              <View style={styles.pauseInfoItem}>
+                <Ionicons name="cafe-outline" size={13} color="#92400e" />
+                <Text style={[styles.pauseInfoText, { color: colors.textSecondary }]}>
+                  {formatTimeUtil(getEffectiveRecordedAt(coffeeStart))}
+                  {coffeeEnd ? ` — ${formatTimeUtil(getEffectiveRecordedAt(coffeeEnd))}` : ` — …`}
+                </Text>
+              </View>
+            )}
+            {lunchStart && (
+              <View style={styles.pauseInfoItem}>
+                <Ionicons name="restaurant-outline" size={13} color="#0369a1" />
+                <Text style={[styles.pauseInfoText, { color: colors.textSecondary }]}>
+                  {formatTimeUtil(getEffectiveRecordedAt(lunchStart))}
+                  {lunchEnd ? ` — ${formatTimeUtil(getEffectiveRecordedAt(lunchEnd))}` : ` — …`}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Botões de ajuste */}
+        {hasAnyAdjust && (
+          <View style={styles.adjustRow}>
+            {canAdjustIn && clockIn && (
+              <TouchableOpacity
+                style={[styles.adjustBtn, { borderColor: '#22c55e' }]}
+                onPress={() => openAdjustModal(clockIn, 'clock_in')}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="create-outline" size={14} color="#22c55e" />
+                <Text style={[styles.adjustBtnText, { color: '#22c55e' }]}>
+                  {t('point.adjustClockIn')}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {canAdjustOut && clockOut && (
+              <TouchableOpacity
+                style={[styles.adjustBtn, { borderColor: '#ef4444' }]}
+                onPress={() => openAdjustModal(clockOut, 'clock_out')}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="create-outline" size={14} color="#ef4444" />
+                <Text style={[styles.adjustBtnText, { color: '#ef4444' }]}>
+                  {t('point.adjustClockOut')}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+      </View>
+    );
   };
 
   return (
@@ -267,23 +759,121 @@ export default function PointScreen() {
           </View>
         )}
 
-        <TouchableOpacity
-          style={[styles.registerButton, { backgroundColor: colors.primary }]}
-          onPress={handleRegisterPress}
-          disabled={registering}
-          activeOpacity={0.8}
-        >
-          {registering ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <>
-              <Ionicons name="finger-print" size={32} color="#fff" />
-              <Text style={styles.registerButtonText}>
-                {t('point.registerButton')}
+        {/* Botões: Clock In → Coffee → Lunch → Clock Out */}
+        <View style={styles.buttonsRow}>
+          {/* 1. Clock In */}
+          <TouchableOpacity
+            style={[styles.seqButton, { backgroundColor: '#22c55e' }, hasTodayClockIn && styles.seqButtonDone]}
+            onPress={() => handleRegisterPress('clock_in')}
+            disabled={registering || hasTodayClockIn}
+            activeOpacity={0.8}
+          >
+            {registering && pendingEntryType === 'clock_in' ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Ionicons name="log-in-outline" size={20} color="#fff" />
+                <Text style={styles.seqButtonText}>{t('point.clockIn')}</Text>
+                <Text style={styles.seqButtonHint}>7:30h</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          {/* 2. Coffee Pause / Timer */}
+          {coffeeActive ? (
+            <View style={[styles.seqButton, styles.seqButtonTimer, { borderColor: '#92400e' }]}>
+              <Ionicons name="cafe" size={18} color="#92400e" />
+              <Text style={[styles.seqTimerValue, { color: '#92400e' }]}>
+                {coffeeCountdown.remaining}
               </Text>
-            </>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[
+                styles.seqButton,
+                { backgroundColor: '#92400e' },
+                (!hasTodayClockIn || hasCoffeeToday || hasTodayClockOut || lunchActive) && styles.seqButtonDone,
+              ]}
+              onPress={() => handlePausePress('coffee')}
+              disabled={registering || !hasTodayClockIn || hasCoffeeToday || hasTodayClockOut || !!lunchActive}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="cafe-outline" size={20} color="#fff" />
+              <Text style={styles.seqButtonText}>{t('point.coffeePause')}</Text>
+              <Text style={styles.seqButtonHint}>9:00h · 15m</Text>
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
+
+          {/* 3. Lunch Pause / Timer */}
+          {lunchActive ? (
+            <View style={[styles.seqButton, styles.seqButtonTimer, { borderColor: '#0369a1' }]}>
+              <Ionicons name="restaurant" size={18} color="#0369a1" />
+              <Text style={[styles.seqTimerValue, { color: '#0369a1' }]}>
+                {lunchCountdown.remaining}
+              </Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[
+                styles.seqButton,
+                { backgroundColor: '#0369a1' },
+                (!hasTodayClockIn || hasLunchToday || hasTodayClockOut || coffeeActive) && styles.seqButtonDone,
+              ]}
+              onPress={() => handlePausePress('lunch')}
+              disabled={registering || !hasTodayClockIn || hasLunchToday || hasTodayClockOut || !!coffeeActive}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="restaurant-outline" size={20} color="#fff" />
+              <Text style={styles.seqButtonText}>{t('point.lunchPause')}</Text>
+              <Text style={styles.seqButtonHint}>12:15h · 45m</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* 4. Clock Out */}
+          <TouchableOpacity
+            style={[styles.seqButton, { backgroundColor: '#ef4444' }, hasTodayClockOut && styles.seqButtonDone]}
+            onPress={() => handleRegisterPress('clock_out')}
+            disabled={registering || hasTodayClockOut}
+            activeOpacity={0.8}
+          >
+            {registering && pendingEntryType === 'clock_out' ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Ionicons name="log-out-outline" size={20} color="#fff" />
+                <Text style={styles.seqButtonText}>{t('point.clockOut')}</Text>
+                <Text style={styles.seqButtonHint}>17:00h</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Timer ao vivo (sempre visível enquanto jornada ativa) */}
+        {liveTimerStartIso && (
+          <View style={[
+            styles.liveTimerCard,
+            anyPauseActive
+              ? { backgroundColor: '#f59e0b15', borderColor: '#f59e0b30' }
+              : { backgroundColor: colors.primary + '10', borderColor: colors.primary + '30' },
+          ]}>
+            <Ionicons
+              name={anyPauseActive ? 'pause-circle-outline' : 'timer-outline'}
+              size={22}
+              color={anyPauseActive ? '#f59e0b' : colors.primary}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.liveTimerLabel, { color: colors.textSecondary }]}>
+                {anyPauseActive ? t('point.timerPaused') : t('point.workInProgress')}
+              </Text>
+              <Text style={[styles.liveTimerValue, {
+                color: anyPauseActive ? '#f59e0b' : colors.primary,
+                fontVariant: ['tabular-nums'],
+              }]}>
+                {liveTimerLabel}
+              </Text>
+            </View>
+          </View>
+        )}
 
         <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
           {t('point.myEntries')}
@@ -291,7 +881,7 @@ export default function PointScreen() {
 
         {isLoading ? (
           <ActivityIndicator size="small" color={colors.primary} style={styles.loader} />
-        ) : entries.length === 0 ? (
+        ) : dayGroups.length === 0 ? (
           <View style={styles.empty}>
             <Ionicons name="calendar-outline" size={40} color={colors.textTertiary} />
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
@@ -300,50 +890,12 @@ export default function PointScreen() {
           </View>
         ) : (
           <View style={styles.list}>
-            {entries.map((entry: TimeEntry) => (
-              <View
-                key={entry.id}
-                style={[styles.card, { backgroundColor: colors.cardBackground }]}
-              >
-                <View style={[styles.cardRow, { justifyContent: 'space-between', alignItems: 'center' }]}>
-                  <View style={styles.cardRowTime}>
-                    <Ionicons name="time" size={18} color={colors.primary} />
-                    <Text style={[styles.cardDateTime, { color: colors.text }]}>
-                      {formatDateTime(getEffectiveRecordedAt(entry))}
-                      {entry.isAdjusted ? ` (${t('point.adjusted')})` : ''}
-                    </Text>
-                  </View>
-                  {canAdjustEntry(entry) && (
-                    <TouchableOpacity
-                      style={[styles.adjustButton, { borderColor: colors.primary }]}
-                      onPress={() => openAdjustModal(entry)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.adjustButtonText, { color: colors.primary }]}>
-                        {t('point.adjust')}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-                {entry.locationAddress ? (
-                  <View style={styles.cardRow}>
-                    <Ionicons name="location-outline" size={16} color={colors.textSecondary} />
-                    <Text style={[styles.cardAddress, { color: colors.textSecondary }]} numberOfLines={2}>
-                      {entry.locationAddress}
-                    </Text>
-                  </View>
-                ) : null}
-                {(entry.gpsAccuracy != null || entry.gpsSource) && (
-                  <Text style={[styles.cardMeta, { color: colors.textTertiary }]}>
-                    {entry.gpsSource ?? '—'} · {entry.gpsAccuracy != null ? `${Math.round(entry.gpsAccuracy)} m` : '—'}
-                  </Text>
-                )}
-              </View>
-            ))}
+            {dayGroups.map(renderDayCard)}
           </View>
         )}
       </ScrollView>
 
+      {/* Modal senha */}
       <Modal
         visible={showPasswordModal}
         transparent
@@ -388,6 +940,7 @@ export default function PointScreen() {
         </TouchableWithoutFeedback>
       </Modal>
 
+      {/* Modal ajuste */}
       <Modal
         visible={showAdjustModal}
         transparent
@@ -399,7 +952,7 @@ export default function PointScreen() {
             <TouchableWithoutFeedback>
               <View style={[styles.modalBox, { backgroundColor: colors.background }]}>
                 <Text style={[styles.modalTitle, { color: colors.text }]}>
-                  {t('point.adjustTitle')}
+                  {adjustTarget === 'clock_in' ? t('point.adjustClockIn') : t('point.adjustClockOut')}
                 </Text>
                 <TimePicker
                   label={t('point.newTime')}
@@ -504,20 +1057,65 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.semibold,
   },
-  registerButton: {
+  buttonsRow: {
     flexDirection: 'row',
+    gap: theme.spacing.xs,
+    marginBottom: theme.spacing.md,
+  },
+  seqButton: {
+    flex: 1,
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: theme.spacing.sm,
-    paddingVertical: theme.spacing.lg,
-    paddingHorizontal: theme.spacing.xl,
-    borderRadius: theme.borderRadius.lg,
-    marginBottom: theme.spacing.lg,
-    ...theme.shadows.md,
+    gap: 4,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: 2,
+    borderRadius: theme.borderRadius.md,
+    ...theme.shadows.sm,
   },
-  registerButtonText: {
+  seqButtonText: {
     color: '#fff',
-    fontSize: theme.typography.fontSize.lg,
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.bold,
+    textAlign: 'center',
+  },
+  seqButtonHint: {
+    color: '#ffffffa0',
+    fontSize: 9,
+    fontWeight: theme.typography.fontWeight.medium,
+    textAlign: 'center',
+    marginTop: 1,
+  },
+  seqButtonTimer: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    justifyContent: 'center',
+  },
+  seqTimerValue: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.bold,
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
+  },
+  seqButtonDone: {
+    opacity: 0.35,
+  },
+  /* Timer ao vivo */
+  liveTimerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.borderRadius.lg,
+    borderWidth: 1,
+    marginBottom: theme.spacing.lg,
+  },
+  liveTimerLabel: {
+    fontSize: theme.typography.fontSize.xs,
+  },
+  liveTimerValue: {
+    fontSize: theme.typography.fontSize.xl,
     fontWeight: theme.typography.fontWeight.bold,
   },
   sectionTitle: {
@@ -536,45 +1134,114 @@ const styles = StyleSheet.create({
   list: {
     gap: theme.spacing.sm,
   },
-  card: {
+  /* Day card */
+  dayCard: {
     borderRadius: theme.borderRadius.md,
     padding: theme.spacing.md,
     ...theme.shadows.sm,
   },
-  cardRow: {
+  dayCardHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: theme.spacing.xs,
-    marginBottom: theme.spacing.xs,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: theme.spacing.sm,
   },
-  cardRowTime: {
+  dayDateWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.xs,
-    flex: 1,
+    gap: theme.spacing.sm,
   },
-  adjustButton: {
+  dayDateText: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  dayWeekday: {
+    fontSize: theme.typography.fontSize.sm,
+  },
+  todayBadge: {
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 2,
+    borderRadius: theme.borderRadius.sm,
+  },
+  todayBadgeText: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.semibold,
+  },
+  autoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  autoBadgeText: {
+    fontSize: theme.typography.fontSize.xs,
+    color: '#f59e0b',
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  dayRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  dayCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  dayColLabel: {
+    fontSize: theme.typography.fontSize.xs,
+    marginBottom: 4,
+  },
+  dayTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  dayTimeText: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.semibold,
+  },
+  adjustedTag: {
+    fontSize: theme.typography.fontSize.xs,
+  },
+  daySep: {
+    width: 1,
+    height: 32,
+    alignSelf: 'center',
+  },
+  pauseInfoRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.sm,
+    paddingTop: theme.spacing.xs,
+  },
+  pauseInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  pauseInfoText: {
+    fontSize: theme.typography.fontSize.xs,
+  },
+  adjustRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
+    paddingTop: theme.spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#e5e7eb',
+  },
+  adjustBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingVertical: theme.spacing.xs,
     paddingHorizontal: theme.spacing.sm,
     borderRadius: theme.borderRadius.sm,
     borderWidth: 1,
   },
-  adjustButtonText: {
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.medium,
-  },
-  cardDateTime: {
-    fontSize: theme.typography.fontSize.md,
-    fontWeight: theme.typography.fontWeight.medium,
-    flex: 1,
-  },
-  cardAddress: {
-    fontSize: theme.typography.fontSize.sm,
-    flex: 1,
-  },
-  cardMeta: {
+  adjustBtnText: {
     fontSize: theme.typography.fontSize.xs,
-    marginTop: theme.spacing.xs,
+    fontWeight: theme.typography.fontWeight.medium,
   },
   modalOverlay: {
     flex: 1,
