@@ -19,6 +19,7 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
+      "permissions": ["android.permission.NFC"],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.anonymous.CreaGlass",
@@ -30,6 +31,7 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/withNfcIntentFilter",
       [
         "expo-splash-screen",
         {

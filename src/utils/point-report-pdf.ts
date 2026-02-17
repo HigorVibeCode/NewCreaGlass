@@ -102,22 +102,12 @@ export function buildDayRows(entries: TimeEntry[]): DayRow[] {
       const saidaTime = clockOut ? formatTime(getEffectiveRecordedAt(clockOut)) : INCOMPLETO;
       const incomplete = !clockIn || !clockOut;
 
-      // Calcular tempo de pausa do dia
+      // Dedução fixa: 15 min se café ativado, 45 min se almoço ativado
       let pauseMinutes = 0;
       const coffeeStart = dayEntries.find((e) => e.entryType === 'coffee_start');
-      const coffeeEnd = dayEntries.find((e) => e.entryType === 'coffee_end');
       const lunchStart = dayEntries.find((e) => e.entryType === 'lunch_start');
-      const lunchEnd = dayEntries.find((e) => e.entryType === 'lunch_end');
-      if (coffeeStart && coffeeEnd) {
-        const cs = new Date(getEffectiveRecordedAt(coffeeStart)).getTime();
-        const ce = new Date(getEffectiveRecordedAt(coffeeEnd)).getTime();
-        if (ce > cs) pauseMinutes += (ce - cs) / 60000;
-      }
-      if (lunchStart && lunchEnd) {
-        const ls = new Date(getEffectiveRecordedAt(lunchStart)).getTime();
-        const le = new Date(getEffectiveRecordedAt(lunchEnd)).getTime();
-        if (le > ls) pauseMinutes += (le - ls) / 60000;
-      }
+      if (coffeeStart) pauseMinutes += 15;
+      if (lunchStart) pauseMinutes += 45;
 
       let totalMinutes = 0;
       if (clockIn && clockOut) {

@@ -1,6 +1,7 @@
 import { useRouter, useSegments } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
+import * as Linking from 'expo-linking';
 import { useRealtime } from '../../hooks/use-realtime';
 import { useThemeColors } from '../../hooks/use-theme-colors';
 import { repos } from '../../services/container';
@@ -14,9 +15,45 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
   const [isReady, setIsReady] = useState(false);
   const isNavigatingRef = useRef(false);
   const hasNavigatedRef = useRef(false);
+  const pendingDeepLinkRef = useRef<string | null>(null);
 
   // Ativar Realtime subscriptions quando o usuário estiver autenticado
   useRealtime();
+
+  // ---- Capturar deep link inicial (NFC, notificação, etc.) ----
+  useEffect(() => {
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        const parsed = Linking.parse(url);
+        if (parsed.path && parsed.path !== '' && parsed.path !== '(tabs)/production') {
+          const qs = parsed.queryString ? `?${parsed.queryString}` : '';
+          pendingDeepLinkRef.current = `/${parsed.path}${qs}`;
+          console.log('[AuthGuard] Pending deep link:', pendingDeepLinkRef.current);
+        }
+      }
+    });
+  }, []);
+
+  // ---- Listener para deep links quando o app já está aberto ----
+  useEffect(() => {
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      if (!url) return;
+      const parsed = Linking.parse(url);
+      if (parsed.path && parsed.path !== '') {
+        const qs = parsed.queryString ? `?${parsed.queryString}` : '';
+        const route = `/${parsed.path}${qs}`;
+        console.log('[AuthGuard] Incoming deep link:', route);
+        if (session) {
+          try { router.push(route as any); } catch (err) {
+            console.warn('[AuthGuard] Deep link navigation error:', err);
+          }
+        } else {
+          pendingDeepLinkRef.current = route;
+        }
+      }
+    });
+    return () => subscription.remove();
+  }, [session, router]);
 
   // ---- On mount: restore Supabase session (fast, from local storage) ----
   useEffect(() => {
@@ -65,8 +102,14 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
     }
 
     if (session && inAuthGroup) {
-      // Has session but still on login → go to app
-      navigateSafely('/(tabs)/production');
+      // Has session — check for pending deep link (NFC, etc.)
+      const deepLink = pendingDeepLinkRef.current;
+      if (deepLink) {
+        pendingDeepLinkRef.current = null;
+        navigateSafely(deepLink);
+      } else {
+        navigateSafely('/(tabs)/production');
+      }
       return;
     }
   }, [session, isReady, segments]);

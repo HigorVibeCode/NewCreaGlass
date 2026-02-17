@@ -78,11 +78,12 @@ function formatHourMin(totalMs: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-/* ─── Timer hook (subtrai pausas completas + pausa ativa em andamento) ─── */
+/* ─── Timer hook (subtrai pausas completas + pausa ativa limitada à duração fixa) ─── */
 function useLiveTimer(
   startIso: string | null,
   completedPauseMs: number,
   activePauseStartIso: string | null,
+  activePauseCapMs: number,
 ): string {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -93,9 +94,9 @@ function useLiveTimer(
   if (!startIso) return '00:00:00';
   const elapsed = Math.max(0, now - new Date(startIso).getTime());
   let totalPause = completedPauseMs;
-  // Incluir tempo da pausa ativa em andamento
   if (activePauseStartIso) {
-    totalPause += Math.max(0, now - new Date(activePauseStartIso).getTime());
+    const activeElapsed = Math.max(0, now - new Date(activePauseStartIso).getTime());
+    totalPause += Math.min(activeElapsed, activePauseCapMs);
   }
   const effective = Math.max(0, elapsed - totalPause);
   const s = Math.floor(effective / 1000) % 60;
@@ -124,7 +125,7 @@ function usePauseCountdown(startIso: string | null, durationMs: number): { remai
 export default function PointScreen() {
   const { t } = useI18n();
   const router = useRouter();
-  const params = useLocalSearchParams<{ nfc?: string }>();
+  const params = useLocalSearchParams<{ nfc?: string }>(); // nfc=clock_in | clock_out | 1 (legado)
   const colors = useThemeColors();
   const { effectiveTheme } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -233,20 +234,12 @@ export default function PointScreen() {
     if (todayGroup?.lunchEnd) setLocalLunchPauseStart(null);
   }, [todayGroup?.lunchEnd]);
 
-  // Calcular total de ms em pausa completa hoje (para subtrair do timer)
+  // Dedução fixa para pausas completas (15 min café, 45 min almoço)
   const todayPauseMs = useMemo(() => {
     if (!todayGroup) return 0;
     let total = 0;
-    if (todayGroup.coffeeStart && todayGroup.coffeeEnd) {
-      const s = new Date(getEffectiveRecordedAt(todayGroup.coffeeStart)).getTime();
-      const e = new Date(getEffectiveRecordedAt(todayGroup.coffeeEnd)).getTime();
-      if (e > s) total += (e - s);
-    }
-    if (todayGroup.lunchStart && todayGroup.lunchEnd) {
-      const s = new Date(getEffectiveRecordedAt(todayGroup.lunchStart)).getTime();
-      const e = new Date(getEffectiveRecordedAt(todayGroup.lunchEnd)).getTime();
-      if (e > s) total += (e - s);
-    }
+    if (todayGroup.coffeeStart && todayGroup.coffeeEnd) total += COFFEE_DURATION_MS;
+    if (todayGroup.lunchStart && todayGroup.lunchEnd) total += LUNCH_DURATION_MS;
     return total;
   }, [todayGroup]);
 
@@ -260,17 +253,19 @@ export default function PointScreen() {
 
   // ISO de início da pausa ativa (para o timer subtrair em tempo real)
   const activePauseStartIso = coffeeStartIso || lunchStartIso;
+  // Cap fixo da pausa ativa: 15 min para café, 45 min para almoço
+  const activePauseCapMs = coffeeStartIso ? COFFEE_DURATION_MS : (lunchStartIso ? LUNCH_DURATION_MS : 0);
 
   // Timer ao vivo
   const liveTimerStartIso =
     todayGroup?.clockIn && !todayGroup?.clockOut
       ? getEffectiveRecordedAt(todayGroup.clockIn)
       : null;
-  const liveTimerLabel = useLiveTimer(liveTimerStartIso, todayPauseMs, activePauseStartIso);
+  const liveTimerLabel = useLiveTimer(liveTimerStartIso, todayPauseMs, activePauseStartIso, activePauseCapMs);
   const coffeeCountdown = usePauseCountdown(coffeeStartIso, COFFEE_DURATION_MS);
   const lunchCountdown = usePauseCountdown(lunchStartIso, LUNCH_DURATION_MS);
 
-  // Auto-encerrar pausa quando o tempo acabar
+  // Auto-encerrar pausa quando o tempo acabar (usa timestamp correto: start + duração fixa)
   const coffeeAutoEndRef = useRef(false);
   const lunchAutoEndRef = useRef(false);
 
@@ -278,40 +273,61 @@ export default function PointScreen() {
     if (coffeeCountdown.finished && coffeeActive && !coffeeAutoEndRef.current) {
       coffeeAutoEndRef.current = true;
       setLocalCoffeePauseStart(null);
-      performRegister('coffee_end');
+      const startIso = todayGroup?.coffeeStart
+        ? getEffectiveRecordedAt(todayGroup.coffeeStart)
+        : localCoffeePauseStart;
+      if (startIso) {
+        const correctEnd = new Date(new Date(startIso).getTime() + COFFEE_DURATION_MS).toISOString();
+        autoEndOverduePause('coffee_end', correctEnd);
+      }
     }
     if (!coffeeActive) coffeeAutoEndRef.current = false;
-  }, [coffeeCountdown.finished, coffeeActive]);
+  }, [coffeeCountdown.finished, coffeeActive, autoEndOverduePause, todayGroup?.coffeeStart, localCoffeePauseStart]);
 
   useEffect(() => {
     if (lunchCountdown.finished && lunchActive && !lunchAutoEndRef.current) {
       lunchAutoEndRef.current = true;
       setLocalLunchPauseStart(null);
-      performRegister('lunch_end');
+      const startIso = todayGroup?.lunchStart
+        ? getEffectiveRecordedAt(todayGroup.lunchStart)
+        : localLunchPauseStart;
+      if (startIso) {
+        const correctEnd = new Date(new Date(startIso).getTime() + LUNCH_DURATION_MS).toISOString();
+        autoEndOverduePause('lunch_end', correctEnd);
+      }
     }
     if (!lunchActive) lunchAutoEndRef.current = false;
-  }, [lunchCountdown.finished, lunchActive]);
+  }, [lunchCountdown.finished, lunchActive, autoEndOverduePause, todayGroup?.lunchStart, localLunchPauseStart]);
 
-  // NFC auto-trigger: when opened via NFC tag (?nfc=1), auto-open password modal
+  // NFC auto-trigger: ?nfc=clock_in | clock_out | 1 (legado = clock_in)
   useEffect(() => {
-    if (params.nfc === '1' && user && !nfcHandledRef.current) {
-      nfcHandledRef.current = true;
-      setNfcMode(true);
-      const timer = setTimeout(() => {
-        if (Platform.OS === 'web') {
-          setShowPasswordModal(true);
-        } else {
-          tryBiometricAuth(t('point.biometricPrompt')).then((ok) => {
-            if (ok) {
-              performRegister('clock_in');
-            } else {
-              setShowPasswordModal(true);
-            }
-          });
-        }
-      }, 500);
-      return () => clearTimeout(timer);
+    if (!params.nfc || !user || nfcHandledRef.current) return;
+    const nfcParam = params.nfc;
+    let nfcEntryType: EntryType;
+    if (nfcParam === 'clock_out') {
+      nfcEntryType = 'clock_out';
+    } else if (nfcParam === 'clock_in' || nfcParam === '1') {
+      nfcEntryType = 'clock_in';
+    } else {
+      return; // parâmetro inválido
     }
+    nfcHandledRef.current = true;
+    setNfcMode(true);
+    setPendingEntryType(nfcEntryType);
+    const timer = setTimeout(() => {
+      if (Platform.OS === 'web') {
+        setShowPasswordModal(true);
+      } else {
+        tryBiometricAuth(t('point.biometricPrompt')).then((ok) => {
+          if (ok) {
+            performRegister(nfcEntryType);
+          } else {
+            setShowPasswordModal(true);
+          }
+        });
+      }
+    }, 500);
+    return () => clearTimeout(timer);
   }, [params.nfc, user]);
 
   const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
@@ -391,6 +407,25 @@ export default function PointScreen() {
       console.warn('Failed to schedule pause notification:', err);
     }
   }, [t]);
+
+  // Encerrar pausa vencida com timestamp correto (start + duração fixa)
+  const autoEndOverduePause = useCallback(async (entryType: EntryType, correctEndIso: string) => {
+    if (!user) return;
+    try {
+      await repos.timeEntriesRepo.createTimeEntry({
+        userId: user.id,
+        userName: user.username,
+        recordedAt: correctEndIso,
+        entryType,
+        locationAddress: null,
+        gpsAccuracy: null,
+        gpsSource: null,
+      });
+      queryClient.invalidateQueries({ queryKey: ['timeEntries'] });
+    } catch (err: any) {
+      console.warn('Auto-end overdue pause failed:', err);
+    }
+  }, [user, queryClient]);
 
   const performRegister = useCallback(async (entryType: EntryType) => {
     if (!user) return;
@@ -527,18 +562,10 @@ export default function PointScreen() {
     const clockInTime = clockIn ? formatTimeUtil(getEffectiveRecordedAt(clockIn)) : '—';
     const clockOutTime = clockOut ? formatTimeUtil(getEffectiveRecordedAt(clockOut)) : '—';
 
-    // Calcular pausas do dia
+    // Dedução fixa: 15 min se café foi ativado, 45 min se almoço foi ativado
     let dayPauseMs = 0;
-    if (coffeeStart && coffeeEnd) {
-      const cs = new Date(getEffectiveRecordedAt(coffeeStart)).getTime();
-      const ce = new Date(getEffectiveRecordedAt(coffeeEnd)).getTime();
-      if (ce > cs) dayPauseMs += (ce - cs);
-    }
-    if (lunchStart && lunchEnd) {
-      const ls = new Date(getEffectiveRecordedAt(lunchStart)).getTime();
-      const le = new Date(getEffectiveRecordedAt(lunchEnd)).getTime();
-      if (le > ls) dayPauseMs += (le - ls);
-    }
+    if (coffeeStart) dayPauseMs += COFFEE_DURATION_MS;
+    if (lunchStart) dayPauseMs += LUNCH_DURATION_MS;
 
     // Calcular total (subtraindo pausas)
     let totalLabel = '—';
@@ -645,7 +672,7 @@ export default function PointScreen() {
           </View>
         </View>
 
-        {/* Info de pausas do dia */}
+        {/* Info de pausas do dia (fim = início + duração fixa) */}
         {(coffeeStart || lunchStart) && (
           <View style={styles.pauseInfoRow}>
             {coffeeStart && (
@@ -653,7 +680,9 @@ export default function PointScreen() {
                 <Ionicons name="cafe-outline" size={13} color="#92400e" />
                 <Text style={[styles.pauseInfoText, { color: colors.textSecondary }]}>
                   {formatTimeUtil(getEffectiveRecordedAt(coffeeStart))}
-                  {coffeeEnd ? ` — ${formatTimeUtil(getEffectiveRecordedAt(coffeeEnd))}` : ` — …`}
+                  {(coffeeEnd || isToday) ? ` — ${formatTimeUtil(
+                    new Date(new Date(getEffectiveRecordedAt(coffeeStart)).getTime() + COFFEE_DURATION_MS).toISOString()
+                  )}` : ` — …`}
                 </Text>
               </View>
             )}
@@ -662,7 +691,9 @@ export default function PointScreen() {
                 <Ionicons name="restaurant-outline" size={13} color="#0369a1" />
                 <Text style={[styles.pauseInfoText, { color: colors.textSecondary }]}>
                   {formatTimeUtil(getEffectiveRecordedAt(lunchStart))}
-                  {lunchEnd ? ` — ${formatTimeUtil(getEffectiveRecordedAt(lunchEnd))}` : ` — …`}
+                  {(lunchEnd || isToday) ? ` — ${formatTimeUtil(
+                    new Date(new Date(getEffectiveRecordedAt(lunchStart)).getTime() + LUNCH_DURATION_MS).toISOString()
+                  )}` : ` — …`}
                 </Text>
               </View>
             )}
@@ -751,10 +782,20 @@ export default function PointScreen() {
         showsVerticalScrollIndicator={false}
       >
         {nfcMode && (
-          <View style={[styles.nfcBanner, { backgroundColor: '#6366f1' + '15' }]}>
-            <Ionicons name="radio-outline" size={20} color="#6366f1" />
-            <Text style={[styles.nfcBannerText, { color: '#6366f1' }]}>
-              {t('point.nfcMode') || 'NFC — Registre seu ponto'}
+          <View style={[styles.nfcBanner, {
+            backgroundColor: pendingEntryType === 'clock_out' ? '#ef444415' : '#22c55e15',
+          }]}>
+            <Ionicons
+              name="radio-outline"
+              size={20}
+              color={pendingEntryType === 'clock_out' ? '#ef4444' : '#22c55e'}
+            />
+            <Text style={[styles.nfcBannerText, {
+              color: pendingEntryType === 'clock_out' ? '#ef4444' : '#22c55e',
+            }]}>
+              {pendingEntryType === 'clock_out'
+                ? `NFC — ${t('point.clockOut')}`
+                : `NFC — ${t('point.clockIn')}`}
             </Text>
           </View>
         )}
