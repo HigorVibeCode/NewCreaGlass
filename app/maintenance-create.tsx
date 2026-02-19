@@ -11,7 +11,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -20,6 +21,7 @@ import { Input } from '../src/components/shared/Input';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 import { useAppTheme } from '../src/hooks/use-app-theme';
 import { repos } from '../src/services/container';
 import { useAuth } from '../src/store/auth-store';
@@ -40,11 +42,12 @@ export default function MaintenanceCreateScreen() {
   const { t } = useI18n();
   const { user } = useAuth();
   const router = useRouter();
+  const goBack = useGoBack('/(tabs)/documents');
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { effectiveTheme } = useAppTheme();
   const isDark = effectiveTheme === 'dark';
-  const params = useLocalSearchParams<{ recordId?: string; recordid?: string }>();
+  const params = useRouteParams<{ recordId?: string; recordid?: string }>('/maintenance-create');
   const rawId = params.recordId ?? (params as { recordid?: string }).recordid;
   const recordId = typeof rawId === 'string' ? rawId : Array.isArray(rawId) ? rawId[0] : undefined;
 
@@ -360,10 +363,10 @@ export default function MaintenanceCreateScreen() {
       }
 
       if (isEditing) {
-        router.back();
+        safeBack(router);
       } else {
         Alert.alert(t('common.success'), t('maintenance.recordCreated'), [
-          { text: t('common.confirm'), onPress: () => router.back() },
+          { text: t('common.confirm'), onPress: () => safeBack(router) },
         ]);
       }
     } catch (error) {
@@ -387,7 +390,7 @@ export default function MaintenanceCreateScreen() {
     return (
       <View style={[styles.container, styles.centered, { backgroundColor: colors.background, padding: theme.spacing.lg }]}>
         <Text style={{ color: colors.text, textAlign: 'center', marginBottom: theme.spacing.md }}>{loadError}</Text>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={goBack}>
           <Text style={{ color: colors.primary }}>{t('common.back')}</Text>
         </TouchableOpacity>
       </View>
@@ -562,7 +565,7 @@ export default function MaintenanceCreateScreen() {
             <Button
               title={t('common.back')}
               variant="outline"
-              onPress={() => router.back()}
+              onPress={goBack}
               style={styles.backButton}
             />
             <Button

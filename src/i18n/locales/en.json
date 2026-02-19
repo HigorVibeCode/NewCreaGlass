@@ -121,6 +121,9 @@
     "confirmRead": "Confirm Read",
     "timerWarning": "Please read the message. You can confirm in {{seconds}} seconds.",
     "readConfirmed": "Read confirmed",
+    "deleteMessage": "Delete Message",
+    "deleteConfirm": "Are you sure you want to delete this message? This action cannot be undone.",
+    "messageDeleted": "Message deleted successfully",
     "unreadMessages": "Unread messages"
   },
   "documents": {
@@ -266,7 +269,9 @@
     "maxImagesPerItem": "max 3",
     "mainImage": "Main",
     "selectOneMainImage": "Select exactly one image as Main.",
-    "searchPlaceholder": "Search by position, type, name or OPO code..."
+    "searchPlaceholder": "Search by position, type, name or OPO code...",
+    "searchPlaceholderGlass": "Search by name, thickness, location...",
+    "searchPlaceholderSupplies": "Search by name, position..."
   },
   "accessControls": {
     "title": "Access Controls",
@@ -321,6 +326,8 @@
     "createOrder": "Create Order",
     "noOrders": "No production orders",
     "filterByStatus": "Filter by Status",
+    "filterByCompany": "Filter by Company",
+    "allCompanies": "All",
     "searchPlaceholder": "Search by client, number, type or item...",
     "orderNumber": "Order Number",
     "orderNumberPlaceholder": "Enter order number",
@@ -547,6 +554,22 @@
       "paused": "Paused",
       "completed": "Completed",
       "cancelled": "Cancelled"
+    },
+    "timeStatus": {
+      "EM_ATENDIMENTO": "In Service",
+      "PAUSADO": "Paused",
+      "DESLOCAMENTO": "Traveling"
+    },
+    "serviceLogType": {
+      "ajuste": "Adjustment",
+      "problema": "Problem",
+      "material": "Material",
+      "recomendacao": "Recommendation"
+    },
+    "evidenceType": {
+      "antes": "Before",
+      "durante": "During",
+      "depois": "After"
     }
   },
   "maintenance": {
@@ -600,10 +623,18 @@
     "updatedAt": "Updated At"
   },
   "permissions": {
+    "_group.production": "Production",
+    "_group.documents": "Documents & Trainings",
+    "_group.events": "Events & Work Orders",
+    "_group.inventory": "Inventory",
+    "_group.notifications": "Notifications",
+    "_group.admin": "Administration",
+    "_group.devices": "Devices",
     "documents.upload": "Upload Documents",
     "documents.create": "Create Documents",
     "documents.view": "View Documents",
     "documents.download": "Download Documents",
+    "documents.update": "Update Documents",
     "documents.delete": "Delete Documents",
     "inventory.create": "Create Inventory",
     "inventory.update": "Update Inventory",

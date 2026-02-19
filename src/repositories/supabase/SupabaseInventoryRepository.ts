@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import { InventoryRepository } from '../../services/repositories/interfaces';
 import { InventoryGroup, InventoryHistory, InventoryItem, InventoryItemImage } from '../../types';
 import { supabase } from '../../services/supabase';
+import { getCachedSignedUrl, invalidateSignedUrl, prefetchSignedUrls } from '../../utils/signed-url-cache';
 
 const BUCKET_NAME = 'documents';
 const INVENTORY_IMAGES_PREFIX = 'inventory-items';
@@ -47,10 +48,9 @@ export class SupabaseInventoryRepository implements InventoryRepository {
       .from('inventory_groups')
       .select('*')
       .eq('id', groupId)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
       console.error('Error fetching inventory group:', error);
       throw new Error('Failed to fetch inventory group');
     }
@@ -66,8 +66,8 @@ export class SupabaseInventoryRepository implements InventoryRepository {
       // Convert old string IDs to actual group names
       const groupNameMap: Record<string, string> = {
         'group-glass': 'Glass',
-        'group-supplies': 'Supplies',
-        'group-spare-parts': 'Spare Parts',
+        'group-supplies': 'Profiles',
+        'group-spare-parts': 'Supplies',
       };
       
       const groupName = groupNameMap[groupId];
@@ -77,7 +77,7 @@ export class SupabaseInventoryRepository implements InventoryRepository {
           .from('inventory_groups')
           .select('id')
           .eq('name', groupName)
-          .single();
+          .maybeSingle();
         
         if (groupData?.id) {
           actualGroupId = groupData.id;
@@ -124,10 +124,9 @@ export class SupabaseInventoryRepository implements InventoryRepository {
       .from('inventory_items')
       .select('*')
       .eq('id', itemId)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
       console.error('Error fetching inventory item:', error);
       throw new Error('Failed to fetch inventory item');
     }
@@ -136,6 +135,24 @@ export class SupabaseInventoryRepository implements InventoryRepository {
     const item = this.mapToItem(data);
     await this.attachImagesToItems([item]);
     return item;
+  }
+
+  async getItemsByIds(ids: string[]): Promise<InventoryItem[]> {
+    if (ids.length === 0) return [];
+
+    const { data, error } = await supabase
+      .from('inventory_items')
+      .select('*')
+      .in('id', ids);
+
+    if (error) {
+      console.error('Error fetching inventory items by ids:', error);
+      throw new Error('Failed to fetch inventory items');
+    }
+
+    const items = (data || []).map(this.mapToItem);
+    await this.attachImagesToItems(items);
+    return items;
   }
 
   async createItem(item: Omit<InventoryItem, 'id' | 'createdAt'>): Promise<InventoryItem> {
@@ -476,7 +493,7 @@ export class SupabaseInventoryRepository implements InventoryRepository {
     const fileUri = file.uri;
     const mimeType = file.type || (ext === 'png' ? 'image/png' : 'image/jpeg');
 
-    if (Platform.OS === 'web' || typeof fetch !== 'undefined') {
+    if (Platform.OS === 'web' && typeof fetch !== 'undefined') {
       const response = await fetch(fileUri);
       fileData = await response.blob();
     } else if (fileUri.startsWith('file://') || fileUri.startsWith('content://')) {
@@ -527,13 +544,14 @@ export class SupabaseInventoryRepository implements InventoryRepository {
       .from('inventory_item_images')
       .select('storage_path')
       .eq('id', imageId)
-      .single();
+      .maybeSingle();
     if (fetchError || !row) {
       throw new Error('Image not found');
     }
     const { error: deleteError } = await supabase.from('inventory_item_images').delete().eq('id', imageId);
     if (deleteError) throw new Error(`Failed to delete image: ${deleteError.message}`);
     await supabase.storage.from(BUCKET_NAME).remove([row.storage_path]);
+    invalidateSignedUrl(row.storage_path);
   }
 
   async setMainItemImage(imageId: string): Promise<void> {
@@ -541,7 +559,7 @@ export class SupabaseInventoryRepository implements InventoryRepository {
       .from('inventory_item_images')
       .select('item_id')
       .eq('id', imageId)
-      .single();
+      .maybeSingle();
     if (!row) throw new Error('Image not found');
     await supabase
       .from('inventory_item_images')
@@ -555,16 +573,11 @@ export class SupabaseInventoryRepository implements InventoryRepository {
   }
 
   async getItemImageUrlSigned(storagePath: string): Promise<string> {
-    if (!storagePath) return '';
-    if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) return storagePath;
-    const { data, error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .createSignedUrl(storagePath, 3600);
-    if (error) {
-      console.warn('[SupabaseInventoryRepository] getItemImageUrlSigned error:', error);
-      return '';
-    }
-    return data?.signedUrl ?? '';
+    return getCachedSignedUrl(storagePath);
+  }
+
+  async prefetchItemImageUrls(storagePaths: string[]): Promise<void> {
+    return prefetchSignedUrls(storagePaths);
   }
 
   private mapToItemImage(data: any): InventoryItemImage {

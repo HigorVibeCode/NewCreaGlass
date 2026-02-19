@@ -1,5 +1,5 @@
 import { Image as ExpoImage } from 'expo-image';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { Button } from '../src/components/shared/Button';
 import { Input } from '../src/components/shared/Input';
@@ -10,6 +10,8 @@ import { useAuth } from '../src/store/auth-store';
 import { theme } from '../src/theme';
 import { clearSavedLogin, getSavedLogin, saveLogin } from '../src/utils/saved-login';
 
+const AUTO_LOGIN_TIMEOUT_MS = 5000;
+
 export default function LoginScreen() {
   const { t } = useI18n();
   const { session, setSession, setLoading, isLoading } = useAuth();
@@ -19,17 +21,32 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [keepLoggedIn, setKeepLoggedIn] = useState(false);
   const [autoLoggingIn, setAutoLoggingIn] = useState(true);
+  const autoLoginAttempted = useRef(false);
 
-  // If AuthGuard already restored a session, just wait for redirect (don't do anything)
+  // If AuthGuard already restored a session, stop showing loading immediately
+  // (AuthGuard's navigation guard will redirect to production)
   useEffect(() => {
     if (session) {
-      // AuthGuard will handle navigation — just show loading
-      return;
+      setAutoLoggingIn(false);
     }
+  }, [session]);
 
-    // No session from AuthGuard — try saved credentials only
+  useEffect(() => {
+    if (session || autoLoginAttempted.current) return;
+    autoLoginAttempted.current = true;
+
     let isMounted = true;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
     const tryAutoLogin = async () => {
+      timeoutId = setTimeout(() => {
+        if (isMounted) {
+          console.warn('[Login] Auto-login timed out');
+          setLoading(false);
+          setAutoLoggingIn(false);
+        }
+      }, AUTO_LOGIN_TIMEOUT_MS);
+
       try {
         const saved = await getSavedLogin();
         if (!isMounted) return;
@@ -44,7 +61,6 @@ export default function LoginScreen() {
             const loginSession = await repos.authRepo.login(saved.username, saved.password);
             if (!isMounted) return;
             setSession(loginSession);
-            // AuthGuard navigation guard will redirect to production
             return;
           } catch (loginErr) {
             console.warn('Auto-login failed:', loginErr);
@@ -60,8 +76,12 @@ export default function LoginScreen() {
       }
       if (isMounted) setAutoLoggingIn(false);
     };
+
     tryAutoLogin();
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [session]);
 
   const handleLogin = async () => {

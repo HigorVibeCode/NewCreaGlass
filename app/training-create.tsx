@@ -10,7 +10,8 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -19,6 +20,7 @@ import { Input } from '../src/components/shared/Input';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 import { useAppTheme } from '../src/hooks/use-app-theme';
 import { repos } from '../src/services/container';
 import { Training, TrainingCategory, TrainingAttachment } from '../src/types';
@@ -29,11 +31,12 @@ const MAX_ATTACHMENTS = 5;
 export default function TrainingCreateScreen() {
   const { t } = useI18n();
   const router = useRouter();
+  const goBack = useGoBack('/(tabs)/documents');
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { effectiveTheme } = useAppTheme();
   const isDark = effectiveTheme === 'dark';
-  const { trainingId, category } = useLocalSearchParams<{ trainingId?: string; category: TrainingCategory }>();
+  const { trainingId, category } = useRouteParams<{ trainingId?: string; category: TrainingCategory }>('/training-create');
   const trainingCategory = category || 'mandatory';
 
   const [title, setTitle] = useState('');
@@ -83,7 +86,7 @@ export default function TrainingCreateScreen() {
         }
       } else {
         Alert.alert(t('common.error'), t('training.trainingNotFound'), [
-          { text: t('common.ok') || t('common.confirm'), onPress: () => router.back() },
+          { text: t('common.ok') || t('common.confirm'), onPress: () => safeBack(router) },
         ]);
       }
     } catch (error) {
@@ -237,7 +240,7 @@ export default function TrainingCreateScreen() {
         t('common.success'),
         isEditing ? t('training.trainingUpdated') : t('training.trainingCreated'),
         [
-          { text: t('common.ok') || t('common.confirm'), onPress: () => router.back() },
+          { text: t('common.ok') || t('common.confirm'), onPress: () => safeBack(router) },
         ]
       );
     } catch (error) {
@@ -284,7 +287,7 @@ export default function TrainingCreateScreen() {
           <View style={styles.headerContent}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.back()}
+              onPress={goBack}
               activeOpacity={0.7}
             >
               <Ionicons name="arrow-back" size={24} color={colors.text} />

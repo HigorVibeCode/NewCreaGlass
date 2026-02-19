@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { useGoBack } from '../src/hooks/use-go-back';
 import { useAppTheme } from '../src/hooks/use-app-theme';
 import { useAuth } from '../src/store/auth-store';
 import { Button } from '../src/components/shared/Button';
@@ -14,18 +16,20 @@ import { PermissionGuard } from '../src/components/shared/PermissionGuard';
 import { repos } from '../src/services/container';
 import { Training, TrainingCategory } from '../src/types';
 import { getLocalizedTrainingTitle, getLocalizedTrainingDescription } from '../src/utils/training-i18n';
+import { pushWithParams } from '../src/utils/navigation';
 import { theme } from '../src/theme';
 import { formatDate as formatDateUtil } from '../src/utils/date-format';
 
 export default function TrainingsListScreen() {
   const { t, currentLanguage } = useI18n();
   const router = useRouter();
+  const goBack = useGoBack('/(tabs)/documents');
   const colors = useThemeColors();
   const { effectiveTheme } = useAppTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const isDark = effectiveTheme === 'dark';
-  const { category } = useLocalSearchParams<{ category: TrainingCategory }>();
+  const { category } = useRouteParams<{ category: TrainingCategory }>('/trainings-list');
   const trainingCategory = category || 'mandatory';
   
   const [trainings, setTrainings] = useState<Training[]>([]);
@@ -77,24 +81,15 @@ export default function TrainingsListScreen() {
   }, [router, loadTrainings]);
 
   const handleAddTraining = () => {
-    router.push({
-      pathname: '/training-create',
-      params: { category: trainingCategory },
-    } as any);
+    pushWithParams(router, '/training-create', { category: String(trainingCategory) });
   };
 
   const handleTrainingPress = (trainingId: string) => {
-    router.push({
-      pathname: '/training-detail',
-      params: { trainingId },
-    } as any);
+    pushWithParams(router, '/training-detail', { trainingId: String(trainingId) });
   };
 
   const handleHistory = () => {
-    router.push({
-      pathname: '/trainings-history',
-      params: { category: trainingCategory },
-    } as any);
+    pushWithParams(router, '/trainings-history', { category: String(trainingCategory) });
   };
 
   const formatDate = (dateString: string): string => {
@@ -161,7 +156,7 @@ export default function TrainingsListScreen() {
           <View style={styles.headerContent}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.back()}
+              onPress={goBack}
               activeOpacity={0.7}
             >
               <Ionicons name="arrow-back" size={24} color={colors.text} />

@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity, ActivityIndicator, Alert, Platform, TextInput, Image } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,11 +9,14 @@ import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { useAppTheme } from '../src/hooks/use-app-theme';
 import { useAuth } from '../src/store/auth-store';
+import { useGoBack } from '../src/hooks/use-go-back';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { repos } from '../src/services/container';
 import { supabase } from '../src/services/supabase';
+import { getCachedSignedUrl, prefetchSignedUrls } from '../src/utils/signed-url-cache';
 import { EquipmentMachine } from '../src/types';
 import { confirmDelete } from '../src/utils/confirm-dialog';
+import { pushWithParams } from '../src/utils/navigation';
 import { theme } from '../src/theme';
 
 const BUCKET_NAME = 'documents';
@@ -58,13 +62,14 @@ const showMsg = (message: string) => {
 };
 
 export default function DocumentsCategoryScreen() {
-  const { categoryId } = useLocalSearchParams<{ categoryId: string }>();
+  const { categoryId } = useRouteParams<{ categoryId: string }>('/documents-category');
   const router = useRouter();
   const { t } = useI18n();
   const colors = useThemeColors();
   const { effectiveTheme } = useAppTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const goBack = useGoBack('/(tabs)/documents');
   const isDark = effectiveTheme === 'dark';
 
   // Equipment state
@@ -130,21 +135,24 @@ export default function DocumentsCategoryScreen() {
     }, [loadEquipment])
   );
 
-  // Load equipment thumbnails
   useEffect(() => {
     const withThumb = equipment.filter((eq) => eq.icon && eq.icon.startsWith('equip_thumb_'));
     if (withThumb.length === 0) return;
     let cancelled = false;
     const load = async () => {
-      const urls: Record<string, string> = {};
-      for (const eq of withThumb) {
+      try {
+        const paths = withThumb.map((eq) => eq.icon!);
+        await prefetchSignedUrls(paths);
         if (cancelled) return;
-        try {
-          const { data } = await supabase.storage.from(BUCKET_NAME).createSignedUrl(eq.icon!, 3600);
-          if (data?.signedUrl) urls[eq.id] = data.signedUrl;
-        } catch (_) {}
+        const urls: Record<string, string> = {};
+        for (const eq of withThumb) {
+          const url = await getCachedSignedUrl(eq.icon!);
+          if (url) urls[eq.id] = url;
+        }
+        if (!cancelled) setEquipThumbUrls((prev) => ({ ...prev, ...urls }));
+      } catch (error) {
+        console.error('[DocumentsCategory] Error loading thumbnails:', error);
       }
-      if (!cancelled) setEquipThumbUrls((prev) => ({ ...prev, ...urls }));
     };
     load();
     return () => { cancelled = true; };
@@ -192,10 +200,7 @@ export default function DocumentsCategoryScreen() {
   };
 
   const handleEquipmentPress = (eq: EquipmentMachine) => {
-    router.push({
-      pathname: '/equipment-documents',
-      params: { equipmentId: eq.id, equipmentName: eq.name },
-    } as any);
+    pushWithParams(router, '/equipment-documents', { equipmentId: eq.id, equipmentName: eq.name });
   };
 
   const handleSubCategoryPress = (subCatId: string) => {
@@ -206,30 +211,15 @@ export default function DocumentsCategoryScreen() {
     if (subCatId === 'maintenance') {
       router.push('/maintenance-list');
     } else if (subCatId === 'obrigatorios') {
-      router.push({
-        pathname: '/trainings-list',
-        params: { category: 'mandatory' },
-      } as any);
+      pushWithParams(router, '/trainings-list', { category: 'mandatory' });
     } else if (subCatId === 'onboarding') {
-      router.push({
-        pathname: '/trainings-list',
-        params: { category: 'onboarding' },
-      } as any);
+      pushWithParams(router, '/trainings-list', { category: 'onboarding' });
     } else if (baseCategoryId === 'professionalTraining') {
-      router.push({
-        pathname: '/trainings-list',
-        params: { category: 'professional' },
-      } as any);
+      pushWithParams(router, '/trainings-list', { category: 'professional' });
     } else if (isLegalRequirements) {
-      router.push({
-        pathname: '/documents-category',
-        params: { categoryId: `legalRequirements.${subCatId}` },
-      } as any);
+      pushWithParams(router, '/documents-category', { categoryId: `legalRequirements.${subCatId}` });
     } else {
-      router.push({
-        pathname: '/documents-category',
-        params: { categoryId: `equipmentTools.${subCatId}` },
-      } as any);
+      pushWithParams(router, '/documents-category', { categoryId: `equipmentTools.${subCatId}` });
     }
   };
 
@@ -244,7 +234,7 @@ export default function DocumentsCategoryScreen() {
     if (n.includes('laminat')) return 'layers';
     if (n.includes('polish') || n.includes('polir')) return 'sparkles';
     if (n.includes('drill') || n.includes('furar')) return 'construct';
-    return 'hardware';
+    return 'build';
   };
 
   const getEquipmentColor = (index: number): { iconColor: string; bgColor: string } => {
@@ -280,7 +270,7 @@ export default function DocumentsCategoryScreen() {
           <View style={styles.headerContent}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.back()}
+              onPress={goBack}
               activeOpacity={0.7}
             >
               <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -327,10 +317,7 @@ export default function DocumentsCategoryScreen() {
                   } else if (baseCategoryId === 'professionalTraining') {
                     cat = 'professional';
                   }
-                  router.push({
-                    pathname: '/trainings-history',
-                    params: { category: cat },
-                  } as any);
+                  pushWithParams(router, '/trainings-history', { category: cat });
                 }}
                 activeOpacity={0.7}
               >
@@ -448,10 +435,7 @@ export default function DocumentsCategoryScreen() {
                 <TouchableOpacity
                   style={[styles.emptyIconContainer, { backgroundColor: colors.backgroundSecondary }]}
                   onPress={() => {
-                    router.push({
-                      pathname: '/trainings-list',
-                      params: { category: 'professional' },
-                    } as any);
+                    pushWithParams(router, '/trainings-list', { category: 'professional' });
                   }}
                   activeOpacity={0.7}
                 >

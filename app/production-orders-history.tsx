@@ -12,12 +12,14 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { formatDate } from '../src/utils/date-format';
 import { repos } from '../src/services/container';
 import { Production, ProductionStatus } from '../src/types';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { pushWithParams } from '../src/utils/navigation';
 
 export default function ProductionOrdersHistoryScreen() {
   const { t } = useI18n();
@@ -178,7 +180,7 @@ export default function ProductionOrdersHistoryScreen() {
         <View style={styles.headerContent}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={() => safeBack(router)}
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
@@ -224,10 +226,7 @@ export default function ProductionOrdersHistoryScreen() {
                   style={[styles.card, { backgroundColor: colors.cardBackground }]}
                   activeOpacity={0.7}
                   onPress={() => {
-                    router.push({
-                      pathname: '/production-detail',
-                      params: { productionId: production.id },
-                    });
+                    pushWithParams(router, '/production-detail', { productionId: production.id });
                   }}
                 >
                   <View style={[styles.cardIndicator, { backgroundColor: statusColor }]} />

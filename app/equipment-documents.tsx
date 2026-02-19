@@ -10,11 +10,10 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { useFocusEffect } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { useAppTheme } from '../src/hooks/use-app-theme';
@@ -22,7 +21,10 @@ import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { repos } from '../src/services/container';
 import { EquipmentDocument } from '../src/types';
 import { confirmDelete } from '../src/utils/confirm-dialog';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 import { supabase } from '../src/services/supabase';
+import { getCachedSignedUrl } from '../src/utils/signed-url-cache';
+import { pushWithParams } from '../src/utils/navigation';
 import { theme } from '../src/theme';
 
 const BUCKET_NAME = 'documents';
@@ -39,30 +41,42 @@ export default function EquipmentDocumentsScreen() {
   const { t } = useI18n();
   const router = useRouter();
   const colors = useThemeColors();
-  const insets = useSafeAreaInsets();
   const { effectiveTheme } = useAppTheme();
   const isDark = effectiveTheme === 'dark';
-  const { equipmentId, equipmentName: initialName } = useLocalSearchParams<{
+  const params = useRouteParams<{
     equipmentId: string;
     equipmentName: string;
-  }>();
+  }>('/equipment-documents');
+  const equipmentId = params.equipmentId || '';
+  const initialName = params.equipmentName || '';
+  const goBack = useGoBack('/(tabs)/documents');
 
   const [documents, setDocuments] = useState<EquipmentDocument[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
   const [equipName, setEquipName] = useState(initialName || '');
   const [equipThumbUrl, setEquipThumbUrl] = useState<string>('');
 
+  useEffect(() => {
+    if (!equipmentId && Platform.OS === 'web') {
+      console.warn('[EquipmentDocuments] No equipmentId, redirecting back');
+      const timeout = setTimeout(() => safeBack(router), 300);
+      return () => clearTimeout(timeout);
+    }
+  }, [equipmentId, router]);
+
   const loadDocuments = useCallback(async () => {
-    if (!equipmentId) return;
+    if (!equipmentId) {
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     try {
       const list = await repos.equipmentDocumentsRepo.getDocumentsByEquipment(equipmentId);
-      // Ordenar por título (alfabética, case-insensitive)
       list.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
       setDocuments(list);
     } catch (error) {
-      console.error('Error loading equipment documents:', error);
+      console.error('[EquipmentDocuments] Error loading documents:', error);
     } finally {
       setIsLoading(false);
     }
@@ -75,8 +89,8 @@ export default function EquipmentDocumentsScreen() {
       if (eq) {
         setEquipName(eq.name);
         if (eq.icon && eq.icon.startsWith('equip_thumb_')) {
-          const { data } = await supabase.storage.from(BUCKET_NAME).createSignedUrl(eq.icon, 3600);
-          if (data?.signedUrl) setEquipThumbUrl(data.signedUrl);
+          const url = await getCachedSignedUrl(eq.icon);
+          if (url) setEquipThumbUrl(url);
         }
       }
     } catch (_) {}
@@ -94,44 +108,52 @@ export default function EquipmentDocumentsScreen() {
     if (withThumb.length === 0) return;
     let cancelled = false;
     const load = async () => {
-      const next: Record<string, string> = {};
-      for (const doc of withThumb) {
-        if (cancelled) return;
-        try {
-          const url = await repos.equipmentDocumentsRepo.getDocumentThumbnailUrl(doc.id);
-          if (url) next[doc.id] = url;
-        } catch (_) {}
+      try {
+        const BATCH_SIZE = 5;
+        for (let i = 0; i < withThumb.length; i += BATCH_SIZE) {
+          if (cancelled) return;
+          const batch = withThumb.slice(i, i + BATCH_SIZE);
+          const results = await Promise.all(
+            batch.map(async (doc) => {
+              try {
+                const url = await repos.equipmentDocumentsRepo.getDocumentThumbnailUrl(doc.id);
+                return url ? { id: doc.id, url } : null;
+              } catch { return null; }
+            })
+          );
+          if (!cancelled) {
+            const next: Record<string, string> = {};
+            for (const r of results) if (r) next[r.id] = r.url;
+            setThumbnailUrls((prev) => ({ ...prev, ...next }));
+          }
+        }
+      } catch (error) {
+        console.error('[EquipmentDocuments] Error loading thumbnails:', error);
       }
-      if (!cancelled) setThumbnailUrls((prev) => ({ ...prev, ...next }));
     };
     load();
     return () => { cancelled = true; };
   }, [documents]);
 
   const handleCreateDocument = () => {
-    router.push({
-      pathname: '/equipment-document-create',
-      params: { equipmentId, equipmentName: equipName },
-    } as any);
+    pushWithParams(router, '/equipment-document-create', { equipmentId, equipmentName: equipName });
   };
 
   const handleDocumentPress = (docId: string) => {
-    router.push({
-      pathname: '/equipment-document-detail',
-      params: { equipmentId, equipmentName: equipName, documentId: docId },
-    } as any);
+    pushWithParams(router, '/equipment-document-detail', { equipmentId, equipmentName: equipName, documentId: docId });
   };
 
   // Change equipment thumbnail — just a pencil icon in the header
   const handleChangeThumb = async () => {
     try {
+      const ImagePicker = await import('expo-image-picker');
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         showMsg(t('equipmentDocs.imagePickerError') || 'Permissão necessária');
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         quality: 0.8,
         aspect: [1, 1],
@@ -171,8 +193,8 @@ export default function EquipmentDocumentsScreen() {
       // Store filename in icon field
       await repos.equipmentDocumentsRepo.updateEquipment(equipmentId, { icon: filename });
 
-      const { data } = await supabase.storage.from(BUCKET_NAME).createSignedUrl(filename, 3600);
-      if (data?.signedUrl) setEquipThumbUrl(data.signedUrl);
+      const url = await getCachedSignedUrl(filename);
+      if (url) setEquipThumbUrl(url);
     } catch (error) {
       console.error('Error picking equipment thumbnail:', error);
     }
@@ -186,7 +208,7 @@ export default function EquipmentDocumentsScreen() {
         `Excluir "${equipName}"?`,
       async () => {
         await repos.equipmentDocumentsRepo.deleteEquipment(equipmentId);
-        router.back();
+        safeBack(router);
       },
       undefined,
       t('common.delete') || 'Excluir',
@@ -211,7 +233,7 @@ export default function EquipmentDocumentsScreen() {
           ]}
         >
           <View style={styles.headerContent}>
-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.backButton} onPress={goBack} activeOpacity={0.7}>
               <Ionicons name="arrow-back" size={24} color={colors.text} />
             </TouchableOpacity>
 

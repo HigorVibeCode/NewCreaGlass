@@ -10,11 +10,14 @@ import { useAppTheme } from '../src/hooks/use-app-theme';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { repos } from '../src/services/container';
 import { Manual } from '../src/types';
+import { pushWithParams } from '../src/utils/navigation';
+import { useGoBack } from '../src/hooks/use-go-back';
 import { theme } from '../src/theme';
 
 export default function ManualsListScreen() {
   const { t } = useI18n();
   const router = useRouter();
+  const goBack = useGoBack('/(tabs)/documents');
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { effectiveTheme } = useAppTheme();
@@ -44,15 +47,19 @@ export default function ManualsListScreen() {
     if (withThumb.length === 0) return;
     let cancelled = false;
     const load = async () => {
-      const next: Record<string, string> = {};
-      for (const m of withThumb) {
-        if (cancelled) return;
-        try {
-          const url = await repos.manualsRepo.getManualThumbnailUrl(m.id);
-          if (url) next[m.id] = url;
-        } catch (_) {}
+      const results = await Promise.all(
+        withThumb.map(async (m) => {
+          try {
+            const url = await repos.manualsRepo.getManualThumbnailUrl(m.id);
+            return url ? { id: m.id, url } : null;
+          } catch { return null; }
+        })
+      );
+      if (!cancelled) {
+        const next: Record<string, string> = {};
+        for (const r of results) if (r) next[r.id] = r.url;
+        setThumbnailUrls((prev) => ({ ...prev, ...next }));
       }
-      if (!cancelled) setThumbnailUrls((prev) => ({ ...prev, ...next }));
     };
     load();
     return () => { cancelled = true; };
@@ -69,7 +76,7 @@ export default function ManualsListScreen() {
   };
 
   const handleEditManual = (manualId: string) => {
-    router.push({ pathname: '/manual-create', params: { manualId } } as any);
+    pushWithParams(router, '/manual-create', { manualId: String(manualId) });
   };
 
   const handleManualPress = async (manual: Manual) => {
@@ -100,7 +107,7 @@ export default function ManualsListScreen() {
         ]}
       >
         <View style={styles.headerContent}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.backButton} onPress={goBack} activeOpacity={0.7}>
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>

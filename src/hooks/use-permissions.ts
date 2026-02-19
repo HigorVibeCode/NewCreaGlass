@@ -8,25 +8,9 @@ export const usePermissions = () => {
   const { data: permissions = [] } = usePermissionsQuery(user?.id);
   
   const hasPermission = (permissionKey: PermissionKey): boolean => {
-    // Always return false if no user
-    if (!user) {
-      return false;
-    }
-    
-    // Master user has ALL permissions - check this FIRST before anything else
-    if (user.userType === 'Master') {
-      return true;
-    }
-    
-    // For non-Master users, check permissions from the database
-    const result = can(user, permissionKey, permissions);
-    
-    // Debug log (can be removed later)
-    if (__DEV__) {
-      console.log(`[Permission Check] User: ${user.username}, Permission: ${permissionKey}, Has: ${result}, Total permissions: ${permissions.length}`);
-    }
-    
-    return result;
+    if (!user) return false;
+    if (user.userType === 'Master') return true;
+    return can(user, permissionKey, permissions);
   };
   
   const permissionsList = useMemo(() => {
@@ -38,6 +22,7 @@ export const usePermissions = () => {
         'documents.create',
         'documents.view',
         'documents.download',
+        'documents.update',
         'documents.delete',
         'inventory.create',
         'inventory.update',

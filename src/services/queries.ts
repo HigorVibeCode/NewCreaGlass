@@ -6,23 +6,16 @@ export const usePermissionsQuery = (userId?: string) => {
   return useQuery<Permission[]>({
     queryKey: ['permissions', userId],
     queryFn: async () => {
-      if (!userId) {
-        if (__DEV__) console.log('[usePermissionsQuery] No userId provided');
-        return [];
-      }
+      if (!userId) return [];
       try {
-        const perms = await repos.permissionsRepo.getUserPermissions(userId);
-        if (__DEV__) {
-          console.log(`[usePermissionsQuery] Loaded ${perms.length} permissions for user ${userId}:`, perms.map(p => p.key));
-        }
-        return perms;
+        return await repos.permissionsRepo.getUserPermissions(userId);
       } catch (error) {
         console.error('[usePermissionsQuery] Error loading permissions:', error);
         return [];
       }
     },
     enabled: !!userId,
-    staleTime: 30000, // Cache for 30 seconds
+    staleTime: 5 * 60 * 1000,
   });
 };
 

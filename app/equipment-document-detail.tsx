@@ -9,7 +9,8 @@ import {
   Image,
   Platform,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +22,8 @@ import { repos } from '../src/services/container';
 import { EquipmentDocument, EquipmentDocumentAttachment } from '../src/types';
 import { confirmDelete } from '../src/utils/confirm-dialog';
 import { downloadAndOpenAttachment } from '../src/utils/attachments';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
+import { pushWithParams } from '../src/utils/navigation';
 import { theme } from '../src/theme';
 
 export default function EquipmentDocumentDetailScreen() {
@@ -30,25 +33,32 @@ export default function EquipmentDocumentDetailScreen() {
   const insets = useSafeAreaInsets();
   const { effectiveTheme } = useAppTheme();
   const isDark = effectiveTheme === 'dark';
-  const { equipmentId, equipmentName, documentId } = useLocalSearchParams<{
+  const { equipmentId, equipmentName, documentId } = useRouteParams<{
     equipmentId: string;
     equipmentName?: string;
     documentId: string;
-  }>();
+  }>('/equipment-document-detail');
+  const goBack = useGoBack('/(tabs)/documents');
 
   const [document, setDocument] = useState<EquipmentDocument | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [thumbnailUrl, setThumbnailUrl] = useState<string>('');
   const [attachmentUrls, setAttachmentUrls] = useState<Record<string, string>>({});
+
+  // documentId check handled by useFocusEffect below
 
   const loadDocument = useCallback(async () => {
     if (!documentId) return;
     setIsLoading(true);
+    setLoadError(false);
     try {
       const doc = await repos.equipmentDocumentsRepo.getDocumentById(documentId);
       setDocument(doc);
+      if (!doc) setLoadError(true);
     } catch (error) {
       console.error('Error loading document:', error);
+      setLoadError(true);
     } finally {
       setIsLoading(false);
     }
@@ -56,8 +66,8 @@ export default function EquipmentDocumentDetailScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadDocument();
-    }, [loadDocument])
+      if (documentId) loadDocument();
+    }, [loadDocument, documentId])
   );
 
   // Load thumbnail URL
@@ -93,10 +103,7 @@ export default function EquipmentDocumentDetailScreen() {
   }, [document]);
 
   const handleEdit = () => {
-    router.push({
-      pathname: '/equipment-document-create',
-      params: { equipmentId, equipmentName, documentId },
-    } as any);
+    pushWithParams(router, '/equipment-document-create', { equipmentId, equipmentName, documentId });
   };
 
   const handleDelete = () => {
@@ -106,7 +113,7 @@ export default function EquipmentDocumentDetailScreen() {
       t('equipmentDocs.deleteDocumentConfirm') || 'Excluir este documento? Esta ação não pode ser desfeita.',
       async () => {
         await repos.equipmentDocumentsRepo.deleteDocument(documentId);
-        router.back();
+        safeBack(router);
       },
       undefined,
       t('common.delete') || 'Excluir',
@@ -139,15 +146,19 @@ export default function EquipmentDocumentDetailScreen() {
     );
   }
 
-  if (!document) {
+  if (loadError || !document) {
     return (
       <ScreenWrapper>
         <View style={styles.loadingContainer}>
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-            {t('equipmentDocs.documentNotFound') || 'Documento não encontrado'}
+          <Ionicons name="alert-circle-outline" size={48} color={colors.textSecondary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary, marginTop: 12 }]}>
+            {t('common.error')}
           </Text>
-          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7}>
-            <Text style={{ color: colors.primary, marginTop: 16 }}>{t('common.back') || 'Voltar'}</Text>
+          <TouchableOpacity
+            onPress={goBack}
+            style={{ marginTop: 16, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: colors.primary, borderRadius: 8 }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600' }}>{t('common.back') || 'Back'}</Text>
           </TouchableOpacity>
         </View>
       </ScreenWrapper>
@@ -169,7 +180,7 @@ export default function EquipmentDocumentDetailScreen() {
           ]}
         >
           <View style={styles.headerContent}>
-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.backButton} onPress={goBack} activeOpacity={0.7}>
               <Ionicons name="arrow-back" size={24} color={colors.text} />
             </TouchableOpacity>
             <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
@@ -331,6 +342,9 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: theme.typography.fontSize.md,
   },
   scrollView: {
     flex: 1,

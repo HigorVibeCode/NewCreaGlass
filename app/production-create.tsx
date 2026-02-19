@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import React, { useEffect, useState, useCallback } from 'react';
 import {
     ActivityIndicator,
@@ -21,6 +22,7 @@ import { Dropdown, DropdownOption } from '../src/components/shared/Dropdown';
 import { Input } from '../src/components/shared/Input';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 import { repos } from '../src/services/container';
 import { supabase } from '../src/services/supabase';
 import { useAuth } from '../src/store/auth-store';
@@ -57,7 +59,8 @@ export default function ProductionCreateScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const { productionId } = useLocalSearchParams<{ productionId: string }>();
+  const { productionId } = useRouteParams<{ productionId: string }>('/production-create');
+  const goBack = useGoBack();
 
   const [orderNumber, setOrderNumber] = useState('');
   const [clientName, setClientName] = useState('');
@@ -168,7 +171,7 @@ export default function ProductionCreateScreen() {
         }
       } else {
         Alert.alert(t('common.error'), 'Production order not found', [
-          { text: t('common.confirm'), onPress: () => router.back() },
+          { text: t('common.confirm'), onPress: () => safeBack(router) },
         ]);
       }
     } catch (error) {
@@ -454,10 +457,10 @@ export default function ProductionCreateScreen() {
         });
         if (Platform.OS === 'web') {
           window.alert('Order updated successfully');
-          router.back();
+          safeBack(router);
         } else {
           Alert.alert(t('common.success'), 'Order updated successfully', [
-            { text: t('common.confirm'), onPress: () => router.back() },
+            { text: t('common.confirm'), onPress: () => safeBack(router) },
           ]);
         }
       } else {
@@ -477,10 +480,10 @@ export default function ProductionCreateScreen() {
         await repos.productionRepo.createProduction(newProduction);
         if (Platform.OS === 'web') {
           window.alert(t('production.orderCreated') || 'Production order created');
-          router.back();
+          safeBack(router);
         } else {
           Alert.alert(t('common.success'), t('production.orderCreated'), [
-            { text: t('common.confirm'), onPress: () => router.back() },
+            { text: t('common.confirm'), onPress: () => safeBack(router) },
           ]);
         }
       }
@@ -511,7 +514,7 @@ export default function ProductionCreateScreen() {
       <View style={[styles.header, { paddingTop: insets.top + theme.spacing.md, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
         <TouchableOpacity
           style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-          onPress={() => router.back()}
+          onPress={goBack}
           activeOpacity={0.7}
         >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -701,7 +704,7 @@ export default function ProductionCreateScreen() {
         <View style={styles.buttonContainer}>
           <Button
             title={t('common.cancel')}
-            onPress={() => router.back()}
+            onPress={goBack}
             variant="outline"
             style={styles.button}
           />

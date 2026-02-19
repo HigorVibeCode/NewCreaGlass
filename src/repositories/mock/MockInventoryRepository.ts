@@ -21,13 +21,13 @@ export class MockInventoryRepository implements InventoryRepository {
         },
         {
           id: 'group-supplies',
-          name: 'Supplies',
+          name: 'Profiles',
           createdBy: 'system',
           createdAt: new Date().toISOString(),
         },
         {
           id: 'group-spare-parts',
-          name: 'Spare Parts',
+          name: 'Supplies',
           createdBy: 'system',
           createdAt: new Date().toISOString(),
         },
@@ -53,13 +53,13 @@ export class MockInventoryRepository implements InventoryRepository {
       },
       {
         id: 'group-supplies',
-        name: 'Supplies',
+        name: 'Profiles',
         createdBy: 'system',
         createdAt: new Date().toISOString(),
       },
       {
         id: 'group-spare-parts',
-        name: 'Spare Parts',
+        name: 'Supplies',
         createdBy: 'system',
         createdAt: new Date().toISOString(),
       },
@@ -114,6 +114,13 @@ export class MockInventoryRepository implements InventoryRepository {
     const item = items.find(i => i.id === itemId) || null;
     if (item) await this.attachImagesToItems([item]);
     return item;
+  }
+
+  async getItemsByIds(ids: string[]): Promise<InventoryItem[]> {
+    const items = await this.getItems();
+    const found = items.filter(i => ids.includes(i.id));
+    await this.attachImagesToItems(found);
+    return found;
   }
 
   private async getItemImages(): Promise<InventoryItemImage[]> {
@@ -315,4 +322,6 @@ export class MockInventoryRepository implements InventoryRepository {
   async getItemImageUrlSigned(_storagePath: string): Promise<string> {
     return '';
   }
+
+  async prefetchItemImageUrls(_storagePaths: string[]): Promise<void> {}
 }

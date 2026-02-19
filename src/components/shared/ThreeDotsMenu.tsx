@@ -45,7 +45,7 @@ export const ThreeDotsMenu: React.FC<ThreeDotsMenuProps> = ({ visible, onClose }
     {
       icon: 'water-outline',
       label: t('navigation.bloodPriority'),
-      route: '/blood-priority',
+      route: '/blood-priority?manage=1',
       color: colors.error,
     },
   ];

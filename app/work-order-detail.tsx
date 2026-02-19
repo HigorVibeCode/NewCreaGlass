@@ -14,19 +14,24 @@ import {
 import { Image } from 'expo-image';
 import * as Location from 'expo-location';
 import SignatureCanvas from 'react-native-signature-canvas';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useAuth } from '../src/store/auth-store';
 import { repos } from '../src/services/container';
 import { supabase } from '../src/services/supabase';
+import { getCachedSignedUrl } from '../src/utils/signed-url-cache';
 import { WorkOrder, User, TimeStatus, ServiceLog, Evidence, ChecklistItem } from '../src/types';
 import { theme } from '../src/theme';
 import { formatDate as formatDateUtil, formatDateTime as formatDateTimeUtil, formatTimestamp as formatTimestampUtil } from '../src/utils/date-format';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 import { confirmDelete } from '../src/utils/confirm-dialog';
 import { downloadAndOpenAttachment } from '../src/utils/attachments';
+import { pushWithParams } from '../src/utils/navigation';
+import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 
 // Web-specific signature pad (loaded only on web)
 const WebSignaturePad = Platform.OS === 'web'
@@ -39,10 +44,12 @@ export default function WorkOrderDetailScreen() {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { workOrderId } = useLocalSearchParams<{ workOrderId: string }>();
+  const { workOrderId } = useRouteParams<{ workOrderId: string }>('/work-order-detail');
+  const goBack = useGoBack('/(tabs)/events');
 
   const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [users, setUsers] = useState<Map<string, User>>(new Map());
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentElapsedTime, setCurrentElapsedTime] = useState(0);
@@ -64,10 +71,7 @@ export default function WorkOrderDetailScreen() {
 
   const handleEdit = () => {
     if (!workOrderId) return;
-    router.push({
-      pathname: '/event-report-create',
-      params: { workOrderId },
-    });
+    pushWithParams(router, '/event-report-create', { workOrderId: String(workOrderId) });
   };
 
   const handleStartService = async () => {
@@ -386,7 +390,7 @@ export default function WorkOrderDetailScreen() {
       'Tem certeza que deseja excluir esta ordem de serviço?',
       async () => {
         await repos.workOrdersRepo.deleteWorkOrder(workOrderId);
-        router.back();
+        safeBack(router);
       },
       undefined,
       t('common.delete') || 'Excluir',
@@ -500,6 +504,7 @@ export default function WorkOrderDetailScreen() {
   const loadWorkOrder = async () => {
     if (!workOrderId) return;
     setIsLoading(true);
+    setLoadError(false);
     try {
       const workOrderData = await repos.workOrdersRepo.getWorkOrderById(workOrderId);
       if (workOrderData) {
@@ -536,11 +541,9 @@ export default function WorkOrderDetailScreen() {
                 if (filename.startsWith('documents/')) {
                   filename = filename.replace('documents/', '');
                 }
-                const { data, error } = await supabase.storage
-                  .from('documents')
-                  .createSignedUrl(filename, 3600); // 1 hour
-                if (data?.signedUrl && !error) {
-                  return { ...ev, photoPath: data.signedUrl };
+                const url = await getCachedSignedUrl(filename);
+                if (url) {
+                  return { ...ev, photoPath: url };
                 }
               } catch (e) {
                 console.warn('Error creating signed URL for evidence:', e);
@@ -554,22 +557,11 @@ export default function WorkOrderDetailScreen() {
         setWorkOrder(workOrderData);
         await loadUsers(workOrderData);
       } else {
-        if (Platform.OS === 'web') {
-          window.alert('Work order not found');
-          router.back();
-        } else {
-          Alert.alert(t('common.error'), 'Work order not found', [
-            { text: t('common.confirm'), onPress: () => router.back() },
-          ]);
-        }
+        setLoadError(true);
       }
     } catch (error) {
       console.error('Error loading work order:', error);
-      if (Platform.OS === 'web') {
-        window.alert('Failed to load work order');
-      } else {
-        Alert.alert(t('common.error'), 'Failed to load work order');
-      }
+      setLoadError(true);
     } finally {
       setIsLoading(false);
     }
@@ -652,44 +644,21 @@ export default function WorkOrderDetailScreen() {
   };
 
   const getTimeStatusLabel = (status: string): string => {
-    switch (status) {
-      case 'EM_ATENDIMENTO':
-        return 'Em Atendimento';
-      case 'PAUSADO':
-        return 'Pausado';
-      case 'DESLOCAMENTO':
-        return 'Deslocamento';
-      default:
-        return status;
-    }
+    const key = `workOrders.timeStatus.${status}`;
+    const translated = t(key);
+    return translated !== key ? translated : status;
   };
 
   const getServiceLogTypeLabel = (type: string): string => {
-    switch (type) {
-      case 'ajuste':
-        return 'Ajuste';
-      case 'problema':
-        return 'Problema';
-      case 'material':
-        return 'Material';
-      case 'recomendacao':
-        return 'Recomendação';
-      default:
-        return type;
-    }
+    const key = `workOrders.serviceLogType.${type}`;
+    const translated = t(key);
+    return translated !== key ? translated : type;
   };
 
   const getEvidenceTypeLabel = (type: string): string => {
-    switch (type) {
-      case 'antes':
-        return 'Antes';
-      case 'durante':
-        return 'Durante';
-      case 'depois':
-        return 'Depois';
-      default:
-        return type;
-    }
+    const key = `workOrders.evidenceType.${type}`;
+    const translated = t(key);
+    return translated !== key ? translated : type;
   };
 
   const formatDateTime = (date: string, time?: string): string => {
@@ -723,8 +692,23 @@ export default function WorkOrderDetailScreen() {
     );
   }
 
-  if (!workOrder) {
-    return null;
+  if (loadError || !workOrder) {
+    return (
+      <ScreenWrapper>
+        <View style={styles.loadingContainer}>
+          <Ionicons name="alert-circle-outline" size={48} color={colors.textSecondary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary, marginTop: 12 }]}>
+            {t('common.error')}
+          </Text>
+          <TouchableOpacity
+            onPress={goBack}
+            style={{ marginTop: 16, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: colors.primary, borderRadius: 8 }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600' }}>{t('common.back') || 'Back'}</Text>
+          </TouchableOpacity>
+        </View>
+      </ScreenWrapper>
+    );
   }
 
   const totalTime = (workOrder.timeStatuses || []).reduce((sum, ts) => sum + ts.totalDuration, 0);
@@ -740,7 +724,7 @@ export default function WorkOrderDetailScreen() {
       <View style={[styles.header, { paddingTop: insets.top + theme.spacing.md, backgroundColor: colors.background }]}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={goBack}
           activeOpacity={0.7}
         >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -1439,6 +1423,9 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: theme.typography.fontSize.md,
   },
   header: {
     flexDirection: 'row',

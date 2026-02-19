@@ -15,24 +15,13 @@ export const PermissionGuard: React.FC<PermissionGuardProps> = ({
   fallback = null,
 }) => {
   const { user } = useAuth();
-  const { hasPermission, isLoading } = usePermissions();
+  const { hasPermission } = usePermissions();
   
-  // Master users always have access - check this first
   if (user?.userType === 'Master') {
-    if (__DEV__) {
-      console.log(`[PermissionGuard] Master user - allowing access to: ${permission}`);
-    }
     return <>{children}</>;
   }
   
-  // Check permission for non-Master users
-  const userHasPermission = hasPermission(permission);
-  
-  if (__DEV__) {
-    console.log(`[PermissionGuard] User: ${user?.username}, Permission: ${permission}, Has: ${userHasPermission}, Loading: ${isLoading}`);
-  }
-  
-  if (!user || !userHasPermission) {
+  if (!user || !hasPermission(permission)) {
     return <>{fallback}</>;
   }
   

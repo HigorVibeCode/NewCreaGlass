@@ -16,7 +16,7 @@ export class SupabaseAuthRepository implements AuthRepository {
         .from('users')
         .select('id, username, user_type, is_active, created_at')
         .eq('username', username)
-        .single();
+        .maybeSingle();
 
       if (userError || !userData) {
         throw new Error('Invalid credentials');
@@ -122,7 +122,7 @@ export class SupabaseAuthRepository implements AuthRepository {
         .from('users')
         .select('*')
         .eq('id', supabaseSession.user.id)
-        .single();
+        .maybeSingle();
 
       if (userError || !userData) {
         return null;
@@ -182,10 +182,9 @@ export class SupabaseAuthRepository implements AuthRepository {
         .from('users')
         .select('is_active')
         .eq('id', session.user.id)
-        .single();
+        .maybeSingle();
 
       if (userError || !userData) {
-        console.log('User not found or error:', userError?.message);
         return false;
       }
 
@@ -214,7 +213,7 @@ export class SupabaseAuthRepository implements AuthRepository {
         .from('users')
         .select('username')
         .eq('id', session.user.id)
-        .single();
+        .maybeSingle();
       if (userError || !userData?.username) return false;
       const emailToUse = `${userData.username.toLowerCase()}@creaglass.local`;
       const { error } = await this.supabase.auth.signInWithPassword({

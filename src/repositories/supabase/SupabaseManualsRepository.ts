@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import { ManualsRepository } from '../../services/repositories/interfaces';
 import { Manual, ManualAttachment } from '../../types';
 import { supabase } from '../../services/supabase';
+import { getCachedSignedUrl } from '../../utils/signed-url-cache';
 
 const BUCKET_NAME = 'documents';
 
@@ -37,10 +38,9 @@ export class SupabaseManualsRepository implements ManualsRepository {
       .from('manuals')
       .select('*')
       .eq('id', manualId)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
       console.error('Error fetching manual:', error);
       throw new Error('Failed to fetch manual');
     }
@@ -74,7 +74,7 @@ export class SupabaseManualsRepository implements ManualsRepository {
 
   async updateManual(manualId: string, updates: Partial<Pick<Manual, 'title' | 'thumbnailPath'>>): Promise<Manual> {
     if (updates.thumbnailPath === null) {
-      const { data: current } = await supabase.from('manuals').select('thumbnail_path').eq('id', manualId).single();
+      const { data: current } = await supabase.from('manuals').select('thumbnail_path').eq('id', manualId).maybeSingle();
       if (current?.thumbnail_path) {
         const filename = current.thumbnail_path.includes('/') ? current.thumbnail_path.split('/').pop() : current.thumbnail_path;
         await supabase.storage.from(BUCKET_NAME).remove([filename || current.thumbnail_path]);
@@ -185,7 +185,7 @@ export class SupabaseManualsRepository implements ManualsRepository {
       .from('manual_attachments')
       .select('storage_path')
       .eq('id', attachmentId)
-      .single();
+      .maybeSingle();
 
     if (fetchError || !attachment) {
       throw new Error('Attachment not found');
@@ -208,7 +208,7 @@ export class SupabaseManualsRepository implements ManualsRepository {
       .from('manual_attachments')
       .select('storage_path')
       .eq('id', attachmentId)
-      .single();
+      .maybeSingle();
 
     if (error || !attachment) {
       throw new Error('Attachment not found');
@@ -217,19 +217,12 @@ export class SupabaseManualsRepository implements ManualsRepository {
     const filename = attachment.storage_path.includes('/')
       ? attachment.storage_path.split('/').pop()
       : attachment.storage_path.replace(`${BUCKET_NAME}/`, '');
-    const { data, error: urlError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .createSignedUrl(filename || attachment.storage_path, 3600);
-
-    if (urlError) {
-      console.error('Error getting attachment URL:', urlError);
-      return attachment.storage_path;
-    }
-    return data.signedUrl;
+    const url = await getCachedSignedUrl(filename || attachment.storage_path);
+    return url || attachment.storage_path;
   }
 
   async uploadManualThumbnail(manualId: string, file: { uri: string; name: string; type: string }): Promise<string> {
-    const { data: current } = await supabase.from('manuals').select('thumbnail_path').eq('id', manualId).single();
+    const { data: current } = await supabase.from('manuals').select('thumbnail_path').eq('id', manualId).maybeSingle();
     if (current?.thumbnail_path) {
       const oldFile = current.thumbnail_path.includes('/') ? current.thumbnail_path.split('/').pop() : current.thumbnail_path;
       await supabase.storage.from(BUCKET_NAME).remove([oldFile || current.thumbnail_path]);
@@ -277,19 +270,14 @@ export class SupabaseManualsRepository implements ManualsRepository {
       .from('manuals')
       .select('thumbnail_path')
       .eq('id', manualId)
-      .single();
+      .maybeSingle();
 
     if (error || !manual?.thumbnail_path) return '';
 
     const filename = manual.thumbnail_path.includes('/')
       ? manual.thumbnail_path.split('/').pop()
       : manual.thumbnail_path;
-    const { data, error: urlError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .createSignedUrl(filename || manual.thumbnail_path, 3600);
-
-    if (urlError) return '';
-    return data.signedUrl;
+    return getCachedSignedUrl(filename || manual.thumbnail_path);
   }
 
   private mapToManual(data: any): Manual {

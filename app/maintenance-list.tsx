@@ -7,17 +7,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { useGoBack } from '../src/hooks/use-go-back';
 import { useAppTheme } from '../src/hooks/use-app-theme';
 import { Button } from '../src/components/shared/Button';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { repos } from '../src/services/container';
 import { MaintenanceRecord } from '../src/types';
+import { pushWithParams } from '../src/utils/navigation';
 import { theme } from '../src/theme';
 import { formatDate as formatDateUtil } from '../src/utils/date-format';
 
 export default function MaintenanceListScreen() {
   const { t } = useI18n();
   const router = useRouter();
+  const goBack = useGoBack('/(tabs)/documents');
   const colors = useThemeColors();
   const { effectiveTheme } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -52,10 +55,7 @@ export default function MaintenanceListScreen() {
   };
 
   const handleRecordPress = (recordId: string) => {
-    router.push({
-      pathname: '/maintenance-detail',
-      params: { recordId },
-    } as any);
+    pushWithParams(router, '/maintenance-detail', { recordId: String(recordId) });
   };
 
   const formatDate = (dateString: string): string => {
@@ -79,7 +79,7 @@ export default function MaintenanceListScreen() {
           <View style={styles.headerContent}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.back()}
+              onPress={goBack}
               activeOpacity={0.7}
             >
               <Ionicons name="arrow-back" size={24} color={colors.text} />

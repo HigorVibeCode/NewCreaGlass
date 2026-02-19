@@ -5,6 +5,7 @@ export type PermissionKey =
   | 'documents.create'
   | 'documents.view'
   | 'documents.download'
+  | 'documents.update'
   | 'documents.delete'
   | 'inventory.create'
   | 'inventory.update'
@@ -139,35 +140,14 @@ export const can = (
   permissionKey: PermissionKey,
   userPermissions: Permission[] = []
 ): boolean => {
-  if (!user || !user.isActive) {
-    if (__DEV__) {
-      console.log(`[can] No user or inactive: user=${!!user}, isActive=${user?.isActive}`);
-    }
-    return false;
-  }
-  
-  // Master user has all permissions (hardcoded rule)
-  if (user.userType === 'Master') {
-    return true;
-  }
-  
-  // Check if user has the permission using hierarchical matching
-  let hasPermission = false;
-  let matchedPermission: string | null = null;
+  if (!user || !user.isActive) return false;
+  if (user.userType === 'Master') return true;
   
   for (const userPerm of userPermissions) {
     if (matchesPermission(permissionKey, userPerm.key)) {
-      hasPermission = true;
-      matchedPermission = userPerm.key;
-      break;
+      return true;
     }
   }
   
-  if (__DEV__) {
-    const availableKeys = userPermissions.map(p => p.key).join(', ');
-    const matchInfo = matchedPermission ? ` (matched with: ${matchedPermission})` : '';
-    console.log(`[can] User: ${user.username}, Permission: ${permissionKey}, Available: [${availableKeys}], Has: ${hasPermission}${matchInfo}`);
-  }
-  
-  return hasPermission;
+  return false;
 };

@@ -9,7 +9,8 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -26,6 +27,7 @@ import { repos } from '../src/services/container';
 import { Event, EventType, EventAttachment } from '../src/types';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
 const MAX_ATTACHMENTS = 3;
@@ -36,7 +38,8 @@ export default function EventCreateScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const { eventId } = useLocalSearchParams<{ eventId: string }>();
+  const { eventId } = useRouteParams<{ eventId: string }>('/event-create');
+  const goBack = useGoBack('/(tabs)/events');
 
   const [title, setTitle] = useState('');
   const [type, setType] = useState<EventType | ''>('');
@@ -80,7 +83,7 @@ export default function EventCreateScreen() {
         setAttachments(eventData.attachments || []);
       } else {
         Alert.alert(t('common.error'), 'Event not found', [
-          { text: t('common.confirm'), onPress: () => router.back() },
+          { text: t('common.confirm'), onPress: () => safeBack(router) },
         ]);
       }
     } catch (error) {
@@ -349,7 +352,7 @@ export default function EventCreateScreen() {
         <View style={[styles.header, { paddingTop: insets.top + theme.spacing.md, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
           <TouchableOpacity
             style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-            onPress={() => router.back()}
+            onPress={goBack}
             activeOpacity={0.7}
           >
             <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -499,7 +502,7 @@ export default function EventCreateScreen() {
         <View style={styles.buttonContainer}>
           <Button
             title={t('common.cancel')}
-            onPress={() => router.back()}
+            onPress={goBack}
             variant="outline"
             style={styles.button}
           />

@@ -18,6 +18,7 @@ import * as Sharing from 'expo-sharing';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { useAppTheme } from '../src/hooks/use-app-theme';
+import { useGoBack } from '../src/hooks/use-go-back';
 import { useAuth } from '../src/store/auth-store';
 import { useAllTimeEntriesQuery, useUsersQuery } from '../src/services/queries';
 import { Button } from '../src/components/shared/Button';
@@ -46,6 +47,7 @@ export default function PointReportsScreen() {
   const { effectiveTheme } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const goBack = useGoBack();
 
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -165,7 +167,7 @@ export default function PointReportsScreen() {
         <View style={styles.headerRow}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={goBack}
             activeOpacity={0.7}
           >
             <Ionicons name="arrow-back" size={24} color={colors.text} />

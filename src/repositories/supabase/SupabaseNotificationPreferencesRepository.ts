@@ -8,13 +8,9 @@ export class SupabaseNotificationPreferencesRepository implements NotificationPr
       .from('notification_preferences')
       .select('*')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') {
-        // No preferences found
-        return null;
-      }
       console.error('Error fetching notification preferences:', error);
       throw new Error('Failed to fetch notification preferences');
     }

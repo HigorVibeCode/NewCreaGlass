@@ -14,7 +14,8 @@ import {
 import { Image } from 'expo-image';
 import * as Location from 'expo-location';
 import SignatureCanvas from 'react-native-signature-canvas';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,28 +26,33 @@ import { getLocalizedTrainingTitle, getLocalizedTrainingDescription } from '../s
 import { repos } from '../src/services/container';
 import { Training, TrainingCompletion, TrainingSignature } from '../src/types';
 import { supabase } from '../src/services/supabase';
+import { getCachedSignedUrl } from '../src/utils/signed-url-cache';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { Button } from '../src/components/shared/Button';
 import { Input } from '../src/components/shared/Input';
 import { SlideToConfirm } from '../src/components/shared/SlideToConfirm';
 import { PermissionGuard } from '../src/components/shared/PermissionGuard';
 import { confirmDelete } from '../src/utils/confirm-dialog';
+import { pushWithParams } from '../src/utils/navigation';
 
 type TrainingState = 'not_started' | 'in_progress' | 'signature_required' | 'completed';
 
 export default function TrainingDetailScreen() {
   const { t, currentLanguage } = useI18n();
   const router = useRouter();
+  const goBack = useGoBack('/(tabs)/documents');
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { trainingId } = useLocalSearchParams<{ trainingId: string }>();
+  const { trainingId } = useRouteParams<{ trainingId: string }>('/training-detail');
 
   const [training, setTraining] = useState<Training | null>(null);
   const [completion, setCompletion] = useState<TrainingCompletion | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [trainingState, setTrainingState] = useState<TrainingState>('not_started');
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [fullName, setFullName] = useState('');
@@ -110,6 +116,7 @@ export default function TrainingDetailScreen() {
   const loadTraining = async () => {
     if (!trainingId || !user) return;
     setIsLoading(true);
+    setLoadError(false);
     setCompletionSignature(null);
     try {
       const trainingData = await repos.trainingRepo.getTrainingById(trainingId);
@@ -141,13 +148,11 @@ export default function TrainingDetailScreen() {
           setTrainingState('not_started');
         }
       } else {
-        Alert.alert(t('common.error'), t('training.trainingNotFound'), [
-          { text: t('common.ok') || t('common.confirm'), onPress: () => router.back() },
-        ]);
+        setLoadError(true);
       }
     } catch (error) {
       console.error('Error loading training:', error);
-      Alert.alert(t('common.error'), t('training.loadError'));
+      setLoadError(true);
     } finally {
       setIsLoading(false);
     }
@@ -340,7 +345,7 @@ export default function TrainingDetailScreen() {
         t('common.success'),
         t('training.trainingCompleted'),
         [
-          { text: t('common.ok') || t('common.confirm'), onPress: () => router.back() },
+          { text: t('common.ok') || t('common.confirm'), onPress: () => safeBack(router) },
         ]
       );
     } catch (error) {
@@ -395,7 +400,7 @@ export default function TrainingDetailScreen() {
         try {
           await repos.trainingRepo.deleteTraining(trainingId);
           Alert.alert(t('common.success'), t('training.trainingDeleted'), [
-            { text: t('common.ok') || t('common.confirm'), onPress: () => router.back() },
+            { text: t('common.ok') || t('common.confirm'), onPress: () => safeBack(router) },
           ]);
         } catch (error) {
           console.error('Error deleting training:', error);
@@ -418,8 +423,23 @@ export default function TrainingDetailScreen() {
     );
   }
 
-  if (!training) {
-    return null;
+  if (loadError || !training) {
+    return (
+      <ScreenWrapper>
+        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+          <Ionicons name="alert-circle-outline" size={48} color={colors.textSecondary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary, marginTop: 12 }]}>
+            {t('common.error')}
+          </Text>
+          <TouchableOpacity
+            onPress={goBack}
+            style={{ marginTop: 16, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: colors.primary, borderRadius: 8 }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600' }}>{t('common.back') || 'Back'}</Text>
+          </TouchableOpacity>
+        </View>
+      </ScreenWrapper>
+    );
   }
 
   const isCompleted = trainingState === 'completed';
@@ -442,7 +462,7 @@ export default function TrainingDetailScreen() {
           <View style={styles.headerContent}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.back()}
+              onPress={goBack}
               activeOpacity={0.7}
             >
               <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -457,10 +477,7 @@ export default function TrainingDetailScreen() {
                 <PermissionGuard permission="documents.update">
                   <TouchableOpacity
                     style={styles.editButton}
-                    onPress={() => router.push({
-                      pathname: '/training-create',
-                      params: { trainingId: training.id, category: training.category },
-                    } as any)}
+                    onPress={() => pushWithParams(router, '/training-create', { trainingId: training.id, category: training.category })}
                     activeOpacity={0.7}
                   >
                     <Ionicons name="pencil-outline" size={24} color={colors.primary} />
@@ -567,12 +584,9 @@ export default function TrainingDetailScreen() {
                   onPress={async () => {
                     try {
                       const filename = completionSignature.signaturePath.replace('signatures/', '');
-                      const { data, error } = await supabase.storage
-                        .from('signatures')
-                        .createSignedUrl(filename, 3600);
-                      if (error) throw error;
-                      if (data?.signedUrl) {
-                        setCompletedSignatureImageUrl(data.signedUrl);
+                      const url = await getCachedSignedUrl(filename, 3600, 'signatures');
+                      if (url) {
+                        setCompletedSignatureImageUrl(url);
                         setShowCompletedSignatureModal(true);
                       }
                     } catch (e) {
@@ -927,6 +941,14 @@ export default function TrainingDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: theme.typography.fontSize.md,
   },
   header: {
     paddingHorizontal: theme.spacing.md,

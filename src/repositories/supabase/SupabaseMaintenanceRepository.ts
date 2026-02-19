@@ -2,6 +2,7 @@ import { MaintenanceRepository } from '../../services/repositories/interfaces';
 import { MaintenanceRecord, MaintenanceInfo, MaintenanceInfoImage, MaintenanceHistory, MaintenanceHistoryChangeType } from '../../types';
 import { supabase } from '../../services/supabase';
 import { Platform } from 'react-native';
+import { getCachedSignedUrl } from '../../utils/signed-url-cache';
 
 const BUCKET_NAME = 'documents';
 
@@ -30,10 +31,9 @@ export class SupabaseMaintenanceRepository implements MaintenanceRepository {
       .from('maintenance_records')
       .select('*')
       .eq('id', recordId)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
       console.error('Error fetching maintenance record:', error);
       throw new Error('Failed to fetch maintenance record');
     }
@@ -189,7 +189,7 @@ export class SupabaseMaintenanceRepository implements MaintenanceRepository {
       .from('maintenance_infos')
       .select('*, maintenance_records!inner(id)')
       .eq('id', infoId)
-      .single();
+      .maybeSingle();
 
     if (infoError || !infoData) {
       throw new Error('Maintenance info not found');
@@ -249,7 +249,7 @@ export class SupabaseMaintenanceRepository implements MaintenanceRepository {
       .from('maintenance_infos')
       .select('maintenance_record_id')
       .eq('id', infoId)
-      .single();
+      .maybeSingle();
 
     const recordId = infoData?.maintenance_record_id;
 
@@ -281,7 +281,7 @@ export class SupabaseMaintenanceRepository implements MaintenanceRepository {
       .from('maintenance_infos')
       .select('maintenance_record_id')
       .eq('id', infoId)
-      .single();
+      .maybeSingle();
 
     if (!infoData) {
       throw new Error('Maintenance info not found');
@@ -356,7 +356,7 @@ export class SupabaseMaintenanceRepository implements MaintenanceRepository {
       .from('maintenance_info_images')
       .select('maintenance_info_id, maintenance_infos!inner(maintenance_record_id)')
       .eq('id', imageId)
-      .single();
+      .maybeSingle();
 
     const recordId = imageData ? (imageData.maintenance_infos as any).maintenance_record_id : null;
 
@@ -550,35 +550,9 @@ export class SupabaseMaintenanceRepository implements MaintenanceRepository {
     }
 
     try {
-      // Get signed URL from Supabase Storage (valid for 1 hour)
-      const { data, error } = await supabase.storage
-        .from(BUCKET_NAME)
-        .createSignedUrl(filename, 3600);
-
-      if (error) {
-        // Silently handle "not found" errors - these are expected for missing files
-        const isNotFoundError = 
-          error.message?.includes('not found') || 
-          error.message?.includes('Object not found') ||
-          error.message?.includes('The resource was not found');
-        
-        if (!isNotFoundError) {
-          console.warn('Error getting image URL:', error.message);
-        }
-        return storagePath;
-      }
-
-      return data.signedUrl;
-    } catch (error: any) {
-      // Silently handle "not found" errors
-      const isNotFoundError = 
-        error?.message?.includes('not found') || 
-        error?.message?.includes('Object not found') ||
-        error?.message?.includes('The resource was not found');
-      
-      if (!isNotFoundError) {
-        console.warn('Exception getting image URL:', error?.message);
-      }
+      const url = await getCachedSignedUrl(filename);
+      return url || storagePath;
+    } catch {
       return storagePath;
     }
   }

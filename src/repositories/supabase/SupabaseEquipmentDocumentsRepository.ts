@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import { EquipmentDocumentsRepository } from '../../services/repositories/interfaces';
 import { EquipmentMachine, EquipmentDocument, EquipmentDocumentAttachment } from '../../types';
 import { supabase } from '../../services/supabase';
+import { getCachedSignedUrl } from '../../utils/signed-url-cache';
 
 const BUCKET_NAME = 'documents';
 
@@ -26,10 +27,9 @@ export class SupabaseEquipmentDocumentsRepository implements EquipmentDocumentsR
       .from('equipment_machines')
       .select('*')
       .eq('id', equipmentId)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
       console.error('Error fetching equipment:', error);
       throw new Error('Failed to fetch equipment');
     }
@@ -105,19 +105,29 @@ export class SupabaseEquipmentDocumentsRepository implements EquipmentDocumentsR
       throw new Error('Failed to fetch equipment documents');
     }
 
-    const documents = await Promise.all(
-      (data || []).map(async (row) => {
-        const doc = this.mapToDocument(row);
-        const { data: attachmentsData } = await supabase
-          .from('equipment_document_attachments')
-          .select('*')
-          .eq('document_id', doc.id)
-          .order('created_at', { ascending: true });
-        doc.attachments = (attachmentsData || []).map(this.mapToAttachment);
-        return doc;
-      })
-    );
-    return documents;
+    const rows = data || [];
+    if (rows.length === 0) return [];
+
+    const docIds = rows.map((r: any) => r.id);
+
+    const { data: allAttachments } = await supabase
+      .from('equipment_document_attachments')
+      .select('*')
+      .in('document_id', docIds)
+      .order('created_at', { ascending: true });
+
+    const attsByDoc = new Map<string, EquipmentDocumentAttachment[]>();
+    for (const att of allAttachments || []) {
+      const did = att.document_id;
+      if (!attsByDoc.has(did)) attsByDoc.set(did, []);
+      attsByDoc.get(did)!.push(this.mapToAttachment(att));
+    }
+
+    return rows.map((row: any) => {
+      const doc = this.mapToDocument(row);
+      doc.attachments = attsByDoc.get(doc.id) || [];
+      return doc;
+    });
   }
 
   async getDocumentById(documentId: string): Promise<EquipmentDocument | null> {
@@ -125,10 +135,9 @@ export class SupabaseEquipmentDocumentsRepository implements EquipmentDocumentsR
       .from('equipment_documents')
       .select('*')
       .eq('id', documentId)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
       console.error('Error fetching equipment document:', error);
       throw new Error('Failed to fetch equipment document');
     }
@@ -173,7 +182,7 @@ export class SupabaseEquipmentDocumentsRepository implements EquipmentDocumentsR
         .from('equipment_documents')
         .select('thumbnail_path')
         .eq('id', documentId)
-        .single();
+        .maybeSingle();
       if (current?.thumbnail_path) {
         const filename = current.thumbnail_path.includes('/')
           ? current.thumbnail_path.split('/').pop()
@@ -307,7 +316,7 @@ export class SupabaseEquipmentDocumentsRepository implements EquipmentDocumentsR
       .from('equipment_document_attachments')
       .select('storage_path')
       .eq('id', attachmentId)
-      .single();
+      .maybeSingle();
 
     if (fetchError || !attachment) {
       throw new Error('Attachment not found');
@@ -334,7 +343,7 @@ export class SupabaseEquipmentDocumentsRepository implements EquipmentDocumentsR
       .from('equipment_document_attachments')
       .select('storage_path')
       .eq('id', attachmentId)
-      .single();
+      .maybeSingle();
 
     if (error || !attachment) {
       throw new Error('Attachment not found');
@@ -343,15 +352,8 @@ export class SupabaseEquipmentDocumentsRepository implements EquipmentDocumentsR
     const filename = attachment.storage_path.includes('/')
       ? attachment.storage_path.split('/').pop()
       : attachment.storage_path.replace(`${BUCKET_NAME}/`, '');
-    const { data, error: urlError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .createSignedUrl(filename || attachment.storage_path, 3600);
-
-    if (urlError) {
-      console.error('Error getting attachment URL:', urlError);
-      return attachment.storage_path;
-    }
-    return data.signedUrl;
+    const url = await getCachedSignedUrl(filename || attachment.storage_path);
+    return url || attachment.storage_path;
   }
 
   // ===================== Thumbnail =====================
@@ -362,7 +364,7 @@ export class SupabaseEquipmentDocumentsRepository implements EquipmentDocumentsR
       .from('equipment_documents')
       .select('thumbnail_path')
       .eq('id', documentId)
-      .single();
+      .maybeSingle();
     if (current?.thumbnail_path) {
       const oldFile = current.thumbnail_path.includes('/')
         ? current.thumbnail_path.split('/').pop()
@@ -413,19 +415,14 @@ export class SupabaseEquipmentDocumentsRepository implements EquipmentDocumentsR
       .from('equipment_documents')
       .select('thumbnail_path')
       .eq('id', documentId)
-      .single();
+      .maybeSingle();
 
     if (error || !doc?.thumbnail_path) return '';
 
     const filename = doc.thumbnail_path.includes('/')
       ? doc.thumbnail_path.split('/').pop()
       : doc.thumbnail_path;
-    const { data, error: urlError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .createSignedUrl(filename || doc.thumbnail_path, 3600);
-
-    if (urlError) return '';
-    return data.signedUrl;
+    return getCachedSignedUrl(filename || doc.thumbnail_path);
   }
 
   // ===================== Mappers =====================

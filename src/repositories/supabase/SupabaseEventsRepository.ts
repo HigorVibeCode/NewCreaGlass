@@ -14,12 +14,33 @@ export class SupabaseEventsRepository implements EventsRepository {
       throw new Error('Failed to fetch events');
     }
 
-    // Load related data for each event
-    const events = await Promise.all(
-      (data || []).map(async (eventData) => this.loadEventWithRelations(eventData))
-    );
+    const rows = data || [];
+    if (rows.length === 0) return [];
 
-    return events;
+    const ids = rows.map((r: any) => r.id);
+
+    const { data: allAttachments } = await supabase
+      .from('event_attachments')
+      .select('*')
+      .in('event_id', ids)
+      .order('created_at', { ascending: false });
+
+    const attsByEvent = new Map<string, EventAttachment[]>();
+    for (const att of allAttachments || []) {
+      const eid = att.event_id;
+      if (!attsByEvent.has(eid)) attsByEvent.set(eid, []);
+      attsByEvent.get(eid)!.push({
+        id: att.id,
+        filename: att.filename,
+        mimeType: att.mime_type,
+        storagePath: att.storage_path,
+        createdAt: att.created_at,
+      });
+    }
+
+    return rows.map((eventData: any) =>
+      this.mapToEvent({ ...eventData, attachments: attsByEvent.get(eventData.id) || [] })
+    );
   }
 
   async getEventById(eventId: string): Promise<Event | null> {
@@ -27,10 +48,9 @@ export class SupabaseEventsRepository implements EventsRepository {
       .from('events')
       .select('*')
       .eq('id', eventId)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
       console.error('Error fetching event:', error);
       throw new Error('Failed to fetch event');
     }

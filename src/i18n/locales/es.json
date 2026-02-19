@@ -121,6 +121,9 @@
     "confirmRead": "Confirmar Lectura",
     "timerWarning": "Por favor, lea el mensaje. Podrá confirmar en {{seconds}} segundos.",
     "readConfirmed": "Lectura confirmada",
+    "deleteMessage": "Eliminar Mensaje",
+    "deleteConfirm": "¿Está seguro de que desea eliminar este mensaje? Esta acción no se puede deshacer.",
+    "messageDeleted": "Mensaje eliminado con éxito",
     "unreadMessages": "Mensajes no leídos"
   },
   "documents": {
@@ -244,7 +247,10 @@
     "invalidQuantity": "Por favor, ingrese una cantidad válida",
     "countHistory": "Historial de Conteos",
     "previousValue": "Anterior",
-    "newValue": "Nuevo"
+    "newValue": "Nuevo",
+    "searchPlaceholder": "Buscar por posición, tipo, nombre o código OPO...",
+    "searchPlaceholderGlass": "Buscar por nombre, espesor, ubicación...",
+    "searchPlaceholderSupplies": "Buscar por nombre, posición..."
   },
   "accessControls": {
     "title": "Controles de Acceso",
@@ -299,6 +305,8 @@
     "createOrder": "Crear Orden",
     "noOrders": "No hay órdenes de producción",
     "filterByStatus": "Filtrar por Estado",
+    "filterByCompany": "Filtrar por Empresa",
+    "allCompanies": "Todas",
     "searchPlaceholder": "Buscar por cliente, número, tipo o artículo...",
     "orderNumber": "Número de Orden",
     "orderNumberPlaceholder": "Ingrese el número de orden",
@@ -525,6 +533,22 @@
       "paused": "Pausado",
       "completed": "Completado",
       "cancelled": "Cancelado"
+    },
+    "timeStatus": {
+      "EM_ATENDIMENTO": "En Servicio",
+      "PAUSADO": "Pausado",
+      "DESLOCAMENTO": "En Desplazamiento"
+    },
+    "serviceLogType": {
+      "ajuste": "Ajuste",
+      "problema": "Problema",
+      "material": "Material",
+      "recomendacao": "Recomendación"
+    },
+    "evidenceType": {
+      "antes": "Antes",
+      "durante": "Durante",
+      "depois": "Después"
     }
   },
   "maintenance": {
@@ -578,10 +602,18 @@
     "updatedAt": "Fecha de Actualización"
   },
   "permissions": {
+    "_group.production": "Producción",
+    "_group.documents": "Documentos & Capacitaciones",
+    "_group.events": "Eventos & Órdenes de Trabajo",
+    "_group.inventory": "Inventario",
+    "_group.notifications": "Notificaciones",
+    "_group.admin": "Administración",
+    "_group.devices": "Dispositivos",
     "documents.upload": "Subir Documentos",
     "documents.create": "Crear Documentos",
     "documents.view": "Ver Documentos",
     "documents.download": "Descargar Documentos",
+    "documents.update": "Actualizar Documentos",
     "documents.delete": "Eliminar Documentos",
     "inventory.create": "Crear Inventario",
     "inventory.update": "Actualizar Inventario",

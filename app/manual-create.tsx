@@ -11,7 +11,8 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -21,6 +22,7 @@ import { Input } from '../src/components/shared/Input';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 import { useAppTheme } from '../src/hooks/use-app-theme';
 import { repos } from '../src/services/container';
 import { confirmDelete } from '../src/utils/confirm-dialog';
@@ -40,10 +42,11 @@ type AttachmentItem = {
 export default function ManualCreateScreen() {
   const { t } = useI18n();
   const router = useRouter();
+  const goBack = useGoBack('/(tabs)/documents');
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { effectiveTheme } = useAppTheme();
-  const { manualId } = useLocalSearchParams<{ manualId?: string }>();
+  const { manualId } = useRouteParams<{ manualId?: string }>('/manual-create');
 
   const [title, setTitle] = useState('');
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
@@ -87,7 +90,7 @@ export default function ManualCreateScreen() {
         }
       } else {
         Alert.alert(t('common.error'), t('manuals.manualNotFound'), [
-          { text: t('common.ok') || t('common.confirm'), onPress: () => router.back() },
+          { text: t('common.ok') || t('common.confirm'), onPress: () => safeBack(router) },
         ]);
       }
     } catch (error) {
@@ -249,7 +252,7 @@ export default function ManualCreateScreen() {
       Alert.alert(
         t('common.success'),
         isEditing ? t('manuals.manualUpdated') : t('manuals.manualCreated'),
-        [{ text: t('common.ok') || t('common.confirm'), onPress: () => router.back() }]
+        [{ text: t('common.ok') || t('common.confirm'), onPress: () => safeBack(router) }]
       );
     } catch (error) {
       console.error('Error saving manual:', error);
@@ -266,7 +269,7 @@ export default function ManualCreateScreen() {
       t('manuals.deleteConfirm', { title: title || '' }),
       async () => {
         await repos.manualsRepo.deleteManual(manualId);
-        router.back();
+        safeBack(router);
       },
       undefined,
       t('common.delete'),
@@ -299,7 +302,7 @@ export default function ManualCreateScreen() {
           ]}
         >
           <View style={styles.headerContent}>
-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.backButton} onPress={goBack} activeOpacity={0.7}>
               <Ionicons name="arrow-back" size={24} color={colors.text} />
             </TouchableOpacity>
             <Text style={[styles.headerTitle, { color: colors.text }]}>

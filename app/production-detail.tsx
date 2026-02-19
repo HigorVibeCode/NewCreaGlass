@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useState, useCallback } from 'react';
 import {
     Alert,
@@ -23,9 +23,12 @@ import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { repos } from '../src/services/container';
 import { useAuth } from '../src/store/auth-store';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 import { theme } from '../src/theme';
 import { downloadAndOpenAttachment, getSignedUrlFromStorage } from '../src/utils/attachments';
 import { confirmDelete } from '../src/utils/confirm-dialog';
+import { pushWithParams } from '../src/utils/navigation';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { GlassType, InventoryItem, PaintType, Production, ProductionStatus, ProductionStatusHistory, StructureType, User } from '../src/types';
 /** Resolve signed URL for a thumbnail — uses same robust logic as downloadAndOpenAttachment */
 function AttachmentThumbnail({ storagePath, filename, index }: { storagePath: string; filename: string; index: number }) {
@@ -129,10 +132,12 @@ export default function ProductionDetailScreen() {
   const { user } = useAuth();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const { productionId } = useLocalSearchParams<{ productionId: string }>();
+  const { productionId } = useRouteParams<{ productionId: string }>('/production-detail');
+  const goBack = useGoBack();
 
   const [production, setProduction] = useState<Production | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [glassItems, setGlassItems] = useState<Map<string, InventoryItem>>(new Map());
   const [statusModalVisible, setStatusModalVisible] = useState(false);
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
@@ -148,11 +153,11 @@ export default function ProductionDetailScreen() {
   const loadProduction = async () => {
     if (!productionId) return;
     setIsLoading(true);
+    setLoadError(false);
     try {
       const productionData = await repos.productionRepo.getProductionById(productionId);
       if (productionData) {
         setProduction(productionData);
-        // Load glass items for all items
         const glassIds = productionData.items.map(item => item.glassId).filter(Boolean);
         const glassMap = new Map<string, InventoryItem>();
         for (const glassId of glassIds) {
@@ -167,13 +172,11 @@ export default function ProductionDetailScreen() {
         }
         setGlassItems(glassMap);
       } else {
-        Alert.alert(t('common.error'), 'Production order not found', [
-          { text: t('common.confirm'), onPress: () => router.back() },
-        ]);
+        setLoadError(true);
       }
     } catch (error) {
       console.error('Error loading production:', error);
-      Alert.alert(t('common.error'), 'Failed to load production order');
+      setLoadError(true);
     } finally {
       setIsLoading(false);
     }
@@ -421,10 +424,7 @@ export default function ProductionDetailScreen() {
 
   const handleEdit = () => {
     if (!productionId) return;
-    router.push({
-      pathname: '/production-create',
-      params: { productionId },
-    });
+    pushWithParams(router, '/production-create', { productionId: productionId! });
   };
 
   const handleDelete = () => {
@@ -434,7 +434,7 @@ export default function ProductionDetailScreen() {
       t('production.deleteOrderConfirm'),
       async () => {
         await repos.productionRepo.deleteProduction(productionId);
-        router.back();
+        safeBack(router);
       },
       undefined,
       t('common.delete'),
@@ -461,13 +461,32 @@ export default function ProductionDetailScreen() {
     }
   };
 
-  if (isLoading || !production) {
+  if (isLoading) {
     return (
       <ScreenWrapper>
         <View style={styles.loadingContainer}>
           <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
             {t('common.loading')}
           </Text>
+        </View>
+      </ScreenWrapper>
+    );
+  }
+
+  if (loadError || !production) {
+    return (
+      <ScreenWrapper>
+        <View style={styles.loadingContainer}>
+          <Ionicons name="alert-circle-outline" size={48} color={colors.textSecondary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary, marginTop: 12 }]}>
+            {t('common.error')}
+          </Text>
+          <TouchableOpacity
+            onPress={goBack}
+            style={{ marginTop: 16, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: colors.primary, borderRadius: 8 }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600' }}>{t('common.back') || 'Back'}</Text>
+          </TouchableOpacity>
         </View>
       </ScreenWrapper>
     );
@@ -630,7 +649,7 @@ export default function ProductionDetailScreen() {
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={[styles.iconButton, { backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border }]}
-            onPress={() => router.back()}
+            onPress={goBack}
             activeOpacity={0.7}
           >
             <Ionicons name="arrow-back" size={24} color={colors.text} />

@@ -1,6 +1,50 @@
 import { create } from 'zustand';
-import { Session } from '../types';
+import { Platform } from 'react-native';
+import { Session, User } from '../types';
 import { repos } from '../services/container';
+
+const USER_PROFILE_CACHE_KEY = '__crea_glass_user_profile__';
+
+function cacheUserProfile(user: User | null): void {
+  try {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (user) {
+        window.localStorage.setItem(USER_PROFILE_CACHE_KEY, JSON.stringify(user));
+      } else {
+        window.localStorage.removeItem(USER_PROFILE_CACHE_KEY);
+      }
+    } else if (Platform.OS !== 'web') {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      if (user) {
+        AsyncStorage.setItem(USER_PROFILE_CACHE_KEY, JSON.stringify(user)).catch(() => {});
+      } else {
+        AsyncStorage.removeItem(USER_PROFILE_CACHE_KEY).catch(() => {});
+      }
+    }
+  } catch {}
+}
+
+export function getCachedUserProfile(): User | null {
+  try {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const stored = window.localStorage.getItem(USER_PROFILE_CACHE_KEY);
+      if (stored) return JSON.parse(stored);
+    }
+  } catch {}
+  return null;
+}
+
+export async function getCachedUserProfileAsync(): Promise<User | null> {
+  try {
+    if (Platform.OS === 'web') {
+      return getCachedUserProfile();
+    }
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    const stored = await AsyncStorage.getItem(USER_PROFILE_CACHE_KEY);
+    if (stored) return JSON.parse(stored);
+  } catch {}
+  return null;
+}
 
 interface AuthState {
   session: Session | null;
@@ -14,12 +58,19 @@ interface AuthState {
  * Auth store — session is kept in memory only.
  * Supabase already persists its own auth session in local storage.
  * On app restart, AuthGuard restores the session from Supabase.
+ * User profile is also cached in local storage for instant restoration.
  */
 export const useAuthStore = create<AuthState>()((set) => ({
   session: null,
   isLoading: false,
-  setSession: (session) => set({ session }),
-  clearSession: () => set({ session: null }),
+  setSession: (session) => {
+    cacheUserProfile(session?.user ?? null);
+    set({ session });
+  },
+  clearSession: () => {
+    cacheUserProfile(null);
+    set({ session: null });
+  },
   setLoading: (isLoading) => set({ isLoading }),
 }));
 

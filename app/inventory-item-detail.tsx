@@ -8,7 +8,8 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -19,6 +20,9 @@ import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { PermissionGuard } from '../src/components/shared/PermissionGuard';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
+import { prefetchSignedUrls } from '../src/utils/signed-url-cache';
+import { pushWithParams } from '../src/utils/navigation';
 
 function DetailImage({ storagePath }: { storagePath: string }) {
   const colors = useThemeColors();
@@ -39,7 +43,7 @@ function DetailImage({ storagePath }: { storagePath: string }) {
   }
   return (
     <View style={[styles.detailImageBox, { backgroundColor: colors.backgroundSecondary }]}>
-      <Image source={{ uri: url }} style={styles.detailImage} contentFit="cover" />
+      <Image source={{ uri: url }} style={styles.detailImage} contentFit="cover" cachePolicy="memory-disk" />
     </View>
   );
 }
@@ -49,36 +53,40 @@ export default function InventoryItemDetailScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const { itemId, groupId } = useLocalSearchParams<{ itemId: string; groupId: string }>();
+  const { itemId, groupId } = useRouteParams<{ itemId: string; groupId: string }>('/inventory-item-detail');
+  const goBack = useGoBack('/(tabs)/inventory');
 
   const [item, setItem] = useState<InventoryItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
-    if (itemId) loadItem();
+    if (itemId) {
+      loadItem();
+    }
   }, [itemId]);
 
   const loadItem = async () => {
     if (!itemId) return;
     setIsLoading(true);
+    setLoadError(false);
     try {
       const data = await repos.inventoryRepo.getItemById(itemId);
       setItem(data ?? null);
-      if (!data) {
-        Alert.alert(t('common.error'), t('inventory.loadItemError'), [
-          { text: t('common.confirm'), onPress: () => router.back() },
-        ]);
+      if (data?.images?.length) {
+        prefetchSignedUrls(data.images.map((img) => img.storagePath).filter(Boolean)).catch(() => {});
       }
+      if (!data) setLoadError(true);
     } catch (error) {
       console.error('Error loading item:', error);
-      Alert.alert(t('common.error'), t('inventory.loadItemError'));
+      setLoadError(true);
     } finally {
       setIsLoading(false);
     }
   };
 
   const isGlass = item?.height != null && item?.width != null;
-  const isSupplies = groupId && (groupId.includes('supplies') || (item && !item.height && (item.position != null || item.color != null)));
+  const isSupplies = !isGlass && (item?.images?.length || item?.position != null || item?.color != null);
 
   const handleEdit = () => {
     if (!groupId || !item) return;
@@ -98,14 +106,29 @@ export default function InventoryItemDetailScreen() {
     );
   }
 
-  if (!item) {
-    return null;
+  if (loadError || !item) {
+    return (
+      <ScreenWrapper>
+        <View style={styles.loadingContainer}>
+          <Ionicons name="alert-circle-outline" size={48} color={colors.textSecondary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary, marginTop: 12 }]}>
+            {t('common.error')}
+          </Text>
+          <TouchableOpacity
+            onPress={goBack}
+            style={{ marginTop: 16, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: colors.primary, borderRadius: 8 }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600' }}>{t('common.back') || 'Back'}</Text>
+          </TouchableOpacity>
+        </View>
+      </ScreenWrapper>
+    );
   }
 
   return (
     <ScreenWrapper>
       <View style={[styles.header, { paddingTop: insets.top + theme.spacing.md, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.backButton} onPress={goBack} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
@@ -222,7 +245,7 @@ export default function InventoryItemDetailScreen() {
             <PermissionGuard permission="inventory.item.adjustStock">
               <TouchableOpacity
                 style={[styles.actionButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
-                onPress={() => router.push({ pathname: '/inventory-stock-count', params: { itemId: item.id } })}
+                onPress={() => pushWithParams(router, '/inventory-stock-count', { itemId: item.id })}
                 activeOpacity={0.7}
               >
                 <Ionicons name="calculator" size={24} color={colors.success} />
@@ -241,6 +264,9 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: theme.typography.fontSize.md,
   },
   header: {
     flexDirection: 'row',

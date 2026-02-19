@@ -2,6 +2,7 @@ import { TrainingRepository } from '../../services/repositories/interfaces';
 import { Training, TrainingCategory, TrainingCompletion, TrainingSignature, TrainingWithCompletion, TrainingAttachment } from '../../types';
 import { supabase } from '../../services/supabase';
 import { Platform } from 'react-native';
+import { getCachedSignedUrl } from '../../utils/signed-url-cache';
 
 const SIGNATURES_BUCKET = 'signatures';
 
@@ -243,7 +244,7 @@ export class SupabaseTrainingRepository implements TrainingRepository {
       .from('training_signatures')
       .select('id, signature_path')
       .eq('training_completion_id', completion.id)
-      .single();
+      .maybeSingle();
 
     let signatureError;
 
@@ -315,10 +316,9 @@ export class SupabaseTrainingRepository implements TrainingRepository {
       .select('*')
       .eq('training_id', trainingId)
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
       console.error('Error fetching training completion:', error);
       throw new Error('Failed to fetch training completion');
     }
@@ -625,16 +625,7 @@ export class SupabaseTrainingRepository implements TrainingRepository {
       ? attachment.storage_path.split('/').pop()
       : attachment.storage_path.replace('documents/', '');
 
-    // Get signed URL from Supabase Storage (valid for 1 hour)
-    const { data, error: urlError } = await supabase.storage
-      .from('documents')
-      .createSignedUrl(filename || attachment.storage_path, 3600);
-
-    if (urlError) {
-      console.error('Error getting attachment URL:', urlError);
-      return attachment.storage_path;
-    }
-
-    return data.signedUrl;
+    const url = await getCachedSignedUrl(filename || attachment.storage_path);
+    return url || attachment.storage_path;
   }
 }

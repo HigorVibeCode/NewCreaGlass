@@ -23,10 +23,9 @@ export class SupabaseUsersRepository implements UsersRepository {
       .from('users')
       .select('*')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null; // Not found
       console.error('Error fetching user:', error);
       throw new Error('Failed to fetch user');
     }
@@ -39,10 +38,9 @@ export class SupabaseUsersRepository implements UsersRepository {
       .from('users')
       .select('*')
       .eq('username', username)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null; // Not found
       console.error('Error fetching user by username:', error);
       throw new Error('Failed to fetch user');
     }

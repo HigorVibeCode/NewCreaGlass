@@ -83,6 +83,7 @@ export interface InventoryRepository {
   getItemsByGroup(groupId: string): Promise<InventoryItem[]>;
   getAllItems(): Promise<InventoryItem[]>;
   getItemById(itemId: string): Promise<InventoryItem | null>;
+  getItemsByIds(ids: string[]): Promise<InventoryItem[]>;
   createItem(item: Omit<InventoryItem, 'id' | 'createdAt'>): Promise<InventoryItem>;
   updateItem(itemId: string, updates: Partial<InventoryItem>): Promise<InventoryItem>;
   deleteItem(itemId: string): Promise<void>;
@@ -95,6 +96,7 @@ export interface InventoryRepository {
   deleteItemImage(imageId: string): Promise<void>;
   setMainItemImage(imageId: string): Promise<void>;
   getItemImageUrlSigned(storagePath: string): Promise<string>;
+  prefetchItemImageUrls(storagePaths: string[]): Promise<void>;
 }
 
 // Notifications Repository
@@ -111,6 +113,7 @@ export interface BloodPriorityRepository {
   getAllMessages(): Promise<BloodPriorityMessage[]>;
   getMessageById(messageId: string): Promise<BloodPriorityMessage | null>;
   createMessage(message: Omit<BloodPriorityMessage, 'id' | 'createdAt'>): Promise<BloodPriorityMessage>;
+  deleteMessage(messageId: string): Promise<void>;
   getUserReads(userId: string): Promise<BloodPriorityRead[]>;
   getUnreadMessages(userId: string): Promise<BloodPriorityMessage[]>;
   openMessage(messageId: string, userId: string): Promise<BloodPriorityRead>;

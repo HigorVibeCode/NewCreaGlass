@@ -12,7 +12,8 @@ import {
   Image,
   TextInput,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -23,6 +24,7 @@ import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { useAppTheme } from '../src/hooks/use-app-theme';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 import { useAuth } from '../src/store/auth-store';
 import { repos } from '../src/services/container';
 import { confirmDelete } from '../src/utils/confirm-dialog';
@@ -52,15 +54,16 @@ const showMsg = (message: string) => {
 export default function EquipmentDocumentCreateScreen() {
   const { t } = useI18n();
   const router = useRouter();
+  const goBack = useGoBack('/(tabs)/documents');
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { effectiveTheme } = useAppTheme();
   const { user } = useAuth();
-  const { equipmentId, equipmentName, documentId } = useLocalSearchParams<{
+  const { equipmentId, equipmentName, documentId } = useRouteParams<{
     equipmentId: string;
     equipmentName?: string;
     documentId?: string;
-  }>();
+  }>('/equipment-document-create');
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -120,7 +123,7 @@ export default function EquipmentDocumentCreateScreen() {
         }
       } else {
         showMsg(t('equipmentDocs.documentNotFound') || 'Documento não encontrado');
-        router.back();
+        safeBack(router);
       }
     } catch (error) {
       console.error('Error loading equipment document:', error);
@@ -372,10 +375,10 @@ export default function EquipmentDocumentCreateScreen() {
 
       if (Platform.OS === 'web') {
         window.alert(successMsg);
-        router.back();
+        safeBack(router);
       } else {
         Alert.alert(t('common.success') || 'Sucesso', successMsg, [
-          { text: t('common.confirm') || 'OK', onPress: () => router.back() },
+          { text: t('common.confirm') || 'OK', onPress: () => safeBack(router) },
         ]);
       }
     } catch (error) {
@@ -393,7 +396,7 @@ export default function EquipmentDocumentCreateScreen() {
       t('equipmentDocs.deleteDocumentConfirm') || 'Excluir este documento?',
       async () => {
         await repos.equipmentDocumentsRepo.deleteDocument(documentId);
-        router.back();
+        safeBack(router);
       },
       undefined,
       t('common.delete') || 'Excluir',
@@ -432,7 +435,7 @@ export default function EquipmentDocumentCreateScreen() {
           ]}
         >
           <View style={styles.headerContent}>
-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.backButton} onPress={goBack} activeOpacity={0.7}>
               <Ionicons name="arrow-back" size={24} color={colors.text} />
             </TouchableOpacity>
             <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>

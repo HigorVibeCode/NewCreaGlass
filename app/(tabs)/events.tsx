@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, ActivityIndicator, Animated, Platform, Easing } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../../src/hooks/use-i18n';
 import { ScreenWrapper } from '../../src/components/shared/ScreenWrapper';
@@ -12,6 +12,7 @@ import { Event, EventType, WorkOrder } from '../../src/types';
 import { theme } from '../../src/theme';
 import { useThemeColors } from '../../src/hooks/use-theme-colors';
 import { formatDateTime as formatDateTimeUtil, formatTimestamp as formatTimestampUtil } from '../../src/utils/date-format';
+import { pushWithParams } from '../../src/utils/navigation';
 
 type EventOrWorkOrder = 
   | { type: 'event'; data: Event }
@@ -82,6 +83,7 @@ export default function EventsScreen() {
   const { t } = useI18n();
   const router = useRouter();
   const colors = useThemeColors();
+  const isFocused = useIsFocused();
   const [items, setItems] = useState<EventOrWorkOrder[]>([]);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [selectedType, setSelectedType] = useState<EventType | 'all'>('all');
@@ -209,14 +211,10 @@ export default function EventsScreen() {
   }, [selectedType]);
 
   useEffect(() => {
-    loadEventsAndWorkOrders();
-  }, [loadEventsAndWorkOrders]);
-
-  useFocusEffect(
-    useCallback(() => {
+    if (isFocused) {
       loadEventsAndWorkOrders();
-    }, [loadEventsAndWorkOrders])
-  );
+    }
+  }, [isFocused, loadEventsAndWorkOrders]);
 
   const handleFilterSelect = (value: string) => {
     setSelectedType(value as EventType | 'all');
@@ -459,10 +457,7 @@ export default function EventsScreen() {
                       style={[styles.eventCard, { backgroundColor: colors.cardBackground }]}
                       activeOpacity={0.7}
                       onPress={() => {
-                        router.push({
-                          pathname: '/event-detail',
-                          params: { eventId: event.id },
-                        });
+                        pushWithParams(router, '/event-detail', { eventId: event.id });
                       }}
                     >
                       <View style={[styles.cardIndicator, { backgroundColor: eventColor }]} />
@@ -545,10 +540,7 @@ export default function EventsScreen() {
                       ]}
                       activeOpacity={0.7}
                       onPress={() => {
-                        router.push({
-                          pathname: '/work-order-detail',
-                          params: { workOrderId: workOrder.id },
-                        });
+                        pushWithParams(router, '/work-order-detail', { workOrderId: workOrder.id });
                       }}
                     >
                       <View style={[styles.cardIndicator, { backgroundColor: workOrderColor }]} />

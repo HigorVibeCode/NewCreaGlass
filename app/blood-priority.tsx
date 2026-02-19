@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, ActivityIndicator, Animated, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useAuth } from '../src/store/auth-store';
 import { usePermissions } from '../src/hooks/use-permissions';
@@ -12,13 +13,33 @@ import { useThemeColors } from '../src/hooks/use-theme-colors';
 
 const TIMER_SECONDS = 10;
 
+const UnreadPulse: React.FC = () => {
+  const anim = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+  return (
+    <Animated.View style={[styles.unreadDot, { opacity: anim }]} />
+  );
+};
+
 export default function BloodPriorityScreen() {
   const { t } = useI18n();
   const { user } = useAuth();
   const router = useRouter();
+  const { manage } = useRouteParams<{ manage?: string }>('/blood-priority');
   const { hasPermission } = usePermissions();
   const colors = useThemeColors();
+  const isManageMode = manage === '1' && (user?.userType === 'Master' || hasPermission('bloodPriority.create'));
   const [messages, setMessages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [timer, setTimer] = useState(TIMER_SECONDS);
   const [canConfirm, setCanConfirm] = useState(false);
@@ -27,9 +48,10 @@ export default function BloodPriorityScreen() {
   const cardRefs = useRef<{ [key: string]: any }>({});
 
   useEffect(() => {
-    loadMessages();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (user) {
+      loadMessages();
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     if (selectedMessageId && timer > 0) {
@@ -46,17 +68,22 @@ export default function BloodPriorityScreen() {
     }
   }, [selectedMessageId, timer]);
 
-  const loadMessages = async () => {
+  const loadMessages = useCallback(async () => {
     if (!user) return;
+    setLoading(true);
     try {
-      const allMessages = await repos.bloodPriorityRepo.getAllMessages();
+      const [allMessages, reads] = await Promise.all([
+        repos.bloodPriorityRepo.getAllMessages(),
+        repos.bloodPriorityRepo.getUserReads(user.id),
+      ]);
       setMessages(allMessages);
-      const reads = await repos.bloodPriorityRepo.getUserReads(user.id);
       setUserReads(reads);
     } catch (error) {
       console.error('Error loading messages:', error);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [user?.id]);
 
   const handleOpenMessage = async (messageId: string) => {
     if (!user) return;
@@ -118,6 +145,33 @@ export default function BloodPriorityScreen() {
     }
   };
 
+  const handleDeleteMessage = (messageId: string, messageTitle: string) => {
+    Alert.alert(
+      t('bloodPriority.deleteMessage'),
+      t('bloodPriority.deleteConfirm'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await repos.bloodPriorityRepo.deleteMessage(messageId);
+              if (selectedMessageId === messageId) {
+                setSelectedMessageId(null);
+              }
+              Alert.alert(t('common.success'), t('bloodPriority.messageDeleted'));
+              loadMessages();
+            } catch (error) {
+              console.error('Error deleting message:', error);
+              Alert.alert(t('common.error'), String(error));
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const isMessageRead = (messageId: string): boolean => {
     const read = userReads.find(r => r.messageId === messageId && r.confirmedAt);
     return !!read;
@@ -129,7 +183,7 @@ export default function BloodPriorityScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
     >
       <View style={styles.content}>
-        {hasPermission('bloodPriority.create') && (
+        {isManageMode && (
           <View style={styles.createButtonRow}>
             <Button
               title={t('permissions.bloodPriority.create')}
@@ -137,7 +191,11 @@ export default function BloodPriorityScreen() {
             />
           </View>
         )}
-        {messages.length === 0 ? (
+        {loading ? (
+          <View style={styles.emptyState}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : messages.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{t('bloodPriority.noMessages')}</Text>
           </View>
@@ -157,15 +215,38 @@ export default function BloodPriorityScreen() {
                     style={[
                       styles.messageCard,
                       { backgroundColor: colors.cardBackground },
+                      !isRead && { borderLeftWidth: 4, borderLeftColor: '#EF4444', backgroundColor: '#EF4444' + '0D' },
                       isRead && styles.messageCardRead,
                       isSelected && { borderWidth: 2, borderColor: colors.primary },
                     ]}
                     onPress={() => handleOpenMessage(message.id)}
                   >
                     <View style={styles.messageHeader}>
-                      <Text style={[styles.messageTitle, { color: colors.text }]}>{message.title}</Text>
-                      {isRead && (
+                      {!isRead && <UnreadPulse />}
+                      <Text
+                        style={[
+                          styles.messageTitle,
+                          { color: colors.text },
+                          !isRead && { fontWeight: '800' },
+                        ]}
+                      >
+                        {message.title}
+                      </Text>
+                      {isRead ? (
                         <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                      ) : (
+                        <View style={styles.unreadBadge}>
+                          <Ionicons name="alert-circle" size={14} color="#fff" />
+                        </View>
+                      )}
+                      {isManageMode && (
+                        <TouchableOpacity
+                          style={styles.deleteButton}
+                          onPress={() => handleDeleteMessage(message.id, message.title)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="trash-outline" size={18} color={colors.error} />
+                        </TouchableOpacity>
                       )}
                     </View>
                   </TouchableOpacity>
@@ -223,17 +304,35 @@ const styles = StyleSheet.create({
     ...theme.shadows.sm,
   },
   messageCardRead: {
-    opacity: 0.7,
+    opacity: 0.6,
   },
   messageHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: theme.spacing.sm,
   },
   messageTitle: {
-    fontSize: theme.typography.fontSize.lg,
+    fontSize: theme.typography.fontSize.md,
     fontWeight: theme.typography.fontWeight.bold,
     flex: 1,
+  },
+  unreadDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#EF4444',
+  },
+  unreadBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteButton: {
+    marginLeft: theme.spacing.sm,
+    padding: theme.spacing.xs,
   },
   messageBody: {
     fontSize: theme.typography.fontSize.md,

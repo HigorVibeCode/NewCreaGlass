@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, TextInput, Animated, Easing } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../../src/hooks/use-i18n';
 import { ScreenWrapper } from '../../src/components/shared/ScreenWrapper';
@@ -14,6 +14,7 @@ import { theme } from '../../src/theme';
 import { useThemeColors } from '../../src/hooks/use-theme-colors';
 import { useAuth } from '../../src/store/auth-store';
 import { formatDate } from '../../src/utils/date-format';
+import { pushWithParams } from '../../src/utils/navigation';
 
 // Alert levels for waiting status cards
 // 0 = no alert, 1 = >8h slow pulse, 2 = >24h pulse+darker, 3 = >48h pulse+alert
@@ -118,6 +119,7 @@ export default function ProductionScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const { user } = useAuth();
+  const isFocused = useIsFocused();
   const [productions, setProductions] = useState<Production[]>([]);
   const [allProductions, setAllProductions] = useState<Production[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<ProductionStatus | 'all'>('all');
@@ -136,66 +138,56 @@ export default function ProductionScreen() {
       const status = selectedStatus === 'all' ? undefined : selectedStatus;
       const fetchedProductions = await repos.productionRepo.getAllProductions(status);
       setAllProductions(fetchedProductions);
-      
-      // Load glass items for all productions
+
       const glassIds = new Set<string>();
       fetchedProductions.forEach(prod => {
         prod.items.forEach(item => {
-          if (item.glassId) {
-            glassIds.add(item.glassId);
-          }
+          if (item.glassId) glassIds.add(item.glassId);
         });
       });
-      
-      const glassMap = new Map<string, InventoryItem>();
-      for (const glassId of glassIds) {
-        try {
-          const glassItem = await repos.inventoryRepo.getItemById(glassId);
-          if (glassItem) {
-            glassMap.set(glassId, glassItem);
-          }
-        } catch (error) {
-          console.error(`Error loading glass item ${glassId}:`, error);
-        }
-      }
-      setGlassItems(glassMap);
 
-      // Load waiting hours for productions in waiting statuses
       const waitingProds = fetchedProductions.filter(p =>
         WAITING_STATUSES.includes(p.status)
       );
+      const waitingIds = waitingProds.map(p => p.id);
+
+      const [glassItems, historyResult] = await Promise.all([
+        glassIds.size > 0
+          ? repos.inventoryRepo.getItemsByIds(Array.from(glassIds))
+          : Promise.resolve([]),
+        waitingIds.length > 0
+          ? supabase
+              .from('production_status_history')
+              .select('production_id, changed_at')
+              .in('production_id', waitingIds)
+              .order('changed_at', { ascending: false })
+          : Promise.resolve({ data: null }),
+      ]);
+
+      const glassMap = new Map<string, InventoryItem>();
+      for (const item of glassItems) {
+        glassMap.set(item.id, item);
+      }
+      setGlassItems(glassMap);
+
       if (waitingProds.length > 0) {
-        const waitingIds = waitingProds.map(p => p.id);
-        try {
-          const { data: historyData } = await supabase
-            .from('production_status_history')
-            .select('production_id, changed_at')
-            .in('production_id', waitingIds)
-            .order('changed_at', { ascending: false });
-
-          // Pick latest change per production
-          const latestChangeMap = new Map<string, string>();
-          for (const entry of historyData || []) {
-            if (!latestChangeMap.has(entry.production_id)) {
-              latestChangeMap.set(entry.production_id, entry.changed_at);
-            }
+        const latestChangeMap = new Map<string, string>();
+        for (const entry of historyResult.data || []) {
+          if (!latestChangeMap.has(entry.production_id)) {
+            latestChangeMap.set(entry.production_id, entry.changed_at);
           }
-
-          const now = Date.now();
-          const hoursMap = new Map<string, number>();
-          for (const prod of waitingProds) {
-            const changedAt = latestChangeMap.get(prod.id);
-            const timestamp = changedAt || prod.createdAt;
-            if (timestamp) {
-              const diff = now - new Date(timestamp).getTime();
-              hoursMap.set(prod.id, diff / (1000 * 60 * 60));
-            }
-          }
-          setWaitingHoursMap(hoursMap);
-        } catch (err) {
-          console.error('Error loading waiting hours:', err);
-          setWaitingHoursMap(new Map());
         }
+        const now = Date.now();
+        const hoursMap = new Map<string, number>();
+        for (const prod of waitingProds) {
+          const changedAt = latestChangeMap.get(prod.id);
+          const timestamp = changedAt || prod.createdAt;
+          if (timestamp) {
+            const diff = now - new Date(timestamp).getTime();
+            hoursMap.set(prod.id, diff / (1000 * 60 * 60));
+          }
+        }
+        setWaitingHoursMap(hoursMap);
       } else {
         setWaitingHoursMap(new Map());
       }
@@ -207,14 +199,10 @@ export default function ProductionScreen() {
   }, [selectedStatus]);
 
   useEffect(() => {
-    loadProductions();
-  }, [loadProductions]);
-
-  useFocusEffect(
-    useCallback(() => {
+    if (isFocused) {
       loadProductions();
-    }, [loadProductions])
-  );
+    }
+  }, [isFocused, loadProductions]);
 
   const handleCreateProduction = () => {
     router.push('/production-create');
@@ -363,7 +351,7 @@ export default function ProductionScreen() {
   };
 
   const companyOptions: DropdownOption[] = [
-    { label: 'Todas', value: 'all' },
+    { label: t('production.allCompanies'), value: 'all' },
     { label: '3S', value: '3S' },
     { label: 'Crea Glass', value: 'Crea Glass' },
   ];
@@ -581,7 +569,7 @@ export default function ProductionScreen() {
                   <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
                     <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
                       <Text style={[styles.modalTitle, { color: colors.text }]}>
-                        Filtrar por Company
+                        {t('production.filterByCompany')}
                       </Text>
                       <TouchableOpacity onPress={() => setCompanyFilterModalVisible(false)}>
                         <Ionicons name="close" size={24} color={colors.text} />
@@ -643,10 +631,7 @@ export default function ProductionScreen() {
                     <TouchableOpacity
                       style={[styles.orderCard, { backgroundColor: colors.cardBackground }]}
                       activeOpacity={0.7}
-                      onPress={() => router.push({
-                        pathname: '/production-detail',
-                        params: { productionId: production.id },
-                      })}
+                      onPress={() => pushWithParams(router, '/production-detail', { productionId: production.id })}
                     >
                       <View style={styles.cardContent}>
                         <View style={styles.orderDetails}>

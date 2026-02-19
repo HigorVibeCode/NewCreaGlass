@@ -3,6 +3,7 @@ import { View, StyleSheet, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useI18n } from '../src/hooks/use-i18n';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 import { useAuth } from '../src/store/auth-store';
 import { Button } from '../src/components/shared/Button';
 import { Input } from '../src/components/shared/Input';
@@ -14,6 +15,7 @@ export default function BloodPriorityCreateScreen() {
   const { t } = useI18n();
   const { user } = useAuth();
   const router = useRouter();
+  const goBack = useGoBack();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const [newMessageTitle, setNewMessageTitle] = useState('');
@@ -35,7 +37,7 @@ export default function BloodPriorityCreateScreen() {
         body: newMessageBody.trim(),
         createdBy: user.id,
       });
-      router.back();
+      safeBack(router);
     } catch (error) {
       console.error('Error creating message:', error);
       Alert.alert(t('common.error'), t('common.error') + ': ' + t('bloodPriority.createMessage'));
@@ -68,7 +70,7 @@ export default function BloodPriorityCreateScreen() {
         <View style={styles.buttonContainer}>
           <Button
             title={t('common.cancel')}
-            onPress={() => router.back()}
+            onPress={goBack}
             variant="outline"
             style={styles.button}
           />

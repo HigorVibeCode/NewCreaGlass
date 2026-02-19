@@ -19,6 +19,8 @@ import { repos } from '../src/services/container';
 import { WorkOrder } from '../src/types';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { useGoBack } from '../src/hooks/use-go-back';
+import { pushWithParams } from '../src/utils/navigation';
 
 type EventOrWorkOrder = 
   | { type: 'workOrder'; data: WorkOrder };
@@ -28,6 +30,7 @@ export default function WorkOrdersHistoryScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
+  const goBack = useGoBack('/(tabs)/events');
   const [historyItems, setHistoryItems] = useState<EventOrWorkOrder[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
@@ -193,7 +196,7 @@ export default function WorkOrdersHistoryScreen() {
         <View style={styles.headerContent}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={goBack}
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
@@ -242,10 +245,7 @@ export default function WorkOrdersHistoryScreen() {
                     style={[styles.card, { backgroundColor: colors.cardBackground }]}
                     activeOpacity={0.7}
                     onPress={() => {
-                      router.push({
-                        pathname: '/work-order-detail',
-                        params: { workOrderId: workOrder.id },
-                      });
+                      pushWithParams(router, '/work-order-detail', { workOrderId: workOrder.id });
                     }}
                   >
                     <View style={[styles.cardIndicator, { backgroundColor: statusColor }]} />

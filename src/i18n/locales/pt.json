@@ -118,6 +118,9 @@
     "confirmRead": "Confirmar Leitura",
     "timerWarning": "Por favor, leia a mensagem. Você pode confirmar em {{seconds}} segundos.",
     "readConfirmed": "Leitura confirmada",
+    "deleteMessage": "Excluir Mensagem",
+    "deleteConfirm": "Tem certeza que deseja excluir esta mensagem? Esta ação não pode ser desfeita.",
+    "messageDeleted": "Mensagem excluída com sucesso",
     "unreadMessages": "Mensagens não lidas"
   },
   "documents": {
@@ -263,7 +266,9 @@
     "maxImagesPerItem": "máx. 3",
     "mainImage": "Principal",
     "selectOneMainImage": "Selecione exatamente uma imagem como Principal.",
-    "searchPlaceholder": "Buscar por posição, tipo, nome ou código OPO..."
+    "searchPlaceholder": "Buscar por posição, tipo, nome ou código OPO...",
+    "searchPlaceholderGlass": "Buscar por nome, espessura, localização...",
+    "searchPlaceholderSupplies": "Buscar por nome, posição..."
   },
   "accessControls": {
     "title": "Controles de Acesso",
@@ -318,6 +323,8 @@
     "createOrder": "Criar Ordem",
     "noOrders": "Nenhuma ordem de produção",
     "filterByStatus": "Filtrar por Status",
+    "filterByCompany": "Filtrar por Empresa",
+    "allCompanies": "Todas",
     "searchPlaceholder": "Buscar por cliente, número, tipo ou item...",
     "orderNumber": "Número do Pedido",
     "orderNumberPlaceholder": "Digite o número do pedido",
@@ -544,6 +551,22 @@
       "paused": "Pausado",
       "completed": "Completado",
       "cancelled": "Cancelado"
+    },
+    "timeStatus": {
+      "EM_ATENDIMENTO": "Em Atendimento",
+      "PAUSADO": "Pausado",
+      "DESLOCAMENTO": "Deslocamento"
+    },
+    "serviceLogType": {
+      "ajuste": "Ajuste",
+      "problema": "Problema",
+      "material": "Material",
+      "recomendacao": "Recomendação"
+    },
+    "evidenceType": {
+      "antes": "Antes",
+      "durante": "Durante",
+      "depois": "Depois"
     }
   },
   "maintenance": {
@@ -597,10 +620,18 @@
     "updatedAt": "Data de Atualização"
   },
   "permissions": {
+    "_group.production": "Produção",
+    "_group.documents": "Documentos & Treinamentos",
+    "_group.events": "Eventos & Ordens de Serviço",
+    "_group.inventory": "Inventário",
+    "_group.notifications": "Notificações",
+    "_group.admin": "Administração",
+    "_group.devices": "Dispositivos",
     "documents.upload": "Enviar Documentos",
     "documents.create": "Criar Documentos",
     "documents.view": "Visualizar Documentos",
     "documents.download": "Baixar Documentos",
+    "documents.update": "Atualizar Documentos",
     "documents.delete": "Excluir Documentos",
     "inventory.create": "Criar Inventário",
     "inventory.update": "Atualizar Inventário",

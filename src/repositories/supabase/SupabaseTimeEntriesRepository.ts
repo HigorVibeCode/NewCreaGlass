@@ -81,7 +81,7 @@ export class SupabaseTimeEntriesRepository implements TimeEntriesRepository {
       .from('users')
       .select('user_type')
       .eq('id', authUser.id)
-      .single();
+      .maybeSingle();
 
     const isMaster = !userError && userRow?.user_type === 'Master';
     const effectiveUserId = isMaster ? options?.userId : authUser.id;
@@ -125,14 +125,14 @@ export class SupabaseTimeEntriesRepository implements TimeEntriesRepository {
       .from('time_entries')
       .select('*')
       .eq('id', entryId)
-      .single();
+      .maybeSingle();
     if (fetchError || !entryRow) throw new Error('Registro de ponto não encontrado');
 
     const { data: userRow, error: userError } = await supabase
       .from('users')
       .select('user_type')
       .eq('id', authUser.id)
-      .single();
+      .maybeSingle();
     const isMaster = !userError && userRow?.user_type === 'Master';
     const isOwner = entryRow.user_id === authUser.id;
     if (!isMaster && !isOwner) throw new Error('Sem permissão para ajustar este ponto');

@@ -97,9 +97,9 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
       .from('notifications')
       .select('target_user_id')
       .eq('id', notificationId)
-      .single();
+      .maybeSingle();
 
-    if (fetchError) {
+    if (fetchError || !notification) {
       console.error('Error fetching notification:', fetchError);
       throw new Error('Notification not found');
     }
@@ -107,7 +107,7 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
     // Allow marking as read if:
     // 1. Notification has no target_user_id (global notification)
     // 2. Notification's target_user_id matches the user
-    if (notification && notification.target_user_id && notification.target_user_id !== userId) {
+    if (notification.target_user_id && notification.target_user_id !== userId) {
       throw new Error('Notification does not belong to user');
     }
 

@@ -118,6 +118,9 @@
     "confirmRead": "Gelesen bestätigen",
     "timerWarning": "Bitte lesen Sie die Nachricht. Sie können in {{seconds}} Sekunden bestätigen.",
     "readConfirmed": "Gelesen bestätigt",
+    "deleteMessage": "Nachricht löschen",
+    "deleteConfirm": "Sind Sie sicher, dass Sie diese Nachricht löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+    "messageDeleted": "Nachricht erfolgreich gelöscht",
     "unreadMessages": "Ungelesene Nachrichten"
   },
   "documents": {
@@ -241,7 +244,10 @@
     "invalidQuantity": "Bitte geben Sie eine gültige Menge ein",
     "countHistory": "Zählhistorie",
     "previousValue": "Vorher",
-    "newValue": "Neu"
+    "newValue": "Neu",
+    "searchPlaceholder": "Suche nach Position, Typ, Name oder OPO-Code...",
+    "searchPlaceholderGlass": "Suche nach Name, Dicke, Standort...",
+    "searchPlaceholderSupplies": "Suche nach Name, Position..."
   },
   "accessControls": {
     "title": "Zugriffskontrollen",
@@ -296,6 +302,8 @@
     "createOrder": "Auftrag erstellen",
     "noOrders": "Keine Produktionsaufträge",
     "filterByStatus": "Nach Status filtern",
+    "filterByCompany": "Nach Unternehmen filtern",
+    "allCompanies": "Alle",
     "searchPlaceholder": "Suche nach Kunde, Nummer, Typ oder Artikel...",
     "orderNumber": "Auftragsnummer",
     "orderNumberPlaceholder": "Auftragsnummer eingeben",
@@ -522,6 +530,22 @@
       "paused": "Pausiert",
       "completed": "Abgeschlossen",
       "cancelled": "Storniert"
+    },
+    "timeStatus": {
+      "EM_ATENDIMENTO": "Im Einsatz",
+      "PAUSADO": "Pausiert",
+      "DESLOCAMENTO": "Unterwegs"
+    },
+    "serviceLogType": {
+      "ajuste": "Anpassung",
+      "problema": "Problem",
+      "material": "Material",
+      "recomendacao": "Empfehlung"
+    },
+    "evidenceType": {
+      "antes": "Vorher",
+      "durante": "Während",
+      "depois": "Nachher"
     }
   },
   "maintenance": {
@@ -575,10 +599,18 @@
     "updatedAt": "Aktualisiert am"
   },
   "permissions": {
+    "_group.production": "Produktion",
+    "_group.documents": "Dokumente & Schulungen",
+    "_group.events": "Termine & Arbeitsaufträge",
+    "_group.inventory": "Inventar",
+    "_group.notifications": "Benachrichtigungen",
+    "_group.admin": "Verwaltung",
+    "_group.devices": "Geräte",
     "documents.upload": "Dokumente hochladen",
     "documents.create": "Dokumente erstellen",
     "documents.view": "Dokumente anzeigen",
     "documents.download": "Dokumente herunterladen",
+    "documents.update": "Dokumente aktualisieren",
     "documents.delete": "Dokumente löschen",
     "inventory.create": "Inventar erstellen",
     "inventory.update": "Inventar aktualisieren",

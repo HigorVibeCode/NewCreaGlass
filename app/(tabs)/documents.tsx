@@ -7,6 +7,7 @@ import { ScreenWrapper } from '../../src/components/shared/ScreenWrapper';
 import { useThemeColors } from '../../src/hooks/use-theme-colors';
 import { useAppTheme } from '../../src/hooks/use-app-theme';
 import { theme } from '../../src/theme';
+import { pushWithParams } from '../../src/utils/navigation';
 
 interface DocumentCategory {
   id: string;
@@ -50,15 +51,9 @@ export default function DocumentsScreen() {
   const handleCategoryPress = (categoryId: string) => {
     // Procedimentos, instruções e treinamentos → lista de treinamentos profissionais
     if (categoryId === 'proceduresInstructionsTrainings') {
-      router.push({
-        pathname: '/trainings-list',
-        params: { category: 'professional' },
-      } as any);
+      pushWithParams(router, '/trainings-list', { category: 'professional' });
     } else {
-      router.push({
-        pathname: '/documents-category',
-        params: { categoryId },
-      } as any);
+      pushWithParams(router, '/documents-category', { categoryId: String(categoryId) });
     }
   };
 

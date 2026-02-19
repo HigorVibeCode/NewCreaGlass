@@ -11,7 +11,8 @@ import {
   TouchableWithoutFeedback,
   Platform,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatDate as formatDateUtil, formatTime as formatTimeUtil } from '../src/utils/date-format';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,6 +31,7 @@ import { getEffectiveRecordedAt } from '../src/utils/point-report-pdf';
 import { repos } from '../src/services/container';
 import { tryBiometricAuth } from '../src/utils/point-auth';
 import { getCurrentLocationForEntry } from '../src/utils/point-location';
+import { useGoBack } from '../src/hooks/use-go-back';
 import { theme } from '../src/theme';
 import { TimeEntry, EntryType } from '../src/types';
 
@@ -125,12 +127,13 @@ function usePauseCountdown(startIso: string | null, durationMs: number): { remai
 export default function PointScreen() {
   const { t } = useI18n();
   const router = useRouter();
-  const params = useLocalSearchParams<{ nfc?: string }>(); // nfc=clock_in | clock_out | 1 (legado)
+  const params = useRouteParams<{ nfc?: string }>('/point'); // nfc=clock_in | clock_out | 1 (legado)
   const colors = useThemeColors();
   const { effectiveTheme } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const goBack = useGoBack();
   const isMaster = user?.userType === 'Master';
   const nfcHandledRef = useRef(false);
 
@@ -264,6 +267,25 @@ export default function PointScreen() {
   const liveTimerLabel = useLiveTimer(liveTimerStartIso, todayPauseMs, activePauseStartIso, activePauseCapMs);
   const coffeeCountdown = usePauseCountdown(coffeeStartIso, COFFEE_DURATION_MS);
   const lunchCountdown = usePauseCountdown(lunchStartIso, LUNCH_DURATION_MS);
+
+  // Encerrar pausa vencida com timestamp correto (start + duração fixa)
+  const autoEndOverduePause = useCallback(async (entryType: EntryType, correctEndIso: string) => {
+    if (!user) return;
+    try {
+      await repos.timeEntriesRepo.createTimeEntry({
+        userId: user.id,
+        userName: user.username,
+        recordedAt: correctEndIso,
+        entryType,
+        locationAddress: null,
+        gpsAccuracy: null,
+        gpsSource: null,
+      });
+      queryClient.invalidateQueries({ queryKey: ['timeEntries'] });
+    } catch (err: any) {
+      console.warn('Auto-end overdue pause failed:', err);
+    }
+  }, [user, queryClient]);
 
   // Auto-encerrar pausa quando o tempo acabar (usa timestamp correto: start + duração fixa)
   const coffeeAutoEndRef = useRef(false);
@@ -407,25 +429,6 @@ export default function PointScreen() {
       console.warn('Failed to schedule pause notification:', err);
     }
   }, [t]);
-
-  // Encerrar pausa vencida com timestamp correto (start + duração fixa)
-  const autoEndOverduePause = useCallback(async (entryType: EntryType, correctEndIso: string) => {
-    if (!user) return;
-    try {
-      await repos.timeEntriesRepo.createTimeEntry({
-        userId: user.id,
-        userName: user.username,
-        recordedAt: correctEndIso,
-        entryType,
-        locationAddress: null,
-        gpsAccuracy: null,
-        gpsSource: null,
-      });
-      queryClient.invalidateQueries({ queryKey: ['timeEntries'] });
-    } catch (err: any) {
-      console.warn('Auto-end overdue pause failed:', err);
-    }
-  }, [user, queryClient]);
 
   const performRegister = useCallback(async (entryType: EntryType) => {
     if (!user) return;
@@ -748,7 +751,7 @@ export default function PointScreen() {
         <View style={styles.headerRow}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={goBack}
             activeOpacity={0.7}
           >
             <Ionicons name="arrow-back" size={24} color={colors.text} />

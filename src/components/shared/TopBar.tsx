@@ -12,6 +12,92 @@ import { ThreeDotsMenu } from './ThreeDotsMenu';
 import { useThemeColors } from '../../hooks/use-theme-colors';
 import { useUnreadNotificationsCountQuery } from '../../services/queries';
 
+const BloodPriorityIcon: React.FC<{ count: number; onPress: () => void }> = ({ count, onPress }) => {
+  const colors = useThemeColors();
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim = useRef(new Animated.Value(0.6)).current;
+  const hasUnread = count > 0;
+
+  useEffect(() => {
+    if (!hasUnread) {
+      pulseAnim.setValue(0);
+      scaleAnim.setValue(1);
+      glowAnim.setValue(1);
+      return;
+    }
+
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1400, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ]),
+    );
+    const bounceLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scaleAnim, { toValue: 1.15, duration: 700, useNativeDriver: true }),
+        Animated.timing(scaleAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
+      ]),
+    );
+    const glowLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 0.5, duration: 700, useNativeDriver: true }),
+      ]),
+    );
+
+    pulseLoop.start();
+    bounceLoop.start();
+    glowLoop.start();
+    return () => { pulseLoop.stop(); bounceLoop.stop(); glowLoop.stop(); };
+  }, [hasUnread]);
+
+  const pulseScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 2.2] });
+  const pulseOpacity = pulseAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.6, 0.25, 0] });
+
+  return (
+    <TouchableOpacity
+      style={styles.bloodIconTouchable}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      {hasUnread && (
+        <Animated.View
+          style={[
+            styles.pulseRing,
+            { transform: [{ scale: pulseScale }], opacity: pulseOpacity },
+          ]}
+        />
+      )}
+
+      {hasUnread ? (
+        <Animated.View
+          style={[
+            styles.circularIcon,
+            styles.bloodPriorityIconActive,
+            {
+              transform: [{ scale: scaleAnim }],
+              opacity: glowAnim.interpolate({ inputRange: [0.5, 1], outputRange: [0.85, 1] }),
+            },
+          ]}
+        >
+          <Ionicons name="water" size={18} color="#fff" />
+        </Animated.View>
+      ) : (
+        <View style={[styles.circularIcon, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+          <Ionicons name="water-outline" size={18} color={colors.text} />
+        </View>
+      )}
+
+      {hasUnread && (
+        <View style={[styles.countBadge, { borderColor: colors.background }]}>
+          <Text style={styles.countBadgeText}>{count > 9 ? '9+' : count}</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+};
+
 interface TopBarProps {
   title?: string;
 }
@@ -26,7 +112,6 @@ export const TopBar: React.FC<TopBarProps> = () => {
   const { data: unreadCount = 0 } = useUnreadNotificationsCountQuery(user?.id);
   const [bloodPriorityUnread, setBloodPriorityUnread] = React.useState(0);
   const [showMenu, setShowMenu] = useState(false);
-  const blinkAnimation = useRef(new Animated.Value(1)).current;
 
   const loadBloodPriorityCount = React.useCallback(async () => {
     if (!user) return;
@@ -44,28 +129,6 @@ export const TopBar: React.FC<TopBarProps> = () => {
     return () => clearInterval(interval);
   }, [loadBloodPriorityCount]);
 
-  useEffect(() => {
-    if (bloodPriorityUnread > 0) {
-      // Create blinking animation
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(blinkAnimation, {
-            toValue: 0.3,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-          Animated.timing(blinkAnimation, {
-            toValue: 1,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-    } else {
-      blinkAnimation.setValue(1);
-    }
-  }, [bloodPriorityUnread, blinkAnimation]);
-
   const username = user?.username || 'User';
 
   return (
@@ -82,47 +145,35 @@ export const TopBar: React.FC<TopBarProps> = () => {
           <Text style={[styles.greeting, { color: colors.text }]}>{t('common.hello')}, {username}</Text>
         </View>
         <View style={styles.rightSection}>
-        {/* Blood Priority icon - visible to all users */}
-        <TouchableOpacity
-          style={styles.iconContainer}
-          onPress={() => router.push('/blood-priority')}
-          activeOpacity={0.7}
-        >
-          <Animated.View
-            style={[
-              styles.circularIcon,
-              styles.bloodPriorityIcon,
-              { opacity: blinkAnimation },
-            ]}
-          >
-            <Ionicons name="water" size={16} color="#ffffff" />
-          </Animated.View>
-        </TouchableOpacity>
-        {hasPermission('notifications.view') && (
+          <BloodPriorityIcon
+            count={bloodPriorityUnread}
+            onPress={() => router.push('/blood-priority')}
+          />
+          {hasPermission('notifications.view') && (
+            <TouchableOpacity
+              style={styles.iconContainer}
+              onPress={() => router.push('/notifications')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.circularIcon, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+                <Ionicons name="notifications-outline" size={18} color={colors.text} />
+              </View>
+              {unreadCount > 0 && (
+                <View style={[styles.badge, { backgroundColor: colors.error, borderColor: colors.background }]}>
+                  <Text style={[styles.badgeText, { color: colors.textInverse }]}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={styles.iconContainer}
-            onPress={() => router.push('/notifications')}
+            onPress={() => setShowMenu(true)}
             activeOpacity={0.7}
           >
             <View style={[styles.circularIcon, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
-              <Ionicons name="notifications-outline" size={18} color={colors.text} />
+              <Ionicons name="ellipsis-vertical" size={18} color={colors.text} />
             </View>
-            {unreadCount > 0 && (
-              <View style={[styles.badge, { backgroundColor: colors.error, borderColor: colors.background }]}>
-                <Text style={[styles.badgeText, { color: colors.textInverse }]}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
-              </View>
-            )}
           </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          style={styles.iconContainer}
-          onPress={() => setShowMenu(true)}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.circularIcon, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
-            <Ionicons name="ellipsis-vertical" size={18} color={colors.text} />
-          </View>
-        </TouchableOpacity>
         </View>
       </View>
       <ThreeDotsMenu visible={showMenu} onClose={() => setShowMenu(false)} />
@@ -177,6 +228,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  bloodIconTouchable: {
+    position: 'relative',
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pulseRing: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#EF4444',
+  },
   circularIcon: {
     width: 40,
     height: 40,
@@ -185,9 +251,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
   },
-  bloodPriorityIcon: {
+  bloodPriorityIconActive: {
     backgroundColor: '#EF4444',
     borderColor: '#EF4444',
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  countBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+  },
+  countBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+    lineHeight: 12,
   },
   badge: {
     position: 'absolute',

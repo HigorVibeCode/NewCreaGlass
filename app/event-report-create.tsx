@@ -10,7 +10,8 @@ import {
   Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
@@ -28,6 +29,7 @@ import { supabase } from '../src/services/supabase';
 import { User, WorkOrder, WorkOrderServiceType } from '../src/types';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 
 interface WOAttachment {
   id: string;
@@ -45,7 +47,8 @@ export default function WorkOrderCreateScreen() {
   const { hasPermission } = usePermissions();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const { workOrderId } = useLocalSearchParams<{ workOrderId: string }>();
+  const { workOrderId } = useRouteParams<{ workOrderId: string }>('/event-report-create');
+  const goBack = useGoBack('/(tabs)/events');
 
   const [clientName, setClientName] = useState('');
   const [clientAddress, setClientAddress] = useState('');
@@ -106,10 +109,10 @@ export default function WorkOrderCreateScreen() {
       } else {
         if (Platform.OS === 'web') {
           window.alert('Work order not found');
-          router.back();
+          safeBack(router);
         } else {
           Alert.alert(t('common.error'), 'Work order not found', [
-            { text: t('common.confirm'), onPress: () => router.back() },
+            { text: t('common.confirm'), onPress: () => safeBack(router) },
           ]);
         }
       }
@@ -418,13 +421,13 @@ export default function WorkOrderCreateScreen() {
     
     if (isEditMode && !hasPermission('workOrders.update')) {
       Alert.alert(t('common.error'), 'Você não tem permissão para editar ordens de serviço', [
-        { text: t('common.confirm'), onPress: () => router.back() },
+        { text: t('common.confirm'), onPress: () => safeBack(router) },
       ]);
       return;
     }
     if (!isEditMode && !hasPermission('workOrders.create')) {
       Alert.alert(t('common.error'), 'Você não tem permissão para criar ordens de serviço', [
-        { text: t('common.confirm'), onPress: () => router.back() },
+        { text: t('common.confirm'), onPress: () => safeBack(router) },
       ]);
       return;
     }
@@ -444,7 +447,7 @@ export default function WorkOrderCreateScreen() {
         <View style={[styles.header, { paddingTop: insets.top + theme.spacing.md, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
           <TouchableOpacity
             style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-            onPress={() => router.back()}
+            onPress={goBack}
             activeOpacity={0.7}
           >
             <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -630,7 +633,7 @@ export default function WorkOrderCreateScreen() {
           <View style={styles.buttonContainer}>
             <Button
               title={t('common.cancel')}
-              onPress={() => router.back()}
+              onPress={goBack}
               variant="outline"
               style={styles.button}
             />

@@ -1,31 +1,36 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity, ActivityIndicator, Alert, Modal } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { useGoBack } from '../src/hooks/use-go-back';
 import { useAppTheme } from '../src/hooks/use-app-theme';
 import { useAuth } from '../src/store/auth-store';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { repos } from '../src/services/container';
 import { formatDateTime as formatDateTimeUtil } from '../src/utils/date-format';
 import { supabase } from '../src/services/supabase';
+import { getCachedSignedUrl } from '../src/utils/signed-url-cache';
 import { TrainingWithCompletion, TrainingCategory } from '../src/types';
 import { getLocalizedTrainingTitle, getLocalizedTrainingDescription } from '../src/utils/training-i18n';
+import { pushWithParams } from '../src/utils/navigation';
 import { theme } from '../src/theme';
 
 export default function TrainingsHistoryScreen() {
   const { t, currentLanguage } = useI18n();
   const router = useRouter();
+  const goBack = useGoBack('/(tabs)/documents');
   const colors = useThemeColors();
   const { effectiveTheme } = useAppTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const isDark = effectiveTheme === 'dark';
-  const { category } = useLocalSearchParams<{ category: TrainingCategory }>();
+  const { category } = useRouteParams<{ category: TrainingCategory }>('/trainings-history');
   const trainingCategory = category || 'mandatory';
 
   const [trainings, setTrainings] = useState<TrainingWithCompletion[]>([]);
@@ -137,7 +142,7 @@ export default function TrainingsHistoryScreen() {
           <View style={styles.headerContent}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.back()}
+              onPress={goBack}
               activeOpacity={0.7}
             >
               <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -187,10 +192,7 @@ export default function TrainingsHistoryScreen() {
                   <TouchableOpacity
                     key={training.id}
                     style={[styles.trainingCard, { backgroundColor: colors.cardBackground }]}
-                    onPress={() => router.push({
-                      pathname: '/training-detail',
-                      params: { trainingId: training.id },
-                    } as any)}
+                    onPress={() => pushWithParams(router, '/training-detail', { trainingId: training.id })}
                     activeOpacity={0.7}
                   >
                     <View style={styles.trainingHeader}>
@@ -248,18 +250,10 @@ export default function TrainingsHistoryScreen() {
                                   style={[styles.signatureImageContainer, { borderColor: colors.border }]}
                                   onPress={async () => {
                                     try {
-                                      // Obter URL da assinatura
                                       const filename = training.signature.signaturePath.replace('signatures/', '');
-                                      const { data, error } = await supabase.storage
-                                        .from('signatures')
-                                        .createSignedUrl(filename, 3600);
-                                      
-                                      if (error) {
-                                        throw error;
-                                      }
-                                      
-                                      if (data?.signedUrl) {
-                                        setSignatureImageUrl(data.signedUrl);
+                                      const url = await getCachedSignedUrl(filename, 3600, 'signatures');
+                                      if (url) {
+                                        setSignatureImageUrl(url);
                                         setShowSignatureModal(true);
                                       }
                                     } catch (error) {

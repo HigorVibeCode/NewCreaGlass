@@ -12,12 +12,14 @@ import {
   Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { formatDateTime as formatDateTimeUtil } from '../src/utils/date-format';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 import { useAppTheme } from '../src/hooks/use-app-theme';
 import { Button } from '../src/components/shared/Button';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
@@ -25,6 +27,7 @@ import { repos } from '../src/services/container';
 import { useAuth } from '../src/store/auth-store';
 import { confirmDelete } from '../src/utils/confirm-dialog';
 import { MaintenanceRecord } from '../src/types';
+import { pushWithParams } from '../src/utils/navigation';
 import { theme } from '../src/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -32,48 +35,44 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export default function MaintenanceDetailScreen() {
   const { t } = useI18n();
   const router = useRouter();
+  const goBack = useGoBack('/(tabs)/documents');
   const { user } = useAuth();
   const colors = useThemeColors();
   const { effectiveTheme } = useAppTheme();
   const insets = useSafeAreaInsets();
   const isDark = effectiveTheme === 'dark';
-  const params = useLocalSearchParams<{ recordId?: string; recordid?: string }>();
+  const params = useRouteParams<{ recordId?: string; recordid?: string }>('/maintenance-detail');
   const rawId = params.recordId ?? (params as { recordid?: string }).recordid;
   const recordId = typeof rawId === 'string' ? rawId : Array.isArray(rawId) ? rawId[0] : undefined;
 
   const [record, setRecord] = useState<MaintenanceRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [imageModalVisible, setImageModalVisible] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (recordId) {
       loadRecord();
-    } else {
-      setIsLoading(false);
     }
   }, [recordId]);
 
   const loadRecord = async () => {
     if (!recordId) return;
     setIsLoading(true);
-    setLoadError(null);
+    setLoadError(false);
     try {
       const recordData = await repos.maintenanceRepo.getMaintenanceRecordById(recordId);
       if (recordData) {
         setRecord(recordData);
       } else {
         setRecord(null);
-        Alert.alert(t('common.error'), t('maintenance.recordNotFound'), [
-          { text: t('common.confirm'), onPress: () => router.back() },
-        ]);
+        setLoadError(true);
       }
     } catch (error) {
       console.error('Error loading maintenance record:', error);
-      setLoadError(t('maintenance.loadError'));
       setRecord(null);
-      Alert.alert(t('common.error'), t('maintenance.loadError'));
+      setLoadError(true);
     } finally {
       setIsLoading(false);
     }
@@ -83,10 +82,7 @@ export default function MaintenanceDetailScreen() {
     !!uri && typeof uri === 'string' && (uri.startsWith('http://') || uri.startsWith('https://'));
 
   const handleEdit = () => {
-    router.push({
-      pathname: '/maintenance-create',
-      params: { recordId },
-    } as any);
+    pushWithParams(router, '/maintenance-create', { recordId: String(recordId) });
   };
 
   const handleDelete = () => {
@@ -96,7 +92,7 @@ export default function MaintenanceDetailScreen() {
       t('maintenance.deleteConfirm'),
       async () => {
         await repos.maintenanceRepo.deleteMaintenanceRecord(recordId);
-        router.back();
+        safeBack(router);
       },
       undefined,
       t('common.delete'),
@@ -123,16 +119,22 @@ export default function MaintenanceDetailScreen() {
     );
   }
 
-  if (!record && !isLoading) {
+  if (loadError || !record) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', padding: theme.spacing.lg }]}>
-        <Text style={{ color: colors.text, textAlign: 'center' }}>
-          {loadError || t('maintenance.recordNotFound')}
-        </Text>
-        <TouchableOpacity style={{ marginTop: theme.spacing.md }} onPress={() => router.back()}>
-          <Text style={{ color: colors.primary }}>{t('common.back')}</Text>
-        </TouchableOpacity>
-      </View>
+      <ScreenWrapper>
+        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+          <Ionicons name="alert-circle-outline" size={48} color={colors.textSecondary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary, marginTop: 12 }]}>
+            {t('common.error')}
+          </Text>
+          <TouchableOpacity
+            onPress={goBack}
+            style={{ marginTop: 16, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: colors.primary, borderRadius: 8 }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600' }}>{t('common.back') || 'Back'}</Text>
+          </TouchableOpacity>
+        </View>
+      </ScreenWrapper>
     );
   }
 
@@ -153,7 +155,7 @@ export default function MaintenanceDetailScreen() {
           <View style={styles.headerContent}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.back()}
+              onPress={goBack}
               activeOpacity={0.7}
             >
               <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -361,6 +363,14 @@ export default function MaintenanceDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: theme.typography.fontSize.md,
   },
   header: {
     paddingHorizontal: theme.spacing.md,

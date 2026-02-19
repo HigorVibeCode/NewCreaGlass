@@ -1,13 +1,33 @@
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import 'react-native-reanimated';
+import { Platform, TouchableOpacity } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
+import { AppErrorBoundary } from '@/src/components/shared/AppErrorBoundary';
 import { AuthGuard } from '@/src/components/shared/AuthGuard';
 import { I18nProvider } from '@/src/providers/I18nProvider';
 import { QueryProvider } from '@/src/providers/QueryProvider';
 import { ThemeProvider } from '@/src/providers/ThemeProvider';
 import { usePushNotifications } from '@/src/hooks/use-push-notifications';
 import { NotificationAudioInitializer } from '@/src/components/shared/NotificationAudioInitializer';
+
+function WebBackButton() {
+  const router = useRouter();
+  return (
+    <TouchableOpacity onPress={() => {
+      if (router.canGoBack()) {
+        router.back();
+      } else if (typeof window !== 'undefined' && window.history.length > 1) {
+        window.history.back();
+      } else {
+        router.replace('/(tabs)/production' as any);
+      }
+    }} style={{ paddingHorizontal: 8 }}>
+      <Ionicons name="arrow-back" size={24} color="#999" />
+    </TouchableOpacity>
+  );
+}
 
 // Remove anchor to let AuthGuard control initial navigation
 // export const unstable_settings = {
@@ -21,6 +41,7 @@ function PushNotificationsInitializer() {
 
 export default function RootLayout() {
   return (
+    <AppErrorBoundary>
     <SafeAreaProvider>
       <I18nProvider>
         <QueryProvider>
@@ -44,6 +65,7 @@ export default function RootLayout() {
                     title: 'Profile',
                     animation: 'slide_from_bottom',
                     headerShown: true,
+                    ...(Platform.OS === 'web' && { headerLeft: () => <WebBackButton /> }),
                   }} 
                 />
                 <Stack.Screen 
@@ -53,6 +75,7 @@ export default function RootLayout() {
                     title: 'Settings',
                     animation: 'slide_from_bottom',
                     headerShown: true,
+                    ...(Platform.OS === 'web' && { headerLeft: () => <WebBackButton /> }),
                   }} 
                 />
                 <Stack.Screen 
@@ -62,6 +85,7 @@ export default function RootLayout() {
                     title: 'Access Controls',
                     animation: 'slide_from_bottom',
                     headerShown: true,
+                    ...(Platform.OS === 'web' && { headerLeft: () => <WebBackButton /> }),
                   }} 
                 />
                 <Stack.Screen 
@@ -71,6 +95,7 @@ export default function RootLayout() {
                     title: 'Blood Priority',
                     animation: 'slide_from_bottom',
                     headerShown: true,
+                    ...(Platform.OS === 'web' && { headerLeft: () => <WebBackButton /> }),
                   }} 
                 />
                 <Stack.Screen 
@@ -80,6 +105,7 @@ export default function RootLayout() {
                     title: 'Create Message',
                     animation: 'slide_from_bottom',
                     headerShown: true,
+                    ...(Platform.OS === 'web' && { headerLeft: () => <WebBackButton /> }),
                   }} 
                 />
                 <Stack.Screen 
@@ -89,6 +115,7 @@ export default function RootLayout() {
                     title: 'Notifications',
                     animation: 'slide_from_bottom',
                     headerShown: true,
+                    ...(Platform.OS === 'web' && { headerLeft: () => <WebBackButton /> }),
                   }} 
                 />
                 <Stack.Screen 
@@ -303,6 +330,22 @@ export default function RootLayout() {
                     headerShown: false,
                   }} 
                 />
+                <Stack.Screen 
+                  name="equipment-document-create" 
+                  options={{
+                    presentation: 'modal',
+                    animation: 'slide_from_bottom',
+                    headerShown: false,
+                  }} 
+                />
+                <Stack.Screen 
+                  name="inventory-item-detail" 
+                  options={{
+                    presentation: 'card',
+                    animation: 'slide_from_right',
+                    headerShown: false,
+                  }} 
+                />
                 <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
               </Stack>
             </AuthGuard>
@@ -310,5 +353,6 @@ export default function RootLayout() {
         </QueryProvider>
       </I18nProvider>
     </SafeAreaProvider>
+    </AppErrorBoundary>
   );
 }

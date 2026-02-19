@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
@@ -14,35 +15,36 @@ import { InventoryGroup, InventoryItem } from '../../src/types';
 import { theme } from '../../src/theme';
 import { useThemeColors } from '../../src/hooks/use-theme-colors';
 import { formatDate as formatDateUtil, formatTime as formatTimeUtil } from '../../src/utils/date-format';
+import { pushWithParams } from '../../src/utils/navigation';
 
 export default function InventoryScreen() {
   const { t } = useI18n();
   const router = useRouter();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
   const [groups, setGroups] = useState<InventoryGroup[]>([]);
   const [showReportModal, setShowReportModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
 
-  useEffect(() => {
-    loadGroups();
-  }, []);
-
-  const loadGroups = async () => {
+  const loadGroups = useCallback(async () => {
     try {
       const allGroups = await repos.inventoryRepo.getAllGroups();
       setGroups(allGroups);
     } catch (error) {
-      console.error('Error loading groups:', error);
+      console.error('Error loading inventory groups:', error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (isFocused) {
+      loadGroups();
+    }
+  }, [isFocused, loadGroups]);
 
   const handleGroupPress = (groupId: string) => {
-    router.push({
-      pathname: '/inventory-group',
-      params: { groupId },
-    });
+    pushWithParams(router, '/inventory-group', { groupId: String(groupId) });
   };
 
   const handleGenerateReport = () => {
@@ -576,15 +578,33 @@ export default function InventoryScreen() {
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{t('inventory.noGroups')}</Text>
             ) : (
               <View style={styles.groupsList}>
-                {groups.map((group) => (
-                  <TouchableOpacity
-                    key={group.id}
-                    style={[styles.groupCard, { backgroundColor: colors.cardBackground }]}
-                    onPress={() => handleGroupPress(group.id)}
-                  >
-                    <Text style={[styles.groupName, { color: colors.text }]}>{group.name}</Text>
-                  </TouchableOpacity>
-                ))}
+                {groups.map((group) => {
+                  const iconName: keyof typeof Ionicons.glyphMap =
+                    group.name === 'Glass' ? 'layers-outline' :
+                    group.name === 'Profiles' ? 'reorder-four-outline' :
+                    group.name === 'Supplies' ? 'cube-outline' :
+                    'cube-outline';
+                  const iconColor =
+                    group.name === 'Glass' ? '#3B82F6' :
+                    group.name === 'Profiles' ? '#F59E0B' :
+                    group.name === 'Supplies' ? '#10B981' :
+                    colors.primary;
+                  return (
+                    <TouchableOpacity
+                      key={group.id}
+                      style={[styles.groupCard, { backgroundColor: colors.cardBackground }]}
+                      onPress={() => handleGroupPress(group.id)}
+                    >
+                      <View style={[styles.groupIconWrap, { backgroundColor: iconColor + '15' }]}>
+                        <Ionicons name={iconName} size={28} color={iconColor} />
+                      </View>
+                      <View style={styles.groupCardText}>
+                        <Text style={[styles.groupName, { color: colors.text }]}>{group.name}</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             )}
           </View>
@@ -725,9 +745,22 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
   },
   groupCard: {
-    padding: theme.spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: theme.spacing.md,
     borderRadius: theme.borderRadius.md,
     ...theme.shadows.sm,
+    gap: theme.spacing.md,
+  },
+  groupIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  groupCardText: {
+    flex: 1,
   },
   groupName: {
     fontSize: theme.typography.fontSize.lg,

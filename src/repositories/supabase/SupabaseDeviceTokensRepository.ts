@@ -13,7 +13,7 @@ export class SupabaseDeviceTokensRepository implements DeviceTokensRepository {
       .eq('user_id', token.userId)
       .eq('token', token.token)
       .eq('platform', token.platform)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       // Update existing token

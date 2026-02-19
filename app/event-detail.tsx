@@ -9,7 +9,8 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
@@ -18,17 +19,22 @@ import { formatDateTime as formatDateTimeUtil } from '../src/utils/date-format';
 import { Event, EventType } from '../src/types';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 import { confirmDelete } from '../src/utils/confirm-dialog';
+import { pushWithParams } from '../src/utils/navigation';
+import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 
 export default function EventDetailScreen() {
   const { t } = useI18n();
   const router = useRouter();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const { eventId } = useLocalSearchParams<{ eventId: string }>();
+  const { eventId } = useRouteParams<{ eventId: string }>('/event-detail');
+  const goBack = useGoBack('/(tabs)/events');
 
   const [event, setEvent] = useState<Event | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const showMsg = (message: string) => {
@@ -61,10 +67,7 @@ export default function EventDetailScreen() {
 
   const handleEdit = () => {
     if (!eventId) return;
-    router.push({
-      pathname: '/event-create',
-      params: { eventId },
-    });
+    pushWithParams(router, '/event-create', { eventId: String(eventId) });
   };
 
   const handleDelete = () => {
@@ -75,7 +78,7 @@ export default function EventDetailScreen() {
       'Tem certeza que deseja excluir este evento?',
       async () => {
         await repos.eventsRepo.deleteEvent(eventId);
-        router.back();
+        safeBack(router);
       },
       undefined,
       t('common.delete') || 'Excluir',
@@ -94,18 +97,17 @@ export default function EventDetailScreen() {
   const loadEvent = async () => {
     if (!eventId) return;
     setIsLoading(true);
+    setLoadError(false);
     try {
       const eventData = await repos.eventsRepo.getEventById(eventId);
       if (eventData) {
         setEvent(eventData);
       } else {
-        Alert.alert(t('common.error'), 'Event not found', [
-          { text: t('common.confirm'), onPress: () => router.back() },
-        ]);
+        setLoadError(true);
       }
     } catch (error) {
       console.error('Error loading event:', error);
-      Alert.alert(t('common.error'), 'Failed to load event');
+      setLoadError(true);
     } finally {
       setIsLoading(false);
     }
@@ -143,8 +145,23 @@ export default function EventDetailScreen() {
     );
   }
 
-  if (!event) {
-    return null;
+  if (loadError || !event) {
+    return (
+      <ScreenWrapper>
+        <View style={styles.loadingContainer}>
+          <Ionicons name="alert-circle-outline" size={48} color={colors.textSecondary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary, marginTop: 12 }]}>
+            {t('common.error')}
+          </Text>
+          <TouchableOpacity
+            onPress={goBack}
+            style={{ marginTop: 16, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: colors.primary, borderRadius: 8 }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600' }}>{t('common.back') || 'Back'}</Text>
+          </TouchableOpacity>
+        </View>
+      </ScreenWrapper>
+    );
   }
 
   return (
@@ -152,7 +169,7 @@ export default function EventDetailScreen() {
       <View style={[styles.header, { paddingTop: insets.top + theme.spacing.md, backgroundColor: colors.background }]}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={goBack}
           activeOpacity={0.7}
         >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -334,6 +351,9 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: theme.typography.fontSize.md,
   },
   header: {
     flexDirection: 'row',

@@ -5,7 +5,23 @@ import * as Linking from 'expo-linking';
 import { useRealtime } from '../../hooks/use-realtime';
 import { useThemeColors } from '../../hooks/use-theme-colors';
 import { repos } from '../../services/container';
+import { supabase } from '../../services/supabase';
 import { useAuth } from '../../store/auth-store';
+import { getCachedUserProfile, getCachedUserProfileAsync } from '../../store/auth-store';
+
+const SESSION_RESTORE_TIMEOUT_MS = 10000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<null>((resolve) =>
+      setTimeout(() => {
+        console.warn(`[AuthGuard] ${label} timed out after ${ms}ms`);
+        resolve(null);
+      }, ms),
+    ),
+  ]);
+}
 
 export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { session, setSession } = useAuth();
@@ -17,7 +33,9 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
   const hasNavigatedRef = useRef(false);
   const pendingDeepLinkRef = useRef<string | null>(null);
 
-  // Ativar Realtime subscriptions quando o usuário estiver autenticado
+  // Web-only: prevent login screen flash during redirect to production
+  const [webRouteResolved, setWebRouteResolved] = useState(Platform.OS !== 'web');
+
   useRealtime();
 
   // ---- Capturar deep link inicial (NFC, notificação, etc.) ----
@@ -26,7 +44,15 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
       if (url) {
         const parsed = Linking.parse(url);
         if (parsed.path && parsed.path !== '' && parsed.path !== '(tabs)/production') {
-          const qs = parsed.queryString ? `?${parsed.queryString}` : '';
+          let qs = '';
+          if (parsed.queryParams && typeof parsed.queryParams === 'object') {
+            const entries = Object.entries(parsed.queryParams).filter(
+              ([, v]) => v !== undefined && v !== null,
+            );
+            if (entries.length > 0) {
+              qs = '?' + entries.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&');
+            }
+          }
           pendingDeepLinkRef.current = `/${parsed.path}${qs}`;
           console.log('[AuthGuard] Pending deep link:', pendingDeepLinkRef.current);
         }
@@ -34,8 +60,13 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
     });
   }, []);
 
-  // ---- Listener para deep links quando o app já está aberto ----
+  // ---- Listener para deep links quando o app já está aberto (native only) ----
+  // On web, every internal router.push() fires a URL change event, which would
+  // be picked up by this listener and re-pushed, causing an infinite loop.
+  // Web doesn't need this: the router already handles URL-based navigation.
   useEffect(() => {
+    if (Platform.OS === 'web') return;
+
     const subscription = Linking.addEventListener('url', ({ url }) => {
       if (!url) return;
       const parsed = Linking.parse(url);
@@ -55,27 +86,71 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
     return () => subscription.remove();
   }, [session, router]);
 
-  // ---- On mount: restore Supabase session (fast, from local storage) ----
+  // ---- On mount: restore session (2-phase: cache → validate) ----
   useEffect(() => {
     let isMounted = true;
 
     const restoreSession = async () => {
+      // Phase 1: instant restore from Supabase local cache + user profile cache
+      let restoredFromCache = false;
       try {
-        const existingSession = await repos.authRepo.getCurrentSession();
+        const { data: { session: supaSession } } = await supabase.auth.getSession();
+        if (supaSession && isMounted) {
+          const cachedUser = Platform.OS === 'web'
+            ? getCachedUserProfile()
+            : await getCachedUserProfileAsync();
+
+          if (cachedUser && cachedUser.id === supaSession.user.id) {
+            console.log('[AuthGuard] Session restored from cache (instant)');
+            setSession({ user: cachedUser, token: supaSession.access_token });
+            restoredFromCache = true;
+          }
+        }
+      } catch (err) {
+        console.warn('[AuthGuard] Cache restore failed:', err);
+      }
+
+      // Mark ready immediately if cache hit (user sees app now)
+      if (restoredFromCache && isMounted) {
+        setIsReady(true);
+
+        // Phase 2 (background): validate and refresh user profile from DB
+        try {
+          const freshSession = await withTimeout(
+            repos.authRepo.getCurrentSession(),
+            SESSION_RESTORE_TIMEOUT_MS,
+            'getCurrentSession (background refresh)',
+          );
+          if (isMounted && freshSession) {
+            setSession(freshSession);
+          } else if (isMounted && !freshSession) {
+            console.warn('[AuthGuard] Background refresh returned null — keeping cached session');
+          }
+        } catch (err) {
+          console.warn('[AuthGuard] Background refresh failed — keeping cached session:', err);
+        }
+        return;
+      }
+
+      // No cache hit — fall back to full getCurrentSession
+      try {
+        const existingSession = await withTimeout(
+          repos.authRepo.getCurrentSession(),
+          SESSION_RESTORE_TIMEOUT_MS,
+          'getCurrentSession',
+        );
         if (isMounted && existingSession) {
-          console.log('[AuthGuard] Session restored from Supabase (fast path)');
+          console.log('[AuthGuard] Session restored from Supabase (full path)');
           setSession(existingSession);
-        } else {
-          console.log('[AuthGuard] No existing session found');
+        } else if (isMounted) {
+          console.log('[AuthGuard] No existing session found (or timed out)');
         }
       } catch (err) {
         console.warn('[AuthGuard] Could not restore session:', err);
       }
 
-      // Wait a frame to ensure children have time to mount
       if (isMounted) {
-        // On native, give extra time for the navigation container to initialize
-        const delay = Platform.OS === 'web' ? 100 : 300;
+        const delay = Platform.OS === 'web' ? 100 : 200;
         setTimeout(() => {
           if (isMounted) setIsReady(true);
         }, delay);
@@ -84,7 +159,17 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
 
     restoreSession();
     return () => { isMounted = false; };
-  }, []); // Only once on mount
+  }, []);
+
+  // ---- Web fallback: force content if route never resolves ----
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !isReady || webRouteResolved) return;
+    const fallback = setTimeout(() => {
+      console.warn('[AuthGuard] Web: forcing route resolved after timeout');
+      setWebRouteResolved(true);
+    }, 1500);
+    return () => clearTimeout(fallback);
+  }, [isReady, webRouteResolved]);
 
   // ---- Navigation guard ----
   useEffect(() => {
@@ -96,13 +181,11 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
     const inAuthGroup = currentRoute === 'login';
 
     if (!session && !inAuthGroup) {
-      // No session & not on login → go to login
       navigateSafely('/login');
       return;
     }
 
     if (session && inAuthGroup) {
-      // Has session — check for pending deep link (NFC, etc.)
       const deepLink = pendingDeepLinkRef.current;
       if (deepLink) {
         pendingDeepLinkRef.current = null;
@@ -112,11 +195,13 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
       }
       return;
     }
+
+    // On the correct route — allow content to render
+    if (!webRouteResolved) {
+      setWebRouteResolved(true);
+    }
   }, [session, isReady, segments]);
 
-  /**
-   * Navigate safely — prevent concurrent navigations and handle errors.
-   */
   const navigateSafely = (route: string) => {
     if (isNavigatingRef.current) return;
     isNavigatingRef.current = true;
@@ -128,12 +213,10 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
       console.warn('[AuthGuard] Navigation error:', err);
     }
 
-    // Reset after navigation settles
     setTimeout(() => { isNavigatingRef.current = false; }, 800);
   };
 
-  // Show loading only during initial session restoration
-  if (!isReady) {
+  if (!isReady || !webRouteResolved) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />

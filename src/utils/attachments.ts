@@ -4,6 +4,7 @@ import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { Platform, Alert } from 'react-native';
 import { supabase, clearSupabaseAuthStorage, isRefreshTokenError } from '../services/supabase';
+import { getCachedSignedUrl } from './signed-url-cache';
 
 /**
  * Mostra um alerta de erro (compatível com Web e Mobile)
@@ -99,10 +100,8 @@ export async function getSignedUrlFromStorage(storagePath: string, fallbackFilen
     filename = fallbackFilename;
   } else if (!filename.includes('.') && fallbackFilename && fallbackFilename.includes('.')) {
     try {
-      const { data, error } = await supabase.storage
-        .from(BUCKET_NAME)
-        .createSignedUrl(filename, 86400);
-      if (!error && data?.signedUrl) return data.signedUrl;
+      const url = await getCachedSignedUrl(filename, 86400);
+      if (url) return url;
     } catch {
       // ignorar
     }
@@ -148,12 +147,9 @@ export async function getSignedUrlFromStorage(storagePath: string, fallbackFilen
     // 1. Tentar todas as variações de nome de arquivo diretamente
     for (const variation of uniqueVariations) {
       try {
-        const { data, error } = await supabase.storage
-          .from(BUCKET_NAME)
-          .createSignedUrl(variation, expiresIn);
-        if (!error && data?.signedUrl) {
-          console.log('[getSignedUrlFromStorage] Found file with variation:', variation);
-          return data.signedUrl;
+        const url = await getCachedSignedUrl(variation, expiresIn);
+        if (url) {
+          return url;
         }
       } catch {
         // Continuar tentando próxima variação
@@ -210,10 +206,8 @@ export async function getSignedUrlFromStorage(storagePath: string, fallbackFilen
 
         console.log('[getSignedUrlFromStorage] Found matching file:', found.name);
         const objectPath = path ? `${path}/${found.name}` : found.name;
-        const { data: signed, error: signErr } = await supabase.storage
-          .from(BUCKET_NAME)
-          .createSignedUrl(objectPath, expiresIn);
-        return !signErr && signed?.signedUrl ? signed.signedUrl : null;
+        const url = await getCachedSignedUrl(objectPath, expiresIn);
+        return url || null;
       } catch (e) {
         console.warn('[getSignedUrlFromStorage] searchInList error:', e);
         return null;
