@@ -40,6 +40,7 @@ function PushNotificationsInitializer() {
 }
 
 export default function RootLayout() {
+  'use no memo';
   return (
     <AppErrorBoundary>
     <SafeAreaProvider>

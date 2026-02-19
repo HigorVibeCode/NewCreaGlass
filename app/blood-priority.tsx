@@ -14,6 +14,7 @@ import { useThemeColors } from '../src/hooks/use-theme-colors';
 const TIMER_SECONDS = 10;
 
 const UnreadPulse: React.FC = () => {
+  'use no memo';
   const anim = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -31,6 +32,7 @@ const UnreadPulse: React.FC = () => {
 };
 
 export default function BloodPriorityScreen() {
+  'use no memo';
   const { t } = useI18n();
   const { user } = useAuth();
   const router = useRouter();

@@ -168,6 +168,10 @@
       "proceduresInstructionsTrainings": {
         "title": "Procedure, istruzioni e formazione",
         "subtitle": "Accedi a procedure, istruzioni e formazione"
+      },
+      "analytics": {
+        "title": "Analytics",
+        "subtitle": "Report di produzione e approfondimenti"
       }
     }
   },
@@ -775,5 +779,63 @@
     "signatureEmpty": "La firma è vuota o troppo corta. Ridisegna la firma.",
     "drawSignatureBeforeSave": "Disegna la firma sul canvas prima di salvare.",
     "signatureEmptyError": "La firma è vuota. Disegna la firma sul canvas."
+  },
+  "analytics": {
+    "title": "Analytics",
+    "subtitle": "Report di produzione e approfondimenti",
+    "reports": {
+      "productionSummary": { "title": "Riepilogo Produzione", "subtitle": "Panoramica ordini, m² e pezzi" },
+      "statusPipeline": { "title": "Pipeline di Stato", "subtitle": "Ordini attivi per stato corrente" },
+      "deliveryPerformance": { "title": "Performance Consegne", "subtitle": "Tasso di consegna puntuale e ritardi" },
+      "topClients": { "title": "Top Clienti", "subtitle": "Classifica per numero di ordini" },
+      "glassTypes": { "title": "Mix di Vetri", "subtitle": "Distribuzione per tipo di vetro in m²" },
+      "bottleneck": { "title": "Analisi Colli di Bottiglia", "subtitle": "Tempo medio per fase di produzione" },
+      "companyComparison": { "title": "Confronto Aziende", "subtitle": "3S vs Crea Glass affiancati" },
+      "reworkRate": { "title": "Tasso di Rilavorazione", "subtitle": "Monitoraggio rilavorazioni e cancellazioni" },
+      "eventsCalendar": { "title": "Calendario Eventi", "subtitle": "Timeline e prossimi eventi" },
+      "eventsByType": { "title": "Eventi per Tipo", "subtitle": "Distribuzione eventi per categoria" },
+      "eventsFrequency": { "title": "Frequenza Eventi", "subtitle": "Trend mensile degli eventi creati" },
+      "woStatus": { "title": "Stato Ordini Lavoro", "subtitle": "Pipeline degli ordini di lavoro attivi" },
+      "woTeam": { "title": "Performance Team", "subtitle": "Classifica per ordini completati" },
+      "woServiceTime": { "title": "Tempo di Servizio", "subtitle": "Tempo medio e conformità checklist" },
+      "woClients": { "title": "OL per Cliente", "subtitle": "Top clienti per numero di OL" },
+      "invLowStock": { "title": "Avvisi Scorte", "subtitle": "Articoli sotto la soglia minima" },
+      "invByGroup": { "title": "Scorte per Gruppo", "subtitle": "Totali inventario per gruppo" },
+      "invSupplier": { "title": "Per Fornitore", "subtitle": "Distribuzione articoli per fornitore" }
+    },
+    "metrics": { "totalOrders": "Totale Ordini", "totalM2": "Totale m²", "totalPieces": "Totale Pezzi", "inProgress": "In Corso" },
+    "charts": { "ordersPerWeek": "Ordini per Settimana", "distributionByM2": "Distribuzione per m²", "ordersByCompany": "Ordini per Azienda", "monthlyTrend": "Tendenza Mensile", "eventsPerMonth": "Eventi per Mese" },
+    "sections": { "production": "Produzione", "events": "Eventi", "workOrders": "Ordini di Lavoro", "inventory": "Inventario" },
+    "onTimeRate": "Tasso di Puntualità",
+    "onTime": "In Tempo",
+    "late": "In Ritardo",
+    "noDate": "Senza Data",
+    "lateOrders": "Ordini in Ritardo",
+    "pieces": "pezzi",
+    "legend": "Legenda",
+    "legendBlocked": "Bloccato / Cancellato",
+    "legendProcess": "In Lavorazione",
+    "legendWaiting": "In Attesa",
+    "legendReady": "Pronto / Imballato",
+    "avgTime": "Tempo Medio",
+    "transitions": "transizioni",
+    "reworkCancelRate": "Tasso Rilavorazione e Cancellazione",
+    "rework": "Rilavorazione",
+    "cancelled": "Cancellato",
+    "total": "Totale",
+    "upcoming": "In arrivo",
+    "avgPerMonth": "Media/Mese",
+    "totalEvents": "totale eventi",
+    "upcomingEvents": "Prossimi Eventi",
+    "totalWO": "totale ordini di lavoro",
+    "avgServiceTime": "Tempo Medio di Servizio",
+    "completedOrders": "ordini completati",
+    "checklistCompliance": "Conformità Checklist",
+    "itemsCompleted": "elementi completati",
+    "items": "articoli",
+    "stock": "Scorte",
+    "itemsBelowThreshold": "articoli sotto soglia",
+    "allStockOk": "Tutti i livelli di scorta OK",
+    "noLowStock": "Nessun articolo con scorte basse"
   }
 }

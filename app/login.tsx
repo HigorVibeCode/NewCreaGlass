@@ -13,6 +13,7 @@ import { clearSavedLogin, getSavedLogin, saveLogin } from '../src/utils/saved-lo
 const AUTO_LOGIN_TIMEOUT_MS = 5000;
 
 export default function LoginScreen() {
+  'use no memo';
   const { t } = useI18n();
   const { session, setSession, setLoading, isLoading } = useAuth();
   const colors = useThemeColors();

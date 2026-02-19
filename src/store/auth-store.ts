@@ -14,11 +14,14 @@ function cacheUserProfile(user: User | null): void {
         window.localStorage.removeItem(USER_PROFILE_CACHE_KEY);
       }
     } else if (Platform.OS !== 'web') {
-      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-      if (user) {
-        AsyncStorage.setItem(USER_PROFILE_CACHE_KEY, JSON.stringify(user)).catch(() => {});
-      } else {
-        AsyncStorage.removeItem(USER_PROFILE_CACHE_KEY).catch(() => {});
+      const mod = require('@react-native-async-storage/async-storage');
+      const AsyncStorage = mod?.default ?? mod;
+      if (AsyncStorage && typeof AsyncStorage.setItem === 'function') {
+        if (user) {
+          AsyncStorage.setItem(USER_PROFILE_CACHE_KEY, JSON.stringify(user)).catch(() => {});
+        } else {
+          AsyncStorage.removeItem(USER_PROFILE_CACHE_KEY).catch(() => {});
+        }
       }
     }
   } catch {}
@@ -39,7 +42,9 @@ export async function getCachedUserProfileAsync(): Promise<User | null> {
     if (Platform.OS === 'web') {
       return getCachedUserProfile();
     }
-    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    const mod = require('@react-native-async-storage/async-storage');
+    const AsyncStorage = mod?.default ?? mod;
+    if (!AsyncStorage || typeof AsyncStorage.getItem !== 'function') return null;
     const stored = await AsyncStorage.getItem(USER_PROFILE_CACHE_KEY);
     if (stored) return JSON.parse(stored);
   } catch {}

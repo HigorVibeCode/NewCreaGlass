@@ -10,6 +10,7 @@ import { usePermissions } from '../../hooks/use-permissions';
 const PULSE_SIZE = 48;
 
 const PulsingBloodIcon: React.FC<{ count: number; onPress: () => void }> = ({ count, onPress }) => {
+  'use no memo';
   const pulseAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0.6)).current;
@@ -111,6 +112,7 @@ interface MainHeaderProps {
 }
 
 export const MainHeader: React.FC<MainHeaderProps> = ({ title }) => {
+  'use no memo';
   const router = useRouter();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();

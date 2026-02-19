@@ -165,6 +165,10 @@
       "proceduresInstructionsTrainings": {
         "title": "Verfahren, Anweisungen und Schulungen",
         "subtitle": "Zugriff auf Verfahren, Anweisungen und Schulungen"
+      },
+      "analytics": {
+        "title": "Analytics",
+        "subtitle": "Produktionsberichte und Einblicke"
       }
     }
   },
@@ -772,5 +776,63 @@
     "signatureEmpty": "Signatur ist leer oder zu kurz. Bitte zeichnen Sie Ihre Signatur erneut.",
     "drawSignatureBeforeSave": "Bitte zeichnen Sie Ihre Signatur auf der Leinwand, bevor Sie speichern.",
     "signatureEmptyError": "Signatur ist leer. Bitte zeichnen Sie Ihre Signatur auf der Leinwand."
+  },
+  "analytics": {
+    "title": "Analytics",
+    "subtitle": "Produktionsberichte und Einblicke",
+    "reports": {
+      "productionSummary": { "title": "Produktionsübersicht", "subtitle": "Übersicht über Aufträge, m² und Stücke" },
+      "statusPipeline": { "title": "Status-Pipeline", "subtitle": "Aktive Aufträge nach aktuellem Status" },
+      "deliveryPerformance": { "title": "Lieferleistung", "subtitle": "Pünktliche Lieferquote und Verzögerungen" },
+      "topClients": { "title": "Top-Kunden", "subtitle": "Ranking nach Anzahl der Aufträge" },
+      "glassTypes": { "title": "Glas-Mix", "subtitle": "Verteilung nach Glastyp in m²" },
+      "bottleneck": { "title": "Engpass-Analyse", "subtitle": "Durchschnittliche Zeit pro Produktionsstufe" },
+      "companyComparison": { "title": "Firmenvergleich", "subtitle": "3S vs Crea Glass nebeneinander" },
+      "reworkRate": { "title": "Nacharbeitsquote", "subtitle": "Nacharbeiten und Stornierungen" },
+      "eventsCalendar": { "title": "Veranstaltungskalender", "subtitle": "Zeitleiste und kommende Events" },
+      "eventsByType": { "title": "Events nach Typ", "subtitle": "Verteilung der Events nach Kategorie" },
+      "eventsFrequency": { "title": "Event-Häufigkeit", "subtitle": "Monatlicher Trend erstellter Events" },
+      "woStatus": { "title": "Auftragsstatus", "subtitle": "Pipeline aktiver Arbeitsaufträge" },
+      "woTeam": { "title": "Teamleistung", "subtitle": "Ranking nach abgeschlossenen Aufträgen" },
+      "woServiceTime": { "title": "Servicezeit & Checkliste", "subtitle": "Durchschnittliche Servicezeit und Compliance" },
+      "woClients": { "title": "Aufträge nach Kunde", "subtitle": "Top-Kunden nach Auftragsanzahl" },
+      "invLowStock": { "title": "Bestandswarnungen", "subtitle": "Artikel unter Mindestbestand" },
+      "invByGroup": { "title": "Bestand nach Gruppe", "subtitle": "Inventar-Gesamtwerte pro Gruppe" },
+      "invSupplier": { "title": "Nach Lieferant", "subtitle": "Artikelverteilung nach Lieferant" }
+    },
+    "metrics": { "totalOrders": "Aufträge gesamt", "totalM2": "Gesamt m²", "totalPieces": "Stücke gesamt", "inProgress": "In Bearbeitung" },
+    "charts": { "ordersPerWeek": "Aufträge pro Woche", "distributionByM2": "Verteilung nach m²", "ordersByCompany": "Aufträge nach Firma", "monthlyTrend": "Monatlicher Trend", "eventsPerMonth": "Events pro Monat" },
+    "sections": { "production": "Produktion", "events": "Veranstaltungen", "workOrders": "Arbeitsaufträge", "inventory": "Inventar" },
+    "onTimeRate": "Pünktlichkeitsrate",
+    "onTime": "Pünktlich",
+    "late": "Verspätet",
+    "noDate": "Kein Datum",
+    "lateOrders": "Verspätete Aufträge",
+    "pieces": "Stücke",
+    "legend": "Legende",
+    "legendBlocked": "Blockiert / Storniert",
+    "legendProcess": "In Bearbeitung",
+    "legendWaiting": "Wartend",
+    "legendReady": "Bereit / Verpackt",
+    "avgTime": "Durchschn. Zeit",
+    "transitions": "Übergänge",
+    "reworkCancelRate": "Nacharbeits- & Stornoquote",
+    "rework": "Nacharbeit",
+    "cancelled": "Storniert",
+    "total": "Gesamt",
+    "upcoming": "Kommende",
+    "avgPerMonth": "Durchschn./Monat",
+    "totalEvents": "Events gesamt",
+    "upcomingEvents": "Kommende Veranstaltungen",
+    "totalWO": "Arbeitsaufträge gesamt",
+    "avgServiceTime": "Durchschn. Servicezeit",
+    "completedOrders": "abgeschlossene Aufträge",
+    "checklistCompliance": "Checklisten-Compliance",
+    "itemsCompleted": "Punkte erledigt",
+    "items": "Artikel",
+    "stock": "Bestand",
+    "itemsBelowThreshold": "Artikel unter Schwellenwert",
+    "allStockOk": "Alle Bestände OK",
+    "noLowStock": "Keine Artikel mit niedrigem Bestand"
   }
 }

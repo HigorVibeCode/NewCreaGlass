@@ -24,6 +24,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 }
 
 export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  'use no memo';
   const { session, setSession } = useAuth();
   const segments = useSegments();
   const router = useRouter();
@@ -94,7 +95,8 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
       // Phase 1: instant restore from Supabase local cache + user profile cache
       let restoredFromCache = false;
       try {
-        const { data: { session: supaSession } } = await supabase.auth.getSession();
+        const getSessionResult = await supabase.auth.getSession();
+        const supaSession = getSessionResult?.data?.session;
         if (supaSession && isMounted) {
           const cachedUser = Platform.OS === 'web'
             ? getCachedUserProfile()

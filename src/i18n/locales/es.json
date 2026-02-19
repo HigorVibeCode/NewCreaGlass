@@ -168,6 +168,10 @@
       "proceduresInstructionsTrainings": {
         "title": "Procedimientos, instrucciones y capacitaciones",
         "subtitle": "Acceder a procedimientos, instrucciones y capacitaciones"
+      },
+      "analytics": {
+        "title": "Analytics",
+        "subtitle": "Informes de producción e insights"
       }
     }
   },
@@ -775,5 +779,63 @@
     "signatureEmpty": "La firma está vacía o es muy corta. Por favor dibuje su firma nuevamente.",
     "drawSignatureBeforeSave": "Por favor dibuje su firma en el canvas antes de guardar.",
     "signatureEmptyError": "La firma está vacía. Por favor dibuje su firma en el canvas."
+  },
+  "analytics": {
+    "title": "Analytics",
+    "subtitle": "Informes de producción e insights",
+    "reports": {
+      "productionSummary": { "title": "Resumen de Producción", "subtitle": "Visión general de pedidos, m² y piezas" },
+      "statusPipeline": { "title": "Pipeline de Estado", "subtitle": "Pedidos activos por estado actual" },
+      "deliveryPerformance": { "title": "Rendimiento de Entrega", "subtitle": "Tasa de entrega a tiempo y retrasos" },
+      "topClients": { "title": "Top Clientes", "subtitle": "Ranking por número de pedidos" },
+      "glassTypes": { "title": "Mix de Vidrios", "subtitle": "Distribución por tipo de vidrio en m²" },
+      "bottleneck": { "title": "Análisis de Cuellos de Botella", "subtitle": "Tiempo medio por etapa de producción" },
+      "companyComparison": { "title": "Comparación de Empresas", "subtitle": "3S vs Crea Glass lado a lado" },
+      "reworkRate": { "title": "Tasa de Retrabajo", "subtitle": "Seguimiento de retrabajos y cancelaciones" },
+      "eventsCalendar": { "title": "Calendario de Eventos", "subtitle": "Línea de tiempo y próximos eventos" },
+      "eventsByType": { "title": "Eventos por Tipo", "subtitle": "Distribución de eventos por categoría" },
+      "eventsFrequency": { "title": "Frecuencia de Eventos", "subtitle": "Tendencia mensual de eventos creados" },
+      "woStatus": { "title": "Estado de Órdenes", "subtitle": "Pipeline de órdenes de trabajo activas" },
+      "woTeam": { "title": "Rendimiento del Equipo", "subtitle": "Ranking por órdenes completadas" },
+      "woServiceTime": { "title": "Tiempo de Servicio", "subtitle": "Tiempo medio y cumplimiento del checklist" },
+      "woClients": { "title": "OT por Cliente", "subtitle": "Top clientes por número de OT" },
+      "invLowStock": { "title": "Alertas de Stock", "subtitle": "Artículos bajo mínimo" },
+      "invByGroup": { "title": "Stock por Grupo", "subtitle": "Totales de inventario por grupo" },
+      "invSupplier": { "title": "Por Proveedor", "subtitle": "Distribución de artículos por proveedor" }
+    },
+    "metrics": { "totalOrders": "Total Pedidos", "totalM2": "Total m²", "totalPieces": "Total Piezas", "inProgress": "En Progreso" },
+    "charts": { "ordersPerWeek": "Pedidos por Semana", "distributionByM2": "Distribución por m²", "ordersByCompany": "Pedidos por Empresa", "monthlyTrend": "Tendencia Mensual", "eventsPerMonth": "Eventos por Mes" },
+    "sections": { "production": "Producción", "events": "Eventos", "workOrders": "Órdenes de Trabajo", "inventory": "Inventario" },
+    "onTimeRate": "Tasa a Tiempo",
+    "onTime": "A Tiempo",
+    "late": "Retrasado",
+    "noDate": "Sin Fecha",
+    "lateOrders": "Pedidos Retrasados",
+    "pieces": "piezas",
+    "legend": "Leyenda",
+    "legendBlocked": "Bloqueado / Cancelado",
+    "legendProcess": "En Proceso",
+    "legendWaiting": "En Espera",
+    "legendReady": "Listo / Embalado",
+    "avgTime": "Tiempo Medio",
+    "transitions": "transiciones",
+    "reworkCancelRate": "Tasa de Retrabajo y Cancelación",
+    "rework": "Retrabajo",
+    "cancelled": "Cancelado",
+    "total": "Total",
+    "upcoming": "Próximos",
+    "avgPerMonth": "Prom./Mes",
+    "totalEvents": "total de eventos",
+    "upcomingEvents": "Próximos Eventos",
+    "totalWO": "total de órdenes",
+    "avgServiceTime": "Tiempo Medio de Servicio",
+    "completedOrders": "órdenes completadas",
+    "checklistCompliance": "Cumplimiento del Checklist",
+    "itemsCompleted": "ítems completados",
+    "items": "artículos",
+    "stock": "Stock",
+    "itemsBelowThreshold": "artículos bajo mínimo",
+    "allStockOk": "Todos los niveles de stock OK",
+    "noLowStock": "Sin artículos con stock bajo"
   }
 }

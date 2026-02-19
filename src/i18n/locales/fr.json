@@ -165,6 +165,10 @@
       "proceduresInstructionsTrainings": {
         "title": "Procédures, instructions et formations",
         "subtitle": "Accéder aux procédures, instructions et formations"
+      },
+      "analytics": {
+        "title": "Analytics",
+        "subtitle": "Rapports de production et analyses"
       }
     }
   },
@@ -772,5 +776,63 @@
     "signatureEmpty": "La signature est vide ou trop courte. Veuillez redessiner votre signature.",
     "drawSignatureBeforeSave": "Veuillez dessiner votre signature sur le canvas avant d'enregistrer.",
     "signatureEmptyError": "La signature est vide. Veuillez dessiner votre signature sur le canvas."
+  },
+  "analytics": {
+    "title": "Analytics",
+    "subtitle": "Rapports de production et analyses",
+    "reports": {
+      "productionSummary": { "title": "Résumé de Production", "subtitle": "Aperçu des commandes, m² et pièces" },
+      "statusPipeline": { "title": "Pipeline de Statut", "subtitle": "Commandes actives par statut actuel" },
+      "deliveryPerformance": { "title": "Performance de Livraison", "subtitle": "Taux de livraison ponctuelle et retards" },
+      "topClients": { "title": "Top Clients", "subtitle": "Classement par nombre de commandes" },
+      "glassTypes": { "title": "Mix de Verres", "subtitle": "Répartition par type de verre en m²" },
+      "bottleneck": { "title": "Analyse des Goulots", "subtitle": "Temps moyen par étape de production" },
+      "companyComparison": { "title": "Comparaison Entreprises", "subtitle": "3S vs Crea Glass côte à côte" },
+      "reworkRate": { "title": "Taux de Retouche", "subtitle": "Suivi des retouches et annulations" },
+      "eventsCalendar": { "title": "Calendrier des Événements", "subtitle": "Chronologie et prochains événements" },
+      "eventsByType": { "title": "Événements par Type", "subtitle": "Répartition des événements par catégorie" },
+      "eventsFrequency": { "title": "Fréquence des Événements", "subtitle": "Tendance mensuelle des événements créés" },
+      "woStatus": { "title": "Statut des OT", "subtitle": "Pipeline des ordres de travail actifs" },
+      "woTeam": { "title": "Performance Équipe", "subtitle": "Classement par OT terminés" },
+      "woServiceTime": { "title": "Temps de Service", "subtitle": "Temps moyen et conformité checklist" },
+      "woClients": { "title": "OT par Client", "subtitle": "Top clients par nombre d'OT" },
+      "invLowStock": { "title": "Alertes de Stock", "subtitle": "Articles sous le seuil minimum" },
+      "invByGroup": { "title": "Stock par Groupe", "subtitle": "Totaux d'inventaire par groupe" },
+      "invSupplier": { "title": "Par Fournisseur", "subtitle": "Répartition des articles par fournisseur" }
+    },
+    "metrics": { "totalOrders": "Total Commandes", "totalM2": "Total m²", "totalPieces": "Total Pièces", "inProgress": "En Cours" },
+    "charts": { "ordersPerWeek": "Commandes par Semaine", "distributionByM2": "Répartition par m²", "ordersByCompany": "Commandes par Entreprise", "monthlyTrend": "Tendance Mensuelle", "eventsPerMonth": "Événements par Mois" },
+    "sections": { "production": "Production", "events": "Événements", "workOrders": "Ordres de Travail", "inventory": "Inventaire" },
+    "onTimeRate": "Taux de Ponctualité",
+    "onTime": "À Temps",
+    "late": "En Retard",
+    "noDate": "Sans Date",
+    "lateOrders": "Commandes en Retard",
+    "pieces": "pièces",
+    "legend": "Légende",
+    "legendBlocked": "Bloqué / Annulé",
+    "legendProcess": "En Cours",
+    "legendWaiting": "En Attente",
+    "legendReady": "Prêt / Emballé",
+    "avgTime": "Temps Moyen",
+    "transitions": "transitions",
+    "reworkCancelRate": "Taux de Retouche et Annulation",
+    "rework": "Retouche",
+    "cancelled": "Annulé",
+    "total": "Total",
+    "upcoming": "À venir",
+    "avgPerMonth": "Moy./Mois",
+    "totalEvents": "total événements",
+    "upcomingEvents": "Prochains Événements",
+    "totalWO": "total ordres de travail",
+    "avgServiceTime": "Temps Moyen de Service",
+    "completedOrders": "ordres terminés",
+    "checklistCompliance": "Conformité Checklist",
+    "itemsCompleted": "éléments complétés",
+    "items": "articles",
+    "stock": "Stock",
+    "itemsBelowThreshold": "articles sous le seuil",
+    "allStockOk": "Tous les niveaux de stock OK",
+    "noLowStock": "Aucun article en stock bas"
   }
 }

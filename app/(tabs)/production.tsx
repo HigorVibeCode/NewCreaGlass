@@ -115,6 +115,7 @@ function WaitingPulseCard({ children, alertLevel }: { children: React.ReactNode;
 }
 
 export default function ProductionScreen() {
+  'use no memo';
   const { t } = useI18n();
   const router = useRouter();
   const colors = useThemeColors();

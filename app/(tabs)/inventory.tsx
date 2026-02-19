@@ -18,6 +18,7 @@ import { formatDate as formatDateUtil, formatTime as formatTimeUtil } from '../.
 import { pushWithParams } from '../../src/utils/navigation';
 
 export default function InventoryScreen() {
+  'use no memo';
   const { t } = useI18n();
   const router = useRouter();
   const colors = useThemeColors();

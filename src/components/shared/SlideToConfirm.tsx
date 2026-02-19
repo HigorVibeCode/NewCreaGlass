@@ -31,6 +31,7 @@ export const SlideToConfirm: React.FC<SlideToConfirmProps> = ({
   confirmText = 'Iniciar',
   disabled = false,
 }) => {
+  'use no memo';
   const colors = useThemeColors();
   const [isConfirmed, setIsConfirmed] = useState(false);
   const pan = useRef(new Animated.Value(0)).current;

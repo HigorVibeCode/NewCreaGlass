@@ -165,6 +165,10 @@
       "proceduresInstructionsTrainings": {
         "title": "Procedimentos, instruções e treinamentos",
         "subtitle": "Acesse procedimentos, instruções e treinamentos"
+      },
+      "analytics": {
+        "title": "Analytics",
+        "subtitle": "Relatórios e insights de produção"
       }
     }
   },
@@ -864,5 +868,119 @@
     "actionCannotBeUndone": "Esta ação não pode ser desfeita.",
     "areYouSure": "Tem certeza?",
     "ok": "OK"
+  },
+  "analytics": {
+    "title": "Analytics",
+    "subtitle": "Relatórios e insights de produção",
+    "reports": {
+      "productionSummary": {
+        "title": "Resumo de Produção",
+        "subtitle": "Visão geral de pedidos, m² e peças"
+      },
+      "statusPipeline": {
+        "title": "Pipeline de Status",
+        "subtitle": "Pedidos ativos por status atual"
+      },
+      "deliveryPerformance": {
+        "title": "Performance de Entrega",
+        "subtitle": "Taxa de entrega no prazo e atrasos"
+      },
+      "topClients": {
+        "title": "Top Clientes",
+        "subtitle": "Ranking por número de pedidos"
+      },
+      "glassTypes": {
+        "title": "Mix de Vidros",
+        "subtitle": "Distribuição por tipo de vidro em m²"
+      },
+      "bottleneck": {
+        "title": "Análise de Gargalos",
+        "subtitle": "Tempo médio por etapa de produção"
+      },
+      "companyComparison": {
+        "title": "Comparação Empresas",
+        "subtitle": "3S vs Crea Glass lado a lado"
+      },
+      "reworkRate": {
+        "title": "Taxa de Retrabalho",
+        "subtitle": "Acompanhamento de retrabalhos e cancelamentos"
+      }
+    },
+    "metrics": {
+      "totalOrders": "Total Pedidos",
+      "totalM2": "Total m²",
+      "totalPieces": "Total Peças",
+      "inProgress": "Em Andamento"
+    },
+    "charts": {
+      "ordersPerWeek": "Pedidos por Semana",
+      "distributionByM2": "Distribuição por m²",
+      "ordersByCompany": "Pedidos por Empresa",
+      "monthlyTrend": "Tendência Mensal"
+    },
+    "onTimeRate": "Taxa no Prazo",
+    "onTime": "No Prazo",
+    "late": "Atrasado",
+    "noDate": "Sem Data",
+    "lateOrders": "Pedidos Atrasados",
+    "pieces": "peças",
+    "legend": "Legenda",
+    "legendBlocked": "Bloqueado / Cancelado",
+    "legendProcess": "Em Processo",
+    "legendWaiting": "Aguardando",
+    "legendReady": "Pronto / Embalado",
+    "avgTime": "Tempo Médio",
+    "transitions": "transições",
+    "reworkCancelRate": "Taxa de Retrabalho e Cancelamento",
+    "rework": "Retrabalho",
+    "cancelled": "Cancelado",
+    "total": "Total",
+    "upcoming": "Próximos",
+    "avgPerMonth": "Média/Mês",
+    "totalEvents": "total de eventos",
+    "upcomingEvents": "Próximos Eventos",
+    "totalWO": "total de ordens de serviço",
+    "avgServiceTime": "Tempo Médio de Atendimento",
+    "completedOrders": "ordens concluídas",
+    "checklistCompliance": "Conformidade do Checklist",
+    "itemsCompleted": "itens concluídos",
+    "items": "itens",
+    "stock": "Estoque",
+    "itemsBelowThreshold": "itens abaixo do mínimo",
+    "allStockOk": "Todos os níveis de estoque OK",
+    "noLowStock": "Nenhum item com estoque baixo",
+    "sections": {
+      "production": "Produção",
+      "events": "Eventos",
+      "workOrders": "Ordens de Serviço",
+      "inventory": "Inventário"
+    },
+    "charts": {
+      "ordersPerWeek": "Pedidos por Semana",
+      "distributionByM2": "Distribuição por m²",
+      "ordersByCompany": "Pedidos por Empresa",
+      "monthlyTrend": "Tendência Mensal",
+      "eventsPerMonth": "Eventos por Mês"
+    },
+    "reports": {
+      "productionSummary": { "title": "Resumo de Produção", "subtitle": "Visão geral de pedidos, m² e peças" },
+      "statusPipeline": { "title": "Pipeline de Status", "subtitle": "Pedidos ativos por status atual" },
+      "deliveryPerformance": { "title": "Performance de Entrega", "subtitle": "Taxa de entrega no prazo e atrasos" },
+      "topClients": { "title": "Top Clientes", "subtitle": "Ranking por número de pedidos" },
+      "glassTypes": { "title": "Mix de Vidros", "subtitle": "Distribuição por tipo de vidro em m²" },
+      "bottleneck": { "title": "Análise de Gargalos", "subtitle": "Tempo médio por etapa de produção" },
+      "companyComparison": { "title": "Comparação Empresas", "subtitle": "3S vs Crea Glass lado a lado" },
+      "reworkRate": { "title": "Taxa de Retrabalho", "subtitle": "Acompanhamento de retrabalhos e cancelamentos" },
+      "eventsCalendar": { "title": "Calendário de Eventos", "subtitle": "Timeline e próximos eventos" },
+      "eventsByType": { "title": "Eventos por Tipo", "subtitle": "Distribuição de eventos por categoria" },
+      "eventsFrequency": { "title": "Frequência de Eventos", "subtitle": "Tendência mensal de eventos criados" },
+      "woStatus": { "title": "Status das Ordens", "subtitle": "Pipeline das ordens de serviço ativas" },
+      "woTeam": { "title": "Performance da Equipe", "subtitle": "Ranking por ordens concluídas" },
+      "woServiceTime": { "title": "Tempo de Atendimento", "subtitle": "Tempo médio e conformidade do checklist" },
+      "woClients": { "title": "OS por Cliente", "subtitle": "Top clientes por número de OS" },
+      "invLowStock": { "title": "Alertas de Estoque", "subtitle": "Itens abaixo do mínimo" },
+      "invByGroup": { "title": "Estoque por Grupo", "subtitle": "Totais de inventário por grupo" },
+      "invSupplier": { "title": "Por Fornecedor", "subtitle": "Distribuição de itens por fornecedor" }
+    }
   }
 }

@@ -13,6 +13,7 @@ import { useThemeColors } from '../../hooks/use-theme-colors';
 import { useUnreadNotificationsCountQuery } from '../../services/queries';
 
 const BloodPriorityIcon: React.FC<{ count: number; onPress: () => void }> = ({ count, onPress }) => {
+  'use no memo';
   const colors = useThemeColors();
   const pulseAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -103,6 +104,7 @@ interface TopBarProps {
 }
 
 export const TopBar: React.FC<TopBarProps> = () => {
+  'use no memo';
   const router = useRouter();
   const { user } = useAuth();
   const { t } = useI18n();

@@ -168,6 +168,10 @@
       "proceduresInstructionsTrainings": {
         "title": "Procedures, instructions and trainings",
         "subtitle": "Access procedures, instructions and trainings"
+      },
+      "analytics": {
+        "title": "Analytics",
+        "subtitle": "Production reports and insights"
       }
     }
   },
@@ -842,5 +846,119 @@
     "signatureEmpty": "Signature is empty or too short. Please draw your signature again.",
     "drawSignatureBeforeSave": "Please draw your signature on the canvas before saving.",
     "signatureEmptyError": "Signature is empty. Please draw your signature on the canvas."
+  },
+  "analytics": {
+    "title": "Analytics",
+    "subtitle": "Production reports and insights",
+    "reports": {
+      "productionSummary": {
+        "title": "Production Summary",
+        "subtitle": "Overview of orders, m² and pieces"
+      },
+      "statusPipeline": {
+        "title": "Status Pipeline",
+        "subtitle": "Active orders by current status"
+      },
+      "deliveryPerformance": {
+        "title": "Delivery Performance",
+        "subtitle": "On-time delivery rate and delays"
+      },
+      "topClients": {
+        "title": "Top Clients",
+        "subtitle": "Ranking by number of orders"
+      },
+      "glassTypes": {
+        "title": "Glass Type Mix",
+        "subtitle": "Distribution by glass type in m²"
+      },
+      "bottleneck": {
+        "title": "Bottleneck Analysis",
+        "subtitle": "Average time spent per production stage"
+      },
+      "companyComparison": {
+        "title": "Company Comparison",
+        "subtitle": "3S vs Crea Glass side by side"
+      },
+      "reworkRate": {
+        "title": "Rework Rate",
+        "subtitle": "Rework and cancellation tracking"
+      }
+    },
+    "metrics": {
+      "totalOrders": "Total Orders",
+      "totalM2": "Total m²",
+      "totalPieces": "Total Pieces",
+      "inProgress": "In Progress"
+    },
+    "charts": {
+      "ordersPerWeek": "Orders per Week",
+      "distributionByM2": "Distribution by m²",
+      "ordersByCompany": "Orders by Company",
+      "monthlyTrend": "Monthly Trend"
+    },
+    "onTimeRate": "On-time Rate",
+    "onTime": "On Time",
+    "late": "Late",
+    "noDate": "No Date",
+    "lateOrders": "Late Orders",
+    "pieces": "pieces",
+    "legend": "Legend",
+    "legendBlocked": "Blocked / Cancelled",
+    "legendProcess": "In Process",
+    "legendWaiting": "Waiting",
+    "legendReady": "Ready / Packed",
+    "avgTime": "Avg. Time",
+    "transitions": "transitions",
+    "reworkCancelRate": "Rework & Cancel Rate",
+    "rework": "Rework",
+    "cancelled": "Cancelled",
+    "total": "Total",
+    "upcoming": "Upcoming",
+    "avgPerMonth": "Avg/Month",
+    "totalEvents": "total events",
+    "upcomingEvents": "Upcoming Events",
+    "totalWO": "total work orders",
+    "avgServiceTime": "Avg. Service Time",
+    "completedOrders": "completed orders",
+    "checklistCompliance": "Checklist Compliance",
+    "itemsCompleted": "items completed",
+    "items": "items",
+    "stock": "Stock",
+    "itemsBelowThreshold": "items below threshold",
+    "allStockOk": "All stock levels OK",
+    "noLowStock": "No items with low stock",
+    "sections": {
+      "production": "Production",
+      "events": "Events",
+      "workOrders": "Work Orders",
+      "inventory": "Inventory"
+    },
+    "charts": {
+      "ordersPerWeek": "Orders per Week",
+      "distributionByM2": "Distribution by m²",
+      "ordersByCompany": "Orders by Company",
+      "monthlyTrend": "Monthly Trend",
+      "eventsPerMonth": "Events per Month"
+    },
+    "reports": {
+      "productionSummary": { "title": "Production Summary", "subtitle": "Overview of orders, m² and pieces" },
+      "statusPipeline": { "title": "Status Pipeline", "subtitle": "Active orders by current status" },
+      "deliveryPerformance": { "title": "Delivery Performance", "subtitle": "On-time delivery rate and delays" },
+      "topClients": { "title": "Top Clients", "subtitle": "Ranking by number of orders" },
+      "glassTypes": { "title": "Glass Type Mix", "subtitle": "Distribution by glass type in m²" },
+      "bottleneck": { "title": "Bottleneck Analysis", "subtitle": "Average time spent per production stage" },
+      "companyComparison": { "title": "Company Comparison", "subtitle": "3S vs Crea Glass side by side" },
+      "reworkRate": { "title": "Rework Rate", "subtitle": "Rework and cancellation tracking" },
+      "eventsCalendar": { "title": "Event Calendar", "subtitle": "Timeline and upcoming events" },
+      "eventsByType": { "title": "Events by Type", "subtitle": "Distribution of events by category" },
+      "eventsFrequency": { "title": "Event Frequency", "subtitle": "Monthly trend of events created" },
+      "woStatus": { "title": "Work Order Status", "subtitle": "Pipeline of active work orders" },
+      "woTeam": { "title": "Team Performance", "subtitle": "Ranking by completed work orders" },
+      "woServiceTime": { "title": "Service Time & Checklist", "subtitle": "Average service time and compliance" },
+      "woClients": { "title": "WO by Client", "subtitle": "Top clients by work order count" },
+      "invLowStock": { "title": "Low Stock Alerts", "subtitle": "Items below minimum threshold" },
+      "invByGroup": { "title": "Stock by Group", "subtitle": "Inventory totals per group" },
+      "invSupplier": { "title": "Supplier Breakdown", "subtitle": "Items distribution by supplier" }
+    }
   }
 }

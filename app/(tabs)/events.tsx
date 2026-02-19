@@ -80,6 +80,7 @@ function InProgressPulseCard({ children, active }: { children: React.ReactNode; 
 }
 
 export default function EventsScreen() {
+  'use no memo';
   const { t } = useI18n();
   const router = useRouter();
   const colors = useThemeColors();
