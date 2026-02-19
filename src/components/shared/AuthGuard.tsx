@@ -33,6 +33,8 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
   const isNavigatingRef = useRef(false);
   const hasNavigatedRef = useRef(false);
   const pendingDeepLinkRef = useRef<string | null>(null);
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
 
   // Web-only: prevent login screen flash during redirect to production
   const [webRouteResolved, setWebRouteResolved] = useState(Platform.OS !== 'web');
@@ -75,7 +77,7 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
         const qs = parsed.queryString ? `?${parsed.queryString}` : '';
         const route = `/${parsed.path}${qs}`;
         console.log('[AuthGuard] Incoming deep link:', route);
-        if (session) {
+        if (sessionRef.current) {
           try { router.push(route as any); } catch (err) {
             console.warn('[AuthGuard] Deep link navigation error:', err);
           }
@@ -84,8 +86,16 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
         }
       }
     });
-    return () => subscription.remove();
-  }, [session, router]);
+    return () => {
+      try {
+        if (subscription && typeof subscription.remove === 'function') {
+          subscription.remove();
+        }
+      } catch (e) {
+        console.warn('[AuthGuard] Deep link cleanup error:', e);
+      }
+    };
+  }, [router]);
 
   // ---- On mount: restore session (2-phase: cache → validate) ----
   useEffect(() => {
@@ -124,6 +134,7 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
             'getCurrentSession (background refresh)',
           );
           if (isMounted && freshSession) {
+            console.log('[AuthGuard] Background refresh completed successfully');
             setSession(freshSession);
           } else if (isMounted && !freshSession) {
             console.warn('[AuthGuard] Background refresh returned null — keeping cached session');

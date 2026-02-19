@@ -89,8 +89,12 @@ export const usePushNotifications = () => {
   const tokenRef = useRef<string | null>(null);
   tokenRef.current = expoPushToken;
 
+  const userId = user?.id;
+  const userRef = useRef(user);
+  userRef.current = user;
+
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
 
     // Skip if Expo Go
     if (checkIfExpoGo()) {
@@ -125,54 +129,74 @@ export const usePushNotifications = () => {
 
     // Load notifications module and initialize
     loadNotifications().then(NotificationsModule => {
-      if (!NotificationsModule) return;
+      if (!NotificationsModule || !mounted) return;
 
       setupPush(NotificationsModule);
 
       // Listen for notifications received while app is foregrounded
-      notificationListener.current = NotificationsModule.addNotificationReceivedListener(notification => {
-        console.log('[usePushNotifications] Notification received:', notification);
-      });
+      if (mounted && typeof NotificationsModule.addNotificationReceivedListener === 'function') {
+        notificationListener.current = NotificationsModule.addNotificationReceivedListener(notification => {
+          console.log('[usePushNotifications] Notification received:', notification);
+        });
+      }
 
       // Listen for user tapping on notification
-      responseListener.current = NotificationsModule.addNotificationResponseReceivedListener(response => {
-        console.log('[usePushNotifications] Notification response:', response);
-        handleNotificationResponse(response);
-      });
+      if (mounted && typeof NotificationsModule.addNotificationResponseReceivedListener === 'function') {
+        responseListener.current = NotificationsModule.addNotificationResponseReceivedListener(response => {
+          console.log('[usePushNotifications] Notification response:', response);
+          handleNotificationResponse(response);
+        });
+      }
+    }).catch(err => {
+      console.warn('[usePushNotifications] loadNotifications error:', err);
     });
 
-    // Retry token registration when app comes to foreground if we still don't have a token (e.g. permission granted later, or standalone config loaded)
-    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
-      if (nextState !== 'active') return;
-      if (tokenRef.current) return; // já temos token
-      loadNotifications().then(NotificationsModule => {
-        if (!NotificationsModule || !mounted) return;
+    // Retry token registration when app comes to foreground
+    let subscription: ReturnType<typeof AppState.addEventListener> | null = null;
+    try {
+      subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+        if (nextState !== 'active') return;
         if (tokenRef.current) return;
-        setupPush(NotificationsModule);
+        loadNotifications().then(NotificationsModule => {
+          if (!NotificationsModule || !mounted) return;
+          if (tokenRef.current) return;
+          setupPush(NotificationsModule);
+        }).catch(() => {});
       });
-    });
+    } catch (err) {
+      console.warn('[usePushNotifications] AppState.addEventListener error:', err);
+    }
 
     return () => {
       mounted = false;
-      subscription?.remove();
-      if (notificationListener.current && Notifications) {
-        Notifications.removeNotificationSubscription(notificationListener.current);
+      try {
+        if (subscription && typeof subscription.remove === 'function') {
+          subscription.remove();
+        }
+      } catch (e) {
+        console.warn('[usePushNotifications] cleanup subscription error:', e);
       }
-      if (responseListener.current && Notifications) {
-        Notifications.removeNotificationSubscription(responseListener.current);
+      try {
+        if (notificationListener.current && Notifications && typeof Notifications.removeNotificationSubscription === 'function') {
+          Notifications.removeNotificationSubscription(notificationListener.current);
+        }
+        notificationListener.current = undefined;
+      } catch (e) {
+        console.warn('[usePushNotifications] cleanup notificationListener error:', e);
       }
-      // Cleanup web Realtime channel
-      if (Platform.OS === 'web' && (window as any).__webPushChannel) {
-        import('../services/supabase').then(({ supabase }) => {
-          supabase.removeChannel((window as any).__webPushChannel);
-          (window as any).__webPushChannel = null;
-        }).catch(() => {});
+      try {
+        if (responseListener.current && Notifications && typeof Notifications.removeNotificationSubscription === 'function') {
+          Notifications.removeNotificationSubscription(responseListener.current);
+        }
+        responseListener.current = undefined;
+      } catch (e) {
+        console.warn('[usePushNotifications] cleanup responseListener error:', e);
       }
     };
-  }, [user]);
+  }, [userId]);
 
   const registerDeviceToken = async (token: string) => {
-    if (!user) return;
+    if (!userRef.current) return;
 
     try {
       // Lazy import to avoid require cycle
@@ -183,7 +207,7 @@ export const usePushNotifications = () => {
       const deviceId = Constants.deviceId || undefined;
 
       await repos.deviceTokensRepo.registerDeviceToken({
-        userId: user.id,
+        userId: userRef.current!.id,
         platform,
         token,
         deviceId,
@@ -204,9 +228,9 @@ export const usePushNotifications = () => {
       console.log('[usePushNotifications] Navigating to deep link:', data.deepLink);
       
       // Mark notification as read if notificationId is provided
-      if (data.notificationId && user) {
+      if (data.notificationId && userRef.current) {
         import('../services/container').then(({ repos }) => {
-          repos.notificationsRepo.markAsRead(data.notificationId, user.id).catch(err => {
+          repos.notificationsRepo.markAsRead(data.notificationId, userRef.current!.id).catch(err => {
             console.error('[usePushNotifications] Error marking notification as read:', err);
           });
         });
@@ -228,10 +252,10 @@ export const usePushNotifications = () => {
           });
         }
       }, 100);
-    } else if (data?.notificationId && user) {
+    } else if (data?.notificationId && userRef.current) {
       // If no deep link, just mark as read and go to notifications
       import('../services/container').then(({ repos }) => {
-        repos.notificationsRepo.markAsRead(data.notificationId, user.id).catch(err => {
+        repos.notificationsRepo.markAsRead(data.notificationId, userRef.current!.id).catch(err => {
           console.error('[usePushNotifications] Error marking notification as read:', err);
         });
       });
