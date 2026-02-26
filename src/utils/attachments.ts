@@ -389,10 +389,10 @@ export async function downloadAndOpenAttachment(
           
         } catch (downloadError: any) {
           console.error('Error downloading file:', downloadError);
-          showErrorAlert('Erro', `Não foi possível baixar o arquivo: ${downloadError?.message || 'Erro desconhecido'}`);
+          showErrorAlert('Error', `Could not download file: ${downloadError?.message || 'Unknown error'}`);
         }
       } else {
-        throw new Error('Não foi possível baixar o arquivo no navegador');
+        throw new Error('Could not download file in browser');
       }
       return;
     }
@@ -407,7 +407,7 @@ export async function downloadAndOpenAttachment(
         const file = new File(remoteUrl);
         const fileInfo = await file.info();
         if (!fileInfo.exists) {
-          Alert.alert('Erro', 'Arquivo não encontrado');
+          Alert.alert('Error', 'File not found');
           return;
         }
       } catch (error) {
@@ -459,7 +459,7 @@ export async function downloadAndOpenAttachment(
       try {
         const freshUrl = await getSignedUrlFromStorage(remoteUrl, filename || sanitizedFilename);
         if (!freshUrl || (!freshUrl.startsWith('http://') && !freshUrl.startsWith('https://'))) {
-          Alert.alert('Erro', 'Não foi possível obter a URL do arquivo');
+          Alert.alert('Error', 'Could not get file URL');
           return;
         }
 
@@ -485,9 +485,9 @@ export async function downloadAndOpenAttachment(
       } catch (error: any) {
         console.error('Error downloading from storage path:', error);
         const msg = error?.message?.includes('não encontrado') || error?.message?.includes('not found')
-          ? 'O arquivo não foi encontrado no servidor. Ele pode ter sido excluído ou não foi salvo corretamente.'
-          : `Não foi possível abrir o arquivo: ${error?.message || 'Erro desconhecido'}`;
-        Alert.alert('Erro', msg);
+          ? 'File was not found on server. It may have been deleted or not saved correctly.'
+          : `Could not open file: ${error?.message || 'Unknown error'}`;
+        Alert.alert('Error', msg);
         return;
       }
     }
@@ -512,7 +512,7 @@ export async function downloadAndOpenAttachment(
         if (isAvailable) {
           await Sharing.shareAsync(localUri, { mimeType: fileMimeType });
         } else {
-          throw new Error('Não foi possível abrir o arquivo');
+          throw new Error('Could not open file');
         }
       }
     } else if (Platform.OS === 'ios') {
@@ -521,20 +521,20 @@ export async function downloadAndOpenAttachment(
       if (isAvailable) {
         await Sharing.shareAsync(localUri, { mimeType: fileMimeType });
       } else {
-        throw new Error('Compartilhamento não está disponível neste dispositivo');
+        throw new Error('Sharing is not available on this device');
       }
     } else {
       // Outras plataformas - não suportado
-      throw new Error('Abrir anexos não é suportado nesta plataforma');
+      throw new Error('Opening attachments is not supported on this platform');
     }
   } catch (error: any) {
     console.error('Error in downloadAndOpenAttachment:', error);
     
     // Mostrar mensagem de erro amigável
-    const errorMessage = error?.message || 'Erro desconhecido';
+    const errorMessage = error?.message || 'Unknown error';
     Alert.alert(
-      'Erro',
-      `Não foi possível abrir o arquivo: ${errorMessage}`,
+      'Error',
+      `Could not open file: ${errorMessage}`,
       [{ text: 'OK' }]
     );
   }

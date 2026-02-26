@@ -23,6 +23,7 @@ import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 import { confirmDelete } from '../src/utils/confirm-dialog';
 import { pushWithParams } from '../src/utils/navigation';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
+import { shareViaWhatsApp } from '../src/utils/share-links';
 
 export default function EventDetailScreen() {
   const { t } = useI18n();
@@ -74,17 +75,25 @@ export default function EventDetailScreen() {
     if (!eventId) return;
     
     confirmDelete(
-      t('common.delete') || 'Excluir',
-      'Tem certeza que deseja excluir este evento?',
+      t('common.delete'),
+      t('events.deleteConfirm'),
       async () => {
         await repos.eventsRepo.deleteEvent(eventId);
         safeBack(router);
       },
       undefined,
-      t('common.delete') || 'Excluir',
-      t('common.cancel') || 'Cancelar',
-      'Evento excluído com sucesso',
-      'Falha ao excluir evento'
+      t('common.delete'),
+      t('common.cancel'),
+      t('events.deletedSuccess'),
+      t('events.deleteError')
+    );
+  };
+
+  const handleShare = async () => {
+    if (!eventId) return;
+    await shareViaWhatsApp(
+      { entity: 'event', params: { eventId } },
+      `Event ${event?.title || ''}`.trim()
     );
   };
 
@@ -296,6 +305,13 @@ export default function EventDetailScreen() {
         </View>
 
         <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={[styles.iconButton, { backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border }]}
+            onPress={handleShare}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="share-social-outline" size={24} color={colors.text} />
+          </TouchableOpacity>
           <TouchableOpacity
             style={[
               styles.actionButton,

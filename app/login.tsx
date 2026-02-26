@@ -1,4 +1,5 @@
 import { Image as ExpoImage } from 'expo-image';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { Button } from '../src/components/shared/Button';
@@ -15,6 +16,7 @@ const AUTO_LOGIN_TIMEOUT_MS = 5000;
 export default function LoginScreen() {
   'use no memo';
   const { t } = useI18n();
+  const router = useRouter();
   const { session, setSession, setLoading, isLoading } = useAuth();
   const colors = useThemeColors();
   const [username, setUsername] = useState('');
@@ -24,13 +26,18 @@ export default function LoginScreen() {
   const [autoLoggingIn, setAutoLoggingIn] = useState(true);
   const autoLoginAttempted = useRef(false);
 
-  // If AuthGuard already restored a session, stop showing loading immediately
-  // (AuthGuard's navigation guard will redirect to production)
+  // If session is already available, stop loading and force redirect.
+  // This avoids edge-cases on web where login can remain mounted in a loading state.
   useEffect(() => {
     if (session) {
       setAutoLoggingIn(false);
+      try {
+        router.replace('/(tabs)/production' as any);
+      } catch (err) {
+        console.warn('[Login] Redirect to production failed:', err);
+      }
     }
-  }, [session]);
+  }, [session, router]);
 
   useEffect(() => {
     if (session || autoLoginAttempted.current) return;

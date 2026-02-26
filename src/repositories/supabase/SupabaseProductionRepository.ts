@@ -75,6 +75,7 @@ export class SupabaseProductionRepository implements ProductionRepository {
 
     return rows.map((prod: any) => ({
       id: prod.id,
+      clientId: prod.client_id || undefined,
       clientName: prod.client_name,
       orderNumber: prod.order_number,
       orderType: prod.order_type,
@@ -82,6 +83,7 @@ export class SupabaseProductionRepository implements ProductionRepository {
       status: prod.status as ProductionStatus,
       items: itemsByProd.get(prod.id) || [],
       attachments: attsByProd.get(prod.id) || [],
+      linkedWorkOrderId: prod.linked_work_order_id || undefined,
       company: prod.company ?? undefined,
       createdAt: prod.created_at,
       createdBy: prod.created_by,
@@ -113,6 +115,7 @@ export class SupabaseProductionRepository implements ProductionRepository {
     const { data: prodData, error: prodError } = await supabase
       .from('productions')
       .insert({
+        client_id: production.clientId ?? null,
         client_name: production.clientName,
         order_number: production.orderNumber,
         order_type: production.orderType,
@@ -204,11 +207,13 @@ export class SupabaseProductionRepository implements ProductionRepository {
     const updateData: any = {};
 
     if (updates.clientName !== undefined) updateData.client_name = updates.clientName;
+    if (updates.clientId !== undefined) updateData.client_id = updates.clientId;
     if (updates.orderNumber !== undefined) updateData.order_number = updates.orderNumber;
     if (updates.orderType !== undefined) updateData.order_type = updates.orderType;
     if (updates.dueDate !== undefined) updateData.due_date = updates.dueDate;
     if (updates.status !== undefined) updateData.status = updates.status;
     if (updates.company !== undefined) updateData.company = updates.company;
+    if (updates.linkedWorkOrderId !== undefined) updateData.linked_work_order_id = updates.linkedWorkOrderId;
 
     // Get current production to check status change
     const currentProduction = await this.getProductionById(productionId);
@@ -524,6 +529,7 @@ export class SupabaseProductionRepository implements ProductionRepository {
 
     return {
       id: prodData.id,
+      clientId: prodData.client_id || undefined,
       clientName: prodData.client_name,
       orderNumber: prodData.order_number,
       orderType: prodData.order_type,
@@ -531,6 +537,7 @@ export class SupabaseProductionRepository implements ProductionRepository {
       status: prodData.status as ProductionStatus,
       items,
       attachments,
+      linkedWorkOrderId: prodData.linked_work_order_id || undefined,
       company: prodData.company ?? undefined,
       createdAt: prodData.created_at,
       createdBy: prodData.created_by,

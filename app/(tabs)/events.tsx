@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, ActivityIndicator, Animated, Platform, Easing } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, ActivityIndicator, Animated, Platform, Easing, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -91,6 +91,7 @@ export default function EventsScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [showCompleted, setShowCompleted] = useState(false); // false = oculta work orders concluídas
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Timer para atualizar tempo real dos serviços em andamento
   useEffect(() => {
@@ -322,11 +323,65 @@ export default function EventsScreen() {
     { label: t('events.types.other'), value: 'other' },
   ];
 
+  const visibleItems = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    const statusFiltered = showCompleted
+      ? items
+      : items.filter((item) => {
+          if (item.type === 'workOrder' && item.data.status === 'completed') return false;
+          if (item.type === 'event' && item.data.status === 'completed') return false;
+          return true;
+        });
+
+    if (!normalizedQuery) return statusFiltered;
+
+    return statusFiltered.filter((item) => {
+      if (item.type === 'event') {
+        const event = item.data;
+        const eventTypeLabel = getTypeLabel(event.type).toLowerCase();
+        return [
+          event.title,
+          event.location || '',
+          event.people || '',
+          eventTypeLabel,
+        ].some((value) => value.toLowerCase().includes(normalizedQuery));
+      }
+
+      const workOrder = item.data;
+      const serviceTypeLabel = getServiceTypeLabel(workOrder.serviceType).toLowerCase();
+      return [
+        workOrder.clientName,
+        workOrder.clientAddress || '',
+        workOrder.clientContact || '',
+        serviceTypeLabel,
+      ].some((value) => value.toLowerCase().includes(normalizedQuery));
+    });
+  }, [items, showCompleted, searchQuery]);
+
   return (
     <ScreenWrapper>
       <ScrollView style={styles.scrollView}>
         <View style={styles.content}>
           <View style={styles.topBar}>
+            <View style={[styles.searchContainer, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+              <Ionicons name="search" size={18} color={colors.textSecondary} />
+              <TextInput
+                style={[styles.searchInput, { color: colors.text }]}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder={t('common.search')}
+                placeholderTextColor={colors.textSecondary}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {!!searchQuery && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
+                  <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
+
             <TouchableOpacity
               style={[styles.filterButton, { backgroundColor: colors.backgroundSecondary }]}
               onPress={handleFilter}
@@ -425,17 +480,7 @@ export default function EventsScreen() {
             </TouchableWithoutFeedback>
           </Modal>
 
-
           {(() => {
-            // Filtrar itens concluídos (work orders e eventos) quando showCompleted está desativado
-            const visibleItems = showCompleted 
-              ? items 
-              : items.filter(item => {
-                if (item.type === 'workOrder' && item.data.status === 'completed') return false;
-                if (item.type === 'event' && item.data.status === 'completed') return false;
-                return true;
-              });
-            
             if (visibleItems.length === 0) {
               return (
                 <View style={styles.emptyState}>
@@ -443,7 +488,7 @@ export default function EventsScreen() {
                 </View>
               );
             }
-            
+
             return (
             <View style={styles.eventsList}>
               {visibleItems.map((item) => {
@@ -694,9 +739,23 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     gap: theme.spacing.sm,
     marginBottom: theme.spacing.md,
+  },
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing.sm,
+    gap: theme.spacing.xs,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: theme.typography.fontSize.sm,
+    paddingVertical: theme.spacing.sm,
   },
   filterButton: {
     width: 36,

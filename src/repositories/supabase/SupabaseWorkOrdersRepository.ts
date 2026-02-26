@@ -110,6 +110,7 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
     const { data: woData, error: woError } = await supabase
       .from('work_orders')
       .insert({
+        client_id: workOrder.clientId ?? null,
         client_name: workOrder.clientName,
         client_address: workOrder.clientAddress,
         client_contact: workOrder.clientContact,
@@ -123,6 +124,7 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
         team_members: workOrder.teamMembers || [],
         responsible: workOrder.responsible,
         is_locked: workOrder.isLocked || false,
+        production_order_id: workOrder.productionOrderId ?? null,
         created_by: authUser.id,
       })
       .select()
@@ -162,8 +164,10 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
       const { repos } = await import('../../services/container');
       const payload = {
         workOrderId: createdWorkOrder.id,
+        workOrderName: `${createdWorkOrder.clientName} - ${createdWorkOrder.serviceType}`,
         clientName: createdWorkOrder.clientName,
         serviceType: createdWorkOrder.serviceType,
+        dueDate: createdWorkOrder.scheduledDate,
         scheduledDate: createdWorkOrder.scheduledDate,
         scheduledTime: createdWorkOrder.scheduledTime,
       };
@@ -201,6 +205,7 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
 
     const updateData: any = {};
     if (updates.clientName !== undefined) updateData.client_name = updates.clientName;
+    if (updates.clientId !== undefined) updateData.client_id = updates.clientId;
     if (updates.clientAddress !== undefined) updateData.client_address = updates.clientAddress;
     if (updates.clientContact !== undefined) updateData.client_contact = updates.clientContact;
     if (updates.serviceType !== undefined) updateData.service_type = updates.serviceType;
@@ -213,6 +218,7 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
     if (updates.teamMembers !== undefined) updateData.team_members = updates.teamMembers;
     if (updates.responsible !== undefined) updateData.responsible = updates.responsible;
     if (updates.isLocked !== undefined) updateData.is_locked = updates.isLocked;
+    if (updates.productionOrderId !== undefined) updateData.production_order_id = updates.productionOrderId;
 
     const { data, error } = await supabase
       .from('work_orders')
@@ -230,6 +236,16 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
   }
 
   async deleteWorkOrder(workOrderId: string): Promise<void> {
+    // Best effort cleanup to avoid stale links on production orders.
+    const { error: unlinkError } = await supabase
+      .from('productions')
+      .update({ linked_work_order_id: null })
+      .eq('linked_work_order_id', workOrderId);
+
+    if (unlinkError) {
+      console.error('Error unlinking production from work order:', unlinkError);
+    }
+
     const { error } = await supabase.from('work_orders').delete().eq('id', workOrderId);
 
     if (error) {
@@ -650,6 +666,7 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
   private mapToWorkOrder(data: any): WorkOrder {
     return {
       id: data.id,
+      clientId: data.client_id || undefined,
       clientName: data.client_name,
       clientAddress: data.client_address,
       clientContact: data.client_contact,
@@ -663,6 +680,7 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
       teamMembers: data.team_members || [],
       responsible: data.responsible,
       isLocked: data.is_locked || false,
+      productionOrderId: data.production_order_id || undefined,
       checkIn: data.checkIn || undefined,
       timeStatuses: data.timeStatuses || [],
       serviceLogs: data.serviceLogs || [],

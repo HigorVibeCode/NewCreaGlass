@@ -796,6 +796,7 @@
       "woTeam": { "title": "Performance Équipe", "subtitle": "Classement par OT terminés" },
       "woServiceTime": { "title": "Temps de Service", "subtitle": "Temps moyen et conformité checklist" },
       "woClients": { "title": "OT par Client", "subtitle": "Top clients par nombre d'OT" },
+      "woByDay": { "title": "Work Orders par Jour", "subtitle": "Débuts, fins et durée par jour" },
       "invLowStock": { "title": "Alertes de Stock", "subtitle": "Articles sous le seuil minimum" },
       "invByGroup": { "title": "Stock par Groupe", "subtitle": "Totaux d'inventaire par groupe" },
       "invSupplier": { "title": "Par Fournisseur", "subtitle": "Répartition des articles par fournisseur" }

@@ -25,7 +25,7 @@ export function getEffectiveRecordedAt(entry: TimeEntry): string {
   return useAdjusted ? entry.adjustedRecordedAt : entry.recordedAt;
 }
 
-const INCOMPLETO = 'INCOMPLETO';
+const INCOMPLETE = 'INCOMPLETE';
 
 function toDateKey(iso: string): string {
   const d = new Date(iso);
@@ -98,8 +98,8 @@ export function buildDayRows(entries: TimeEntry[]): DayRow[] {
     if (hasEntryTypes) {
       const clockIn = dayEntries.find((e) => e.entryType === 'clock_in');
       const clockOut = dayEntries.find((e) => e.entryType === 'clock_out');
-      const entradaTime = clockIn ? formatTime(getEffectiveRecordedAt(clockIn)) : INCOMPLETO;
-      const saidaTime = clockOut ? formatTime(getEffectiveRecordedAt(clockOut)) : INCOMPLETO;
+      const entradaTime = clockIn ? formatTime(getEffectiveRecordedAt(clockIn)) : INCOMPLETE;
+      const saidaTime = clockOut ? formatTime(getEffectiveRecordedAt(clockOut)) : INCOMPLETE;
       const incomplete = !clockIn || !clockOut;
 
       // Dedução fixa: 15 min se café ativado, 45 min se almoço ativado
@@ -122,7 +122,7 @@ export function buildDayRows(entries: TimeEntry[]): DayRow[] {
         dateLabel,
         entrada: entradaTime,
         saida: saidaTime,
-        totalDay: incomplete ? INCOMPLETO : minutesToHoursLabel(totalMinutes),
+        totalDay: incomplete ? INCOMPLETE : minutesToHoursLabel(totalMinutes),
         local,
         incomplete,
         totalMinutes: incomplete ? 0 : totalMinutes,
@@ -137,8 +137,8 @@ export function buildDayRows(entries: TimeEntry[]): DayRow[] {
           date: dateKey,
           dateLabel,
           entrada,
-          saida: INCOMPLETO,
-          totalDay: INCOMPLETO,
+          saida: INCOMPLETE,
+          totalDay: INCOMPLETE,
           local,
           incomplete: true,
           totalMinutes: 0,
@@ -167,8 +167,8 @@ export function buildDayRows(entries: TimeEntry[]): DayRow[] {
         date: dateKey,
         dateLabel,
         entrada,
-        saida: invalid ? INCOMPLETO : lastTime,
-        totalDay: invalid ? INCOMPLETO : minutesToHoursLabel(safeTotal),
+        saida: invalid ? INCOMPLETE : lastTime,
+        totalDay: invalid ? INCOMPLETE : minutesToHoursLabel(safeTotal),
         local,
         incomplete: invalid,
         totalMinutes: invalid ? 0 : safeTotal,
@@ -183,7 +183,7 @@ export function buildDayRows(entries: TimeEntry[]): DayRow[] {
 }
 
 /**
- * Soma apenas totais diários completos (não INCOMPLETO). Retorna minutos e label.
+ * Soma apenas totais diários completos (não INCOMPLETE). Retorna minutos e label.
  */
 export function totalHoursInPeriod(dayRows: DayRow[]): { totalMinutes: number; label: string } {
   const totalMinutes = (dayRows || [])
@@ -224,12 +224,12 @@ export function buildPointReportHtml(options: {
     .map(
       (r) => `
     <tr>
-      <td style="padding:6px 8px;border:1px solid #ddd;">${escapeHtml(r.dateLabel)}${r.adjusted ? ' (AJUSTADO)' : ''}</td>
+      <td style="padding:6px 8px;border:1px solid #ddd;">${escapeHtml(r.dateLabel)}${r.adjusted ? ' (ADJUSTED)' : ''}</td>
       <td style="padding:6px 8px;border:1px solid #ddd;">${escapeHtml(r.entrada)}</td>
       <td style="padding:6px 8px;border:1px solid #ddd;">${escapeHtml(r.saida)}</td>
       <td style="padding:6px 8px;border:1px solid #ddd;">${escapeHtml(r.totalDay)}</td>
       <td style="padding:6px 8px;border:1px solid #ddd;font-size:11px;">${escapeHtml(r.local)}</td>
-      <td style="padding:6px 8px;border:1px solid #ddd;font-size:11px;">${escapeHtml(r.adjustDescription ?? '—')}</td>
+      <td style="padding:6px 8px;border:1px solid #ddd;font-size:11px;">${escapeHtml(r.adjustDescription ?? '-')}</td>
     </tr>`
     )
     .join('');
@@ -239,16 +239,18 @@ export function buildPointReportHtml(options: {
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Relatório de Ponto</title>
+  <title>Time Clock Report</title>
   <style>
+    @page { size: A4 landscape; margin: 10mm; }
     body { font-family: 'Segoe UI', system-ui, sans-serif; font-size: 12px; color: #222; margin: 20px; }
     .logo-container { text-align: center; margin-bottom: 12px; }
     .report-logo { max-height: 56px; max-width: 200px; object-fit: contain; }
     .header { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #333; }
     .header h1 { margin: 0 0 8px 0; font-size: 18px; }
     .header .meta { color: #555; font-size: 11px; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; table-layout: fixed; }
     th { background: #f5f5f5; padding: 8px; text-align: left; border: 1px solid #ddd; font-size: 11px; }
+    td { word-break: break-word; }
     .footer { margin-top: 20px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 11px; color: #555; }
     .totalizador { font-weight: bold; font-size: 14px; margin-top: 12px; padding: 8px 0; page-break-inside: avoid; }
   </style>
@@ -256,28 +258,28 @@ export function buildPointReportHtml(options: {
 <body>
   ${logoImg}
   <div class="header">
-    <h1>Relatório de Ponto</h1>
-    <div class="meta">Período: ${periodFrom} a ${periodTo}</div>
-    <div class="meta">Emitido em: ${emittedAt}</div>
-    <div class="meta">Identificação: ${escapeHtml(identification)}</div>
+    <h1>Time Clock Report</h1>
+    <div class="meta">Period: ${periodFrom} to ${periodTo}</div>
+    <div class="meta">Issued at: ${emittedAt}</div>
+    <div class="meta">User: ${escapeHtml(identification)}</div>
   </div>
   <table>
     <thead>
       <tr>
-        <th>Data</th>
-        <th>Entrada</th>
-        <th>Saída</th>
-        <th>Total do dia</th>
-        <th>Local</th>
-        <th>Justificativa</th>
+        <th>Date</th>
+        <th>Clock In</th>
+        <th>Clock Out</th>
+        <th>Day Total</th>
+        <th>Location</th>
+        <th>Reason</th>
       </tr>
     </thead>
     <tbody>
       ${tableRows}
     </tbody>
   </table>
-  <div class="totalizador">TOTAL DE HORAS NO PERÍODO: ${totalLabelSafe}</div>
-  <div class="footer">Página 1 de ${totalPages}</div>
+  <div class="totalizador">TOTAL HOURS IN PERIOD: ${totalLabelSafe}</div>
+  <div class="footer">Page 1 of ${totalPages}</div>
 </body>
 </html>`;
 }

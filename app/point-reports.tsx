@@ -15,6 +15,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
+import * as IntentLauncher from 'expo-intent-launcher';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { useAppTheme } from '../src/hooks/use-app-theme';
@@ -135,13 +137,31 @@ export default function PointReportsScreen() {
         }
       } else {
         const { uri } = await Print.printToFileAsync({ html });
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(uri, {
-            mimeType: 'application/pdf',
-            dialogTitle: t('point.exportPdf'),
-          });
-        } else {
-          Alert.alert(t('common.success'), t('point.pdfSaved'));
+        try {
+          if (Platform.OS === 'android') {
+            const contentUri = await FileSystemLegacy.getContentUriAsync(uri);
+            await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+              data: contentUri,
+              flags: 1,
+              type: 'application/pdf',
+            });
+          } else {
+            const canOpen = await Linking.canOpenURL(uri);
+            if (!canOpen) {
+              throw new Error('Cannot open PDF URI');
+            }
+            await Linking.openURL(uri);
+          }
+        } catch (openError) {
+          console.warn('Could not open PDF with default app, falling back to share:', openError);
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(uri, {
+              mimeType: 'application/pdf',
+              dialogTitle: t('point.exportPdf'),
+            });
+          } else {
+            Alert.alert(t('common.success'), t('point.pdfSaved'));
+          }
         }
       }
     } catch (e) {

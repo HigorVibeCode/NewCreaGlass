@@ -28,12 +28,12 @@ export const confirmDialog = (
       message,
       [
         {
-          text: cancelText || 'Cancelar',
+          text: cancelText || 'Cancel',
           style: 'cancel',
           onPress: onCancel,
         },
         {
-          text: confirmText || 'Confirmar',
+          text: confirmText || 'Confirm',
           style: 'destructive',
           onPress: onConfirm,
         },
@@ -69,7 +69,7 @@ export const confirmDelete = (
         })
         .catch((error) => {
           console.error('Error in delete confirmation:', error);
-          alert(errorMessage || 'Erro ao excluir. Por favor, tente novamente.');
+          alert(errorMessage || 'Could not delete. Please try again.');
         });
     } else if (onCancel) {
       onCancel();
@@ -80,12 +80,12 @@ export const confirmDelete = (
       message,
       [
         {
-          text: cancelText || 'Cancelar',
+          text: cancelText || 'Cancel',
           style: 'cancel',
           onPress: onCancel,
         },
         {
-          text: deleteText || 'Excluir',
+          text: deleteText || 'Delete',
           style: 'destructive',
           onPress: () => {
             Promise.resolve(onConfirm())
@@ -100,7 +100,7 @@ export const confirmDelete = (
               })
               .catch((error) => {
                 console.error('Error in delete confirmation:', error);
-                Alert.alert('Erro', errorMessage || 'Erro ao excluir. Por favor, tente novamente.');
+                Alert.alert('Error', errorMessage || 'Could not delete. Please try again.');
               });
           },
         },

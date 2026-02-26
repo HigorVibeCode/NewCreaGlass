@@ -407,6 +407,74 @@ export function getWorkOrderTopClients(workOrders: any[], limit: number = 10) {
     .slice(0, limit);
 }
 
+export function getWorkOrdersByDay(workOrders: any[]) {
+  const dayMap = new Map<
+    string,
+    {
+      date: string;
+      startedCount: number;
+      finishedCount: number;
+      dayTotalDurationSeconds: number;
+      completedCount: number;
+      items: {
+        id: string;
+        name: string;
+        startTime?: string;
+        endTime?: string;
+        durationSeconds: number;
+      }[];
+    }
+  >();
+
+  for (const wo of workOrders) {
+    const statuses = wo.timeStatuses || [];
+    const startTimes = statuses
+      .filter((ts: any) => ts.startTime)
+      .map((ts: any) => new Date(ts.startTime).getTime())
+      .filter((v: number) => !isNaN(v));
+    const endTimes = statuses
+      .filter((ts: any) => ts.endTime)
+      .map((ts: any) => new Date(ts.endTime).getTime())
+      .filter((v: number) => !isNaN(v));
+
+    const startMs = startTimes.length > 0 ? Math.min(...startTimes) : null;
+    const endMs = endTimes.length > 0 ? Math.max(...endTimes) : null;
+    const dayRef = startMs ?? (wo.scheduledDate ? new Date(wo.scheduledDate).getTime() : null);
+    if (!dayRef || isNaN(dayRef)) continue;
+
+    const dayKey = new Date(dayRef).toISOString().slice(0, 10);
+    if (!dayMap.has(dayKey)) {
+      dayMap.set(dayKey, {
+        date: dayKey,
+        startedCount: 0,
+        finishedCount: 0,
+        dayTotalDurationSeconds: 0,
+        completedCount: 0,
+        items: [],
+      });
+    }
+
+    const day = dayMap.get(dayKey)!;
+    const durationSeconds =
+      startMs && endMs && endMs > startMs ? Math.floor((endMs - startMs) / 1000) : 0;
+
+    if (startMs) day.startedCount += 1;
+    if (endMs) day.finishedCount += 1;
+    if (wo.status === 'completed') day.completedCount += 1;
+    day.dayTotalDurationSeconds += durationSeconds;
+
+    day.items.push({
+      id: wo.id,
+      name: wo.clientName || wo.id,
+      startTime: startMs ? new Date(startMs).toISOString() : undefined,
+      endTime: endMs ? new Date(endMs).toISOString() : undefined,
+      durationSeconds,
+    });
+  }
+
+  return Array.from(dayMap.values()).sort((a, b) => b.date.localeCompare(a.date));
+}
+
 // --- Inventory analytics ---
 
 export function getInventoryLowStock(items: InventoryItem[]) {

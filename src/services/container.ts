@@ -1,6 +1,7 @@
 import {
   AuthRepository,
   BloodPriorityRepository,
+  ClientsRepository,
   DeviceTokensRepository,
   DocumentsRepository,
   EquipmentDocumentsRepository,
@@ -22,6 +23,7 @@ import {
 // Import Supabase repositories
 import { SupabaseAuthRepository } from '../repositories/supabase/SupabaseAuthRepository';
 import { SupabaseUsersRepository } from '../repositories/supabase/SupabaseUsersRepository';
+import { SupabaseClientsRepository } from '../repositories/supabase/SupabaseClientsRepository';
 import { SupabasePermissionsRepository } from '../repositories/supabase/SupabasePermissionsRepository';
 import { SupabaseDocumentsRepository } from '../repositories/supabase/SupabaseDocumentsRepository';
 import { SupabaseInventoryRepository } from '../repositories/supabase/SupabaseInventoryRepository';
@@ -42,6 +44,7 @@ import { SupabaseEquipmentDocumentsRepository } from '../repositories/supabase/S
 // Import Mock repositories (for fallback or development)
 import { MockAuthRepository } from '../repositories/mock/MockAuthRepository';
 import { MockUsersRepository } from '../repositories/mock/MockUsersRepository';
+import { MockClientsRepository } from '../repositories/mock/MockClientsRepository';
 import { MockPermissionsRepository } from '../repositories/mock/MockPermissionsRepository';
 import { MockDocumentsRepository } from '../repositories/mock/MockDocumentsRepository';
 import { MockInventoryRepository } from '../repositories/mock/MockInventoryRepository';
@@ -61,6 +64,7 @@ const USE_MOCK_REPOSITORIES = process.env.EXPO_PUBLIC_USE_MOCK_REPOSITORIES === 
 export const repos = {
   authRepo: (USE_MOCK_REPOSITORIES ? new MockAuthRepository() : new SupabaseAuthRepository()) as AuthRepository,
   usersRepo: (USE_MOCK_REPOSITORIES ? new MockUsersRepository() : new SupabaseUsersRepository()) as UsersRepository,
+  clientsRepo: (USE_MOCK_REPOSITORIES ? new MockClientsRepository() : new SupabaseClientsRepository()) as ClientsRepository,
   permissionsRepo: (USE_MOCK_REPOSITORIES ? new MockPermissionsRepository() : new SupabasePermissionsRepository()) as PermissionsRepository,
   documentsRepo: (USE_MOCK_REPOSITORIES ? new MockDocumentsRepository() : new SupabaseDocumentsRepository()) as DocumentsRepository,
   inventoryRepo: (USE_MOCK_REPOSITORIES ? new MockInventoryRepository() : new SupabaseInventoryRepository()) as InventoryRepository,

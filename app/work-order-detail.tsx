@@ -22,21 +22,60 @@ import { useI18n } from '../src/hooks/use-i18n';
 import { useAuth } from '../src/store/auth-store';
 import { repos } from '../src/services/container';
 import { supabase } from '../src/services/supabase';
-import { getCachedSignedUrl } from '../src/utils/signed-url-cache';
 import { WorkOrder, User, TimeStatus, ServiceLog, Evidence, ChecklistItem } from '../src/types';
 import { theme } from '../src/theme';
 import { formatDate as formatDateUtil, formatDateTime as formatDateTimeUtil, formatTimestamp as formatTimestampUtil } from '../src/utils/date-format';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 import { confirmDelete } from '../src/utils/confirm-dialog';
-import { downloadAndOpenAttachment } from '../src/utils/attachments';
+import { downloadAndOpenAttachment, getSignedUrlFromStorage } from '../src/utils/attachments';
 import { pushWithParams } from '../src/utils/navigation';
+import { shareViaWhatsApp } from '../src/utils/share-links';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 
 // Web-specific signature pad (loaded only on web)
 const WebSignaturePad = Platform.OS === 'web'
   ? require('../src/components/shared/WebSignaturePad').WebSignaturePad
   : null;
+
+function extractStoragePathFromUrl(pathOrUrl: string): string | null {
+  if (!pathOrUrl) return null;
+  if (!pathOrUrl.startsWith('http://') && !pathOrUrl.startsWith('https://')) {
+    return pathOrUrl;
+  }
+  const fromSignedOrPublic = pathOrUrl.match(/\/object\/(?:sign|public)\/documents\/(.+?)(?:\?|$)/);
+  if (fromSignedOrPublic?.[1]) {
+    return decodeURIComponent(fromSignedOrPublic[1]);
+  }
+  const fromBucketPath = pathOrUrl.match(/\/documents\/(.+?)(?:\?|$)/);
+  if (fromBucketPath?.[1]) {
+    return decodeURIComponent(fromBucketPath[1]);
+  }
+  return null;
+}
+
+function getFilenameFromPath(pathOrUrl?: string): string {
+  if (!pathOrUrl) return 'attachment';
+  return pathOrUrl.split('/').pop()?.split('?')[0] || 'attachment';
+}
+
+function isImagePath(pathOrUrl?: string): boolean {
+  if (!pathOrUrl) return false;
+  return /\.(jpg|jpeg|png|gif|webp|bmp|tiff|svg)(\?|$)/i.test(pathOrUrl);
+}
+
+function inferMimeTypeFromPath(pathOrUrl?: string): string {
+  if (!pathOrUrl) return 'application/octet-stream';
+  const lower = pathOrUrl.toLowerCase();
+  if (/\.(jpg|jpeg)(\?|$)/.test(lower)) return 'image/jpeg';
+  if (/\.(png)(\?|$)/.test(lower)) return 'image/png';
+  if (/\.(gif)(\?|$)/.test(lower)) return 'image/gif';
+  if (/\.(webp)(\?|$)/.test(lower)) return 'image/webp';
+  if (/\.(bmp)(\?|$)/.test(lower)) return 'image/bmp';
+  if (/\.(svg)(\?|$)/.test(lower)) return 'image/svg+xml';
+  if (/\.(pdf)(\?|$)/.test(lower)) return 'application/pdf';
+  return 'application/octet-stream';
+}
 
 export default function WorkOrderDetailScreen() {
   const { t } = useI18n();
@@ -386,17 +425,25 @@ export default function WorkOrderDetailScreen() {
     if (!workOrderId) return;
     
     confirmDelete(
-      t('common.delete') || 'Excluir',
-      'Tem certeza que deseja excluir esta ordem de serviço?',
+      t('common.delete'),
+      t('workOrders.deleteConfirm'),
       async () => {
         await repos.workOrdersRepo.deleteWorkOrder(workOrderId);
         safeBack(router);
       },
       undefined,
-      t('common.delete') || 'Excluir',
-      t('common.cancel') || 'Cancelar',
-      'Ordem de serviço excluída com sucesso',
-      'Falha ao excluir ordem de serviço'
+      t('common.delete'),
+      t('common.cancel'),
+      t('workOrders.deletedSuccess'),
+      t('workOrders.deleteError')
+    );
+  };
+
+  const handleShare = async () => {
+    if (!workOrderId) return;
+    await shareViaWhatsApp(
+      { entity: 'workOrder', params: { workOrderId } },
+      `Work Order ${workOrder?.clientName || ''}`.trim()
     );
   };
 
@@ -527,21 +574,15 @@ export default function WorkOrderDetailScreen() {
           const resolvedEvidences = await Promise.all(
             workOrderData.evidences.map(async (ev: Evidence) => {
               if (!ev.photoPath) return ev;
-              // Already a full URL (http/https) — leave as-is
-              if (ev.photoPath.startsWith('http://') || ev.photoPath.startsWith('https://')) {
-                return ev;
-              }
               // Local file URI — leave as-is
               if (ev.photoPath.startsWith('file://') || ev.photoPath.startsWith('content://')) {
                 return ev;
               }
               try {
-                // Strip bucket prefix if present
-                let filename = ev.photoPath;
-                if (filename.startsWith('documents/')) {
-                  filename = filename.replace('documents/', '');
-                }
-                const url = await getCachedSignedUrl(filename);
+                const extracted = extractStoragePathFromUrl(ev.photoPath);
+                const storagePath = extracted || ev.photoPath;
+                const filename = getFilenameFromPath(storagePath);
+                const url = await getSignedUrlFromStorage(storagePath, filename);
                 if (url) {
                   return { ...ev, photoPath: url };
                 }
@@ -1106,16 +1147,26 @@ export default function WorkOrderDetailScreen() {
                                 if (Platform.OS === 'web') {
                                   window.open(evidence.photoPath, '_blank');
                                 } else {
-                                  const filename = evidence.photoPath.split('/').pop()?.split('?')[0] || 'evidence.jpg';
-                                  downloadAndOpenAttachment(evidence.photoPath, filename, 'image/jpeg');
+                                  const filename = getFilenameFromPath(evidence.photoPath);
+                                  const mimeType = inferMimeTypeFromPath(evidence.photoPath);
+                                  downloadAndOpenAttachment(evidence.photoPath, filename, mimeType);
                                 }
                               }}
                             >
-                              <Image
-                                source={{ uri: evidence.photoPath }}
-                                style={styles.photo}
-                                contentFit="cover"
-                              />
+                              {isImagePath(evidence.photoPath) ? (
+                                <Image
+                                  source={{ uri: evidence.photoPath }}
+                                  style={styles.photo}
+                                  contentFit="cover"
+                                />
+                              ) : (
+                                <View style={[styles.filePreview, { backgroundColor: colors.backgroundSecondary }]}>
+                                  <Ionicons name="document-text-outline" size={20} color={colors.textSecondary} />
+                                  <Text style={[styles.filePreviewText, { color: colors.textSecondary }]} numberOfLines={1}>
+                                    {getFilenameFromPath(evidence.photoPath)}
+                                  </Text>
+                                </View>
+                              )}
                             </TouchableOpacity>
                           )}
                           {evidence.internalNotes && (
@@ -1229,6 +1280,13 @@ export default function WorkOrderDetailScreen() {
         </View>
 
         <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={[styles.iconButton, { backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border }]}
+            onPress={handleShare}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="share-social-outline" size={24} color={colors.text} />
+          </TouchableOpacity>
           {workOrder.status === 'planned' && (
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: colors.primary }]}
@@ -1562,6 +1620,20 @@ const styles = StyleSheet.create({
     height: 64,
     borderRadius: 6,
     backgroundColor: '#f3f4f6',
+  },
+  filePreview: {
+    width: 180,
+    minHeight: 64,
+    borderRadius: 6,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  filePreviewText: {
+    flex: 1,
+    fontSize: theme.typography.fontSize.xs,
   },
   timerCard: {
     padding: theme.spacing.lg,

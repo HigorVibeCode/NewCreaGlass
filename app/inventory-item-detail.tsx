@@ -23,6 +23,7 @@ import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 import { prefetchSignedUrls } from '../src/utils/signed-url-cache';
 import { pushWithParams } from '../src/utils/navigation';
+import { shareViaWhatsApp } from '../src/utils/share-links';
 
 function DetailImage({ storagePath }: { storagePath: string }) {
   const colors = useThemeColors();
@@ -94,6 +95,14 @@ export default function InventoryItemDetailScreen() {
       pathname: '/inventory-group',
       params: { groupId, editItemId: item.id },
     });
+  };
+
+  const handleShare = async () => {
+    if (!itemId || !groupId) return;
+    await shareViaWhatsApp(
+      { entity: 'inventoryItem', params: { itemId, groupId } },
+      `Inventory Item ${item?.name || ''}`.trim()
+    );
   };
 
   if (isLoading) {
@@ -242,6 +251,14 @@ export default function InventoryItemDetailScreen() {
           )}
 
           <View style={styles.actions}>
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
+              onPress={handleShare}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="share-social-outline" size={24} color={colors.text} />
+              <Text style={[styles.actionButtonText, { color: colors.text }]}>{t('common.share')}</Text>
+            </TouchableOpacity>
             <PermissionGuard permission="inventory.item.adjustStock">
               <TouchableOpacity
                 style={[styles.actionButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}

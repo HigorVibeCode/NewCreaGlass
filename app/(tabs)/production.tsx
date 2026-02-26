@@ -493,6 +493,13 @@ export default function ProductionScreen() {
             >
               <Ionicons name="business" size={20} color={selectedCompany !== 'all' ? colors.primary : colors.text} />
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterButton, { backgroundColor: colors.backgroundSecondary }]}
+              onPress={() => router.push('/clients')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="people-outline" size={20} color={colors.text} />
+            </TouchableOpacity>
             <PermissionGuard permission="production.create">
               <TouchableOpacity
                 style={[styles.addButton, { backgroundColor: colors.primary }]}

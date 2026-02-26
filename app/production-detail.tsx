@@ -28,8 +28,26 @@ import { theme } from '../src/theme';
 import { downloadAndOpenAttachment, getSignedUrlFromStorage } from '../src/utils/attachments';
 import { confirmDelete } from '../src/utils/confirm-dialog';
 import { pushWithParams } from '../src/utils/navigation';
+import { shareViaWhatsApp } from '../src/utils/share-links';
 import { useRouteParams } from '../src/hooks/use-route-params';
 import { GlassType, InventoryItem, PaintType, Production, ProductionStatus, ProductionStatusHistory, StructureType, User } from '../src/types';
+
+function extractStoragePathFromUrl(pathOrUrl: string): string | null {
+  if (!pathOrUrl) return null;
+  if (!pathOrUrl.startsWith('http://') && !pathOrUrl.startsWith('https://')) {
+    return pathOrUrl;
+  }
+  const fromSignedOrPublic = pathOrUrl.match(/\/object\/(?:sign|public)\/documents\/(.+?)(?:\?|$)/);
+  if (fromSignedOrPublic?.[1]) {
+    return decodeURIComponent(fromSignedOrPublic[1]);
+  }
+  const fromBucketPath = pathOrUrl.match(/\/documents\/(.+?)(?:\?|$)/);
+  if (fromBucketPath?.[1]) {
+    return decodeURIComponent(fromBucketPath[1]);
+  }
+  return null;
+}
+
 /** Resolve signed URL for a thumbnail — uses same robust logic as downloadAndOpenAttachment */
 function AttachmentThumbnail({ storagePath, filename, index }: { storagePath: string; filename: string; index: number }) {
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -42,15 +60,8 @@ function AttachmentThumbnail({ storagePath, filename, index }: { storagePath: st
     const resolve = async () => {
       try {
         // Extract a usable storage key from the URL (same approach as downloadAndOpenAttachment)
-        let storageKey = storagePath;
-        if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
-          const match = storagePath.match(/\/([^\/]+\.(jpg|jpeg|png|gif|webp|bmp|tiff|svg))(\?|$)/i);
-          if (match && match[1]) {
-            storageKey = match[1];
-          } else {
-            storageKey = filename;
-          }
-        } else if (!storagePath.includes('/') && !storagePath.includes('.')) {
+        let storageKey = extractStoragePathFromUrl(storagePath) || storagePath;
+        if (!storageKey.includes('/') && !storageKey.includes('.')) {
           storageKey = filename;
         }
 
@@ -141,6 +152,7 @@ export default function ProductionDetailScreen() {
   const [glassItems, setGlassItems] = useState<Map<string, InventoryItem>>(new Map());
   const [statusModalVisible, setStatusModalVisible] = useState(false);
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [isLinkingWorkOrder, setIsLinkingWorkOrder] = useState(false);
   const [statusHistory, setStatusHistory] = useState<ProductionStatusHistory[]>([]);
   const [historyUsers, setHistoryUsers] = useState<Map<string, User>>(new Map());
 
@@ -449,6 +461,111 @@ export default function ProductionDetailScreen() {
     Alert.alert(t('common.info'), 'Save functionality will be implemented');
   };
 
+  const linkWorkOrder = async () => {
+    if (!production || !user) return;
+
+    setIsLinkingWorkOrder(true);
+    try {
+      let clientAddress = '';
+      let clientContact = '';
+      if (production.clientId) {
+        const client = await repos.clientsRepo.getClientById(production.clientId);
+        clientAddress = client?.address || '';
+        clientContact = client?.contact || '';
+      }
+
+      const plannedMaterials = production.items.map((item, index) => ({
+        id: `po-item-${index}`,
+        name: `${getGlassTypeLabel(item.glassType)} (${item.quantity})`,
+        quantity: item.quantity || 1,
+        unit: 'un',
+      }));
+
+      const createdWorkOrder = await repos.workOrdersRepo.createWorkOrder({
+        clientId: production.clientId,
+        clientName: production.clientName,
+        clientAddress,
+        clientContact,
+        serviceType: 'external',
+        scheduledDate: production.dueDate,
+        scheduledTime: '07:30',
+        status: 'planned',
+        plannedChecklist: [],
+        plannedMaterials,
+        teamMembers: [],
+        responsible: user.id,
+        isLocked: false,
+        productionOrderId: production.id,
+        timeStatuses: [],
+        serviceLogs: [],
+        evidences: [],
+        checklistItems: [],
+        createdBy: user.id,
+      });
+
+      // Import production attachments as work order evidences
+      for (const attachment of production.attachments || []) {
+        const candidatePath = attachment.originalStoragePath || attachment.storagePath;
+        const filePath = extractStoragePathFromUrl(candidatePath) || candidatePath;
+        if (!filePath) continue;
+        await repos.workOrdersRepo.createEvidence(createdWorkOrder.id, {
+          type: 'antes',
+          photoPath: filePath,
+          createdBy: user.id,
+        });
+      }
+
+      await repos.productionRepo.updateProduction(production.id, {
+        linkedWorkOrderId: createdWorkOrder.id,
+      });
+
+      await loadProduction();
+      Alert.alert(t('common.success'), t('production.workOrderLinkedSuccess'), [
+        {
+          text: t('production.openLinkedWorkOrder'),
+          onPress: () => pushWithParams(router, '/work-order-detail', { workOrderId: createdWorkOrder.id }),
+        },
+        { text: t('common.confirm') },
+      ]);
+    } catch (error) {
+      console.error('Error linking work order:', error);
+      Alert.alert(t('common.error'), t('production.workOrderLinkedError'));
+    } finally {
+      setIsLinkingWorkOrder(false);
+    }
+  };
+
+  const handleLinkWorkOrder = async () => {
+    if (isLinkingWorkOrder) return;
+    if (production?.linkedWorkOrderId) {
+      setIsLinkingWorkOrder(true);
+      try {
+        const linkedWorkOrder = await repos.workOrdersRepo.getWorkOrderById(production.linkedWorkOrderId);
+        if (linkedWorkOrder) {
+          pushWithParams(router, '/work-order-detail', { workOrderId: production.linkedWorkOrderId });
+          return;
+        }
+      } catch (error) {
+        console.error('Error validating linked work order:', error);
+      } finally {
+        setIsLinkingWorkOrder(false);
+      }
+    }
+    Alert.alert(
+      t('production.linkWorkOrderConfirmTitle'),
+      t('production.linkWorkOrderConfirmMessage'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('production.linkWorkOrderAction'),
+          onPress: () => {
+            linkWorkOrder();
+          },
+        },
+      ]
+    );
+  };
+
   const handleAttachmentPress = async (attachment: { storagePath: string; mimeType: string; filename: string }) => {
     try {
       await downloadAndOpenAttachment(
@@ -459,6 +576,14 @@ export default function ProductionDetailScreen() {
     } catch (error) {
       console.error('Error opening attachment:', error);
     }
+  };
+
+  const handleShare = async () => {
+    if (!productionId) return;
+    await shareViaWhatsApp(
+      { entity: 'production', params: { productionId } },
+      `Production Order ${production?.orderNumber || ''}`.trim()
+    );
   };
 
   if (isLoading) {
@@ -653,6 +778,21 @@ export default function ProductionDetailScreen() {
             activeOpacity={0.7}
           >
             <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.iconButton, { backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border }]}
+            onPress={handleShare}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="share-social-outline" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.iconButton, { backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border }]}
+            onPress={handleLinkWorkOrder}
+            activeOpacity={0.7}
+            disabled={isLinkingWorkOrder}
+          >
+            <Ionicons name="link-outline" size={24} color={colors.text} />
           </TouchableOpacity>
           <PermissionGuard permission="production.update">
             <TouchableOpacity

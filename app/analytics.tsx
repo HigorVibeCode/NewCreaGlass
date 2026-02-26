@@ -59,6 +59,7 @@ const SECTIONS: Section[] = [
       { id: 'woTeam', route: '/analytics-wo-team', icon: 'people-outline', iconColor: '#10b981', iconBgColor: '#d1fae5' },
       { id: 'woServiceTime', route: '/analytics-wo-service-time', icon: 'stopwatch-outline', iconColor: '#f59e0b', iconBgColor: '#fef3c7' },
       { id: 'woClients', route: '/analytics-wo-clients', icon: 'person-outline', iconColor: '#0ea5e9', iconBgColor: '#e0f2fe' },
+      { id: 'woByDay', route: '/analytics-wo-by-day', icon: 'calendar-number-outline', iconColor: '#8b5cf6', iconBgColor: '#ede9fe' },
     ],
   },
   {

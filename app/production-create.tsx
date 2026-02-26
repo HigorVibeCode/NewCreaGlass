@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../src/components/shared/Button';
+import { ClientAutocomplete } from '../src/components/shared/ClientAutocomplete';
 import { DatePicker } from '../src/components/shared/DatePicker';
 import { Dropdown, DropdownOption } from '../src/components/shared/Dropdown';
 import { Input } from '../src/components/shared/Input';
@@ -28,6 +29,7 @@ import { supabase } from '../src/services/supabase';
 import { useAuth } from '../src/store/auth-store';
 import { theme } from '../src/theme';
 import {
+    Client,
     GlassType,
     InventoryItem,
     PaintType,
@@ -64,6 +66,8 @@ export default function ProductionCreateScreen() {
 
   const [orderNumber, setOrderNumber] = useState('');
   const [clientName, setClientName] = useState('');
+  const [clientId, setClientId] = useState<string | undefined>(undefined);
+  const [clients, setClients] = useState<Client[]>([]);
   const [orderType, setOrderType] = useState('');
   const [company, setCompany] = useState<ProductionCompany>('3S');
   const [dueDate, setDueDate] = useState('');
@@ -139,10 +143,20 @@ export default function ProductionCreateScreen() {
 
   useEffect(() => {
     loadGlassItems();
+    loadClients();
     if (productionId) {
       loadProduction();
     }
   }, [productionId]);
+
+  const loadClients = async () => {
+    try {
+      const allClients = await repos.clientsRepo.getAllClients();
+      setClients(allClients);
+    } catch (error) {
+      console.error('Error loading clients:', error);
+    }
+  };
 
   const loadProduction = async () => {
     if (!productionId) return;
@@ -151,6 +165,7 @@ export default function ProductionCreateScreen() {
       const productionData = await repos.productionRepo.getProductionById(productionId);
       if (productionData) {
         setOrderNumber(productionData.orderNumber);
+        setClientId(productionData.clientId);
         setClientName(productionData.clientName);
         setOrderType(productionData.orderType);
         const loadedCompany = productionData.company || '3S';
@@ -404,7 +419,7 @@ export default function ProductionCreateScreen() {
       return false;
     }
 
-    if (!clientName.trim()) {
+    if (!clientId && !isEditing) {
       showAlert(t('common.error'), t('production.fillRequiredFields'));
       return false;
     }
@@ -448,6 +463,7 @@ export default function ProductionCreateScreen() {
         // Update existing production
         await repos.productionRepo.updateProduction(productionId, {
           orderNumber: orderNumber.trim(),
+          clientId,
           clientName: clientName.trim(),
           orderType: orderType.trim(),
           company,
@@ -467,6 +483,7 @@ export default function ProductionCreateScreen() {
         // Create new production
         const newProduction: Omit<Production, 'id' | 'createdAt'> = {
           orderNumber: orderNumber.trim(),
+          clientId,
           clientName: clientName.trim(),
           orderType: orderType.trim(),
           company,
@@ -535,11 +552,16 @@ export default function ProductionCreateScreen() {
         ]}
       >
         {/* 1. Client & Company */}
-        <Input
-          label="Client Name"
-          value={clientName}
-          onChangeText={setClientName}
+        <ClientAutocomplete
+          label="Cliente *"
+          clients={clients}
+          selectedClientId={clientId}
           placeholder={t('production.clientNamePlaceholder')}
+          onSelectClient={(client) => {
+            setClientId(client.id);
+            setClientName(client.name);
+          }}
+          onManageClientsPress={() => router.push('/clients')}
         />
 
         <Dropdown

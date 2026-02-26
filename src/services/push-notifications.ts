@@ -352,7 +352,8 @@ export class PushNotificationService {
         }
       
       case 'workOrder.created': {
-        const scheduledDate = payloadJson.scheduledDate || '';
+        const workOrderName = payloadJson.workOrderName || payloadJson.clientName || 'Work Order';
+        const scheduledDate = payloadJson.dueDate || payloadJson.scheduledDate || '';
         const scheduledTime = payloadJson.scheduledTime || '';
         
         let dateText = '';
@@ -397,7 +398,7 @@ export class PushNotificationService {
         
         return {
           title: 'Nova Ordem de Serviço',
-          body: `Nova ordem de serviço criada${dateText ? ` - ${dateText}` : ''}`,
+          body: `${workOrderName}${dateText ? ` - Vencimento: ${dateText}` : ''}`,
         };
       }
       

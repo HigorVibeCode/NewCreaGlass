@@ -136,7 +136,7 @@ export const triggerNotificationAlert = async (
       // Use setTimeout to avoid blocking the current operation
       setTimeout(() => {
         Alert.alert(
-          'Nova Notificação',
+          'New Notification',
           message,
           [{ text: 'OK' }],
           { cancelable: true }

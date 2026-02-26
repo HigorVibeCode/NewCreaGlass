@@ -796,6 +796,7 @@
       "woTeam": { "title": "Teamleistung", "subtitle": "Ranking nach abgeschlossenen Aufträgen" },
       "woServiceTime": { "title": "Servicezeit & Checkliste", "subtitle": "Durchschnittliche Servicezeit und Compliance" },
       "woClients": { "title": "Aufträge nach Kunde", "subtitle": "Top-Kunden nach Auftragsanzahl" },
+      "woByDay": { "title": "Work Orders pro Tag", "subtitle": "Start, Ende und Dauer pro Tag" },
       "invLowStock": { "title": "Bestandswarnungen", "subtitle": "Artikel unter Mindestbestand" },
       "invByGroup": { "title": "Bestand nach Gruppe", "subtitle": "Inventar-Gesamtwerte pro Gruppe" },
       "invSupplier": { "title": "Nach Lieferant", "subtitle": "Artikelverteilung nach Lieferant" }

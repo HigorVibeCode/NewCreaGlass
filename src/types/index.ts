@@ -28,6 +28,18 @@ export interface Session {
   token?: string;
 }
 
+// Client types
+export interface Client {
+  id: string;
+  name: string;
+  address?: string;
+  contact?: string;
+  isActive: boolean;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Document types
 export interface Document {
   id: string;
@@ -72,7 +84,7 @@ export interface InventoryItem {
   totalM2?: number;
   idealStock?: number;
   location?: string;
-  supplier?: string; // '3S' or 'Crea Glass'
+  supplier?: string; // '3S', 'Crea Glass' or 'Kromatix'
   referenceNumber?: string;
   // Supplies-specific (aluminum/rubber profiles)
   position?: string;
@@ -255,6 +267,7 @@ export type ProductionCompany = '3S' | 'Crea Glass';
 
 export interface Production {
   id: string;
+  clientId?: string;
   clientName: string;
   orderNumber: string;
   orderType: string;
@@ -262,9 +275,133 @@ export interface Production {
   status: ProductionStatus;
   items: ProductionItem[];
   attachments: ProductionAttachment[];
+  linkedWorkOrderId?: string;
   company?: ProductionCompany;
   createdAt: string;
   createdBy: string;
+}
+
+// Work Orders types
+export type WorkOrderStatus = 'planned' | 'in_progress' | 'paused' | 'completed' | 'cancelled';
+export type WorkOrderServiceType = 'maintenance' | 'installation' | 'internal' | 'external';
+export type TimeStatusType = 'EM_ATENDIMENTO' | 'PAUSADO' | 'DESLOCAMENTO';
+export type EvidenceType = 'antes' | 'durante' | 'depois';
+export type ServiceLogType = 'ajuste' | 'problema' | 'material' | 'recomendacao';
+export type ChecklistItemType = 'planned' | 'execution';
+
+export interface WorkOrderChecklistPlanItem {
+  id: string;
+  title: string;
+  description?: string;
+  checked?: boolean;
+}
+
+export interface WorkOrderPlannedMaterial {
+  id: string;
+  name: string;
+  quantity: number;
+  unit?: string;
+}
+
+export interface CheckIn {
+  id: string;
+  workOrderId: string;
+  timestamp: string;
+  latitude: number;
+  longitude: number;
+  toleranceRadius: number;
+  photoPath?: string;
+  performedBy: string;
+  createdAt: string;
+}
+
+export interface TimeStatus {
+  id: string;
+  workOrderId: string;
+  status: TimeStatusType;
+  pauseReason?: string;
+  startTime: string;
+  endTime?: string;
+  totalDuration: number;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface ServiceLog {
+  id: string;
+  workOrderId: string;
+  type: ServiceLogType;
+  text: string;
+  author: string;
+  timestamp: string;
+  photoPath?: string;
+  videoPath?: string;
+  createdAt: string;
+}
+
+export interface Evidence {
+  id: string;
+  workOrderId: string;
+  type: EvidenceType;
+  photoPath: string;
+  videoPath?: string;
+  internalNotes?: string;
+  clientNotes?: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface ChecklistItem {
+  id: string;
+  workOrderId: string;
+  type: ChecklistItemType;
+  title: string;
+  description?: string;
+  completed: boolean;
+  completedAt?: string;
+  completedBy?: string;
+  createdAt: string;
+}
+
+export interface Signature {
+  id: string;
+  workOrderId: string;
+  signaturePath: string;
+  fullName: string;
+  timestamp: string;
+  latitude: number;
+  longitude: number;
+  pinHash?: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface WorkOrder {
+  id: string;
+  clientId?: string;
+  clientName: string;
+  clientAddress: string;
+  clientContact: string;
+  serviceType: WorkOrderServiceType;
+  scheduledDate: string;
+  scheduledTime: string;
+  status: WorkOrderStatus;
+  plannedChecklist: WorkOrderChecklistPlanItem[];
+  plannedMaterials: WorkOrderPlannedMaterial[];
+  internalNotes?: string;
+  teamMembers: string[];
+  responsible: string;
+  isLocked: boolean;
+  productionOrderId?: string;
+  checkIn?: CheckIn;
+  timeStatuses: TimeStatus[];
+  serviceLogs: ServiceLog[];
+  evidences: Evidence[];
+  checklistItems: ChecklistItem[];
+  signature?: Signature;
+  createdAt: string;
+  createdBy: string;
+  updatedAt?: string;
 }
 
 // Maintenance types

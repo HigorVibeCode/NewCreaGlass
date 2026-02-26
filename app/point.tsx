@@ -202,7 +202,12 @@ export default function PointScreen() {
         isToday: dk === todayKey,
         isAutomatic:
           (g.clockIn?.locationAddress === 'Automático') ||
-          (g.clockOut?.locationAddress === 'Automático') || false,
+          (g.clockOut?.locationAddress === 'Automático') ||
+          (g.coffeeStart?.locationAddress === 'Automático') ||
+          (g.coffeeEnd?.locationAddress === 'Automático') ||
+          (g.lunchStart?.locationAddress === 'Automático') ||
+          (g.lunchEnd?.locationAddress === 'Automático') ||
+          false,
       });
     }
     result.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
@@ -388,11 +393,11 @@ export default function PointScreen() {
     if (!adjustEntry) return;
     const desc = adjustDescription.trim();
     if (!desc) {
-      Alert.alert(t('common.error'), t('point.adjustDescription') + ' obrigatória.');
+      Alert.alert(t('common.error'), t('point.adjustDescriptionRequired'));
       return;
     }
     if (desc.length > 20) {
-      Alert.alert(t('common.error'), 'Descrição deve ter no máximo 20 caracteres');
+      Alert.alert(t('common.error'), t('point.adjustDescriptionMaxLength'));
       return;
     }
     setSavingAdjust(true);
@@ -419,7 +424,8 @@ export default function PointScreen() {
     const durationMs = pauseType === 'coffee' ? COFFEE_DURATION_MS : LUNCH_DURATION_MS;
     const triggerMs = durationMs - WARN_BEFORE_MS; // 12min (café) ou 42min (almoço)
     const title = pauseType === 'coffee' ? t('point.coffeeEndingSoon') : t('point.lunchEndingSoon');
-    const body = t('point.pauseEndingIn3Min');
+    const endTime = formatTimeUtil(new Date(Date.now() + durationMs).toISOString());
+    const body = `${t('point.pauseEndingIn3Min')} (${endTime})`;
     try {
       await Notifications.scheduleNotificationAsync({
         content: { title, body, sound: 'default' },

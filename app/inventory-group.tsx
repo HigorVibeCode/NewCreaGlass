@@ -251,7 +251,7 @@ export default function InventoryGroupScreen() {
       }
     }
     if (hasImageCards && itemImages.length > 3) {
-      Alert.alert(t('common.error'), t('inventory.maxImagesPerItem') ? 'Maximum 3 images.' : 'Máximo 3 imagens.');
+      Alert.alert(t('common.error'), t('inventory.maxImagesPerItem'));
       return;
     }
 
@@ -390,7 +390,7 @@ export default function InventoryGroupScreen() {
       }
     }
     if (hasImageCards && itemImages.length > 3) {
-      Alert.alert(t('common.error'), t('inventory.maxImagesPerItem') ? 'Maximum 3 images.' : 'Máximo 3 imagens.');
+      Alert.alert(t('common.error'), t('inventory.maxImagesPerItem'));
       return;
     }
 

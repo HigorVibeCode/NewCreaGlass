@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, Alert, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, Alert, Platform, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,6 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
+import * as IntentLauncher from 'expo-intent-launcher';
 import { useI18n } from '../../src/hooks/use-i18n';
 import { ScreenWrapper } from '../../src/components/shared/ScreenWrapper';
 import { Dropdown } from '../../src/components/shared/Dropdown';
@@ -196,17 +198,34 @@ export default function InventoryScreen() {
         console.log('PDF generated at:', uri);
       }
       
-      // Share the PDF (mobile only)
+      // Open the PDF in default app (mobile only)
       if (Platform.OS !== 'web') {
-        console.log('Sharing PDF...');
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(uri, {
-            mimeType: 'application/pdf',
-            dialogTitle: t('inventory.shareReport'),
-          });
-          console.log('PDF shared successfully');
-        } else {
-          Alert.alert(t('inventory.reportGenerated'), `${t('inventory.reportSaved')} ${uri}`);
+        console.log('Opening PDF with default app...');
+        try {
+          if (Platform.OS === 'android') {
+            const contentUri = await FileSystemLegacy.getContentUriAsync(uri);
+            await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+              data: contentUri,
+              flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
+              type: 'application/pdf',
+            });
+          } else {
+            const canOpen = await Linking.canOpenURL(uri);
+            if (!canOpen) {
+              throw new Error('Cannot open PDF URI');
+            }
+            await Linking.openURL(uri);
+          }
+        } catch (openError) {
+          console.warn('Could not open PDF with default app, falling back to share:', openError);
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(uri, {
+              mimeType: 'application/pdf',
+              dialogTitle: t('inventory.shareReport'),
+            });
+          } else {
+            Alert.alert(t('inventory.reportGenerated'), `${t('inventory.reportSaved')} ${uri}`);
+          }
         }
       }
 
@@ -409,9 +428,13 @@ export default function InventoryScreen() {
           <meta charset="utf-8">
           <title>Relatório de Inventário - ${clientName}</title>
           <style>
+            @page {
+              size: A4 landscape;
+              margin: 10mm;
+            }
             body {
               font-family: Arial, sans-serif;
-              margin: 20px;
+              margin: 0;
               color: #333;
             }
             .header {
@@ -465,7 +488,8 @@ export default function InventoryScreen() {
               width: 100%;
               border-collapse: collapse;
               margin-top: 20px;
-              font-size: 11px;
+              font-size: 10px;
+              table-layout: fixed;
             }
             thead {
               background-color: #f5f5f5;
@@ -479,6 +503,7 @@ export default function InventoryScreen() {
             }
             td {
               padding: 8px;
+              word-break: break-word;
             }
             .footer {
               margin-top: 30px;
@@ -651,6 +676,7 @@ export default function InventoryScreen() {
                     options={[
                       { label: '3S', value: '3S' },
                       { label: 'Crea Glass', value: 'Crea Glass' },
+                      { label: 'Kromatix', value: 'Kromatix' },
                     ]}
                     onSelect={handleClientSelect}
                   />
@@ -771,14 +797,14 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: theme.spacing.lg,
+    padding: theme.spacing.md,
     zIndex: 1000,
     elevation: 1000,
   },
   modalContent: {
     borderRadius: theme.borderRadius.lg,
     width: '100%',
-    maxWidth: 500,
+    maxWidth: 460,
     maxHeight: '80%',
     zIndex: 1001,
     elevation: 1001,
@@ -805,10 +831,11 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.lg,
   },
   modalButton: {
+    flex: 1,
     paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.md,
     borderRadius: theme.borderRadius.md,
-    minWidth: 100,
+    minWidth: 0,
     alignItems: 'center',
   },
   modalButtonDisabled: {

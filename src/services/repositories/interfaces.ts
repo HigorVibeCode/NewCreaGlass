@@ -1,11 +1,15 @@
 import {
     BloodPriorityMessage,
     BloodPriorityRead,
+    CheckIn,
+    ChecklistItem,
+    Client,
     DeviceToken,
     Document,
     EquipmentDocument,
     EquipmentDocumentAttachment,
     EquipmentMachine,
+    Evidence,
     Event,
     InventoryGroup,
     InventoryHistory,
@@ -22,14 +26,18 @@ import {
     ProductionStatus,
     ProductionStatusHistory,
     PushDeliveryLog,
+    ServiceLog,
     Session,
+    Signature,
+    TimeStatus,
     TimeEntry,
     Training,
     TrainingCategory,
     TrainingCompletion,
-    TrainingSignature,
     TrainingWithCompletion,
     User,
+    WorkOrder,
+    WorkOrderStatus,
     Manual,
     ManualAttachment,
 } from '../../types';
@@ -54,6 +62,15 @@ export interface UsersRepository {
   deactivateUser(userId: string): Promise<void>;
   changeUserPassword(userId: string, newPassword: string): Promise<void>;
   updatePreferredLanguage(userId: string, language: string): Promise<void>;
+}
+
+// Clients Repository
+export interface ClientsRepository {
+  getAllClients(search?: string): Promise<Client[]>;
+  getClientById(clientId: string): Promise<Client | null>;
+  createClient(client: Omit<Client, 'id' | 'createdAt' | 'updatedAt'>): Promise<Client>;
+  updateClient(clientId: string, updates: Partial<Client>): Promise<Client>;
+  deleteClient(clientId: string): Promise<void>;
 }
 
 // Permissions Repository
@@ -126,6 +143,32 @@ export interface EventsRepository {
   getEventById(eventId: string): Promise<Event | null>;
   createEvent(event: Omit<Event, 'id' | 'createdAt'>): Promise<Event>;
   updateEvent(eventId: string, updates: Partial<Event>): Promise<Event>;
+}
+
+// Work Orders Repository
+export interface WorkOrdersRepository {
+  getAllWorkOrders(status?: WorkOrderStatus): Promise<WorkOrder[]>;
+  getWorkOrderById(workOrderId: string): Promise<WorkOrder | null>;
+  createWorkOrder(workOrder: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'>): Promise<WorkOrder>;
+  updateWorkOrder(workOrderId: string, updates: Partial<WorkOrder>): Promise<WorkOrder>;
+  deleteWorkOrder(workOrderId: string): Promise<void>;
+
+  createCheckIn(workOrderId: string, checkIn: Omit<CheckIn, 'id' | 'workOrderId' | 'createdAt'>): Promise<CheckIn>;
+  getCheckIn(workOrderId: string): Promise<CheckIn | null>;
+  createTimeStatus(workOrderId: string, timeStatus: Omit<TimeStatus, 'id' | 'workOrderId' | 'createdAt'>): Promise<TimeStatus>;
+  updateTimeStatus(timeStatusId: string, updates: Partial<TimeStatus>): Promise<TimeStatus>;
+  getTimeStatuses(workOrderId: string): Promise<TimeStatus[]>;
+  getCurrentTimeStatus(workOrderId: string): Promise<TimeStatus | null>;
+  createServiceLog(workOrderId: string, log: Omit<ServiceLog, 'id' | 'workOrderId' | 'createdAt'>): Promise<ServiceLog>;
+  getServiceLogs(workOrderId: string): Promise<ServiceLog[]>;
+  createEvidence(workOrderId: string, evidence: Omit<Evidence, 'id' | 'workOrderId' | 'createdAt'>): Promise<Evidence>;
+  getEvidences(workOrderId: string): Promise<Evidence[]>;
+  createChecklistItem(workOrderId: string, item: Omit<ChecklistItem, 'id' | 'workOrderId' | 'createdAt'>): Promise<ChecklistItem>;
+  updateChecklistItem(itemId: string, updates: Partial<ChecklistItem>): Promise<ChecklistItem>;
+  getChecklistItems(workOrderId: string): Promise<ChecklistItem[]>;
+  createSignature(workOrderId: string, signature: Omit<Signature, 'id' | 'workOrderId' | 'createdAt'>): Promise<Signature>;
+  getSignature(workOrderId: string): Promise<Signature | null>;
+  finalizeWorkOrder(workOrderId: string): Promise<WorkOrder>;
 }
 
 // Production Repository

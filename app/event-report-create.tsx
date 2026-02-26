@@ -18,6 +18,7 @@ import { useI18n } from '../src/hooks/use-i18n';
 import { useAuth } from '../src/store/auth-store';
 import { usePermissions } from '../src/hooks/use-permissions';
 import { Button } from '../src/components/shared/Button';
+import { ClientAutocomplete } from '../src/components/shared/ClientAutocomplete';
 import { Input } from '../src/components/shared/Input';
 import { Dropdown, DropdownOption } from '../src/components/shared/Dropdown';
 import { DatePicker } from '../src/components/shared/DatePicker';
@@ -26,7 +27,7 @@ import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { PermissionGuard } from '../src/components/shared/PermissionGuard';
 import { repos } from '../src/services/container';
 import { supabase } from '../src/services/supabase';
-import { User, WorkOrder, WorkOrderServiceType } from '../src/types';
+import { Client, User, WorkOrder, WorkOrderServiceType } from '../src/types';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { useGoBack, safeBack } from '../src/hooks/use-go-back';
@@ -51,8 +52,10 @@ export default function WorkOrderCreateScreen() {
   const goBack = useGoBack('/(tabs)/events');
 
   const [clientName, setClientName] = useState('');
+  const [clientId, setClientId] = useState<string | undefined>(undefined);
   const [clientAddress, setClientAddress] = useState('');
   const [clientContact, setClientContact] = useState('');
+  const [clients, setClients] = useState<Client[]>([]);
   const [serviceType, setServiceType] = useState<WorkOrderServiceType | ''>('');
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
@@ -75,7 +78,17 @@ export default function WorkOrderCreateScreen() {
       }
     };
     loadUsers();
+    loadClients();
   }, []);
+
+  const loadClients = async () => {
+    try {
+      const allClients = await repos.clientsRepo.getAllClients();
+      setClients(allClients);
+    } catch (error) {
+      console.error('Error loading clients:', error);
+    }
+  };
 
   // Load work order data if in edit mode
   useEffect(() => {
@@ -92,6 +105,7 @@ export default function WorkOrderCreateScreen() {
       const workOrderData = await repos.workOrdersRepo.getWorkOrderById(workOrderId);
       if (workOrderData) {
         setClientName(workOrderData.clientName || '');
+        setClientId(workOrderData.clientId);
         setClientAddress(workOrderData.clientAddress || '');
         setClientContact(workOrderData.clientContact || '');
         setServiceType(workOrderData.serviceType || '');
@@ -251,7 +265,7 @@ export default function WorkOrderCreateScreen() {
   };
 
   const validateForm = (): boolean => {
-    if (!clientName.trim()) {
+    if (!clientId && !(isEditMode && clientName.trim())) {
       Alert.alert(t('common.error'), t('workOrders.fillRequiredFields') || 'Por favor, preencha todos os campos obrigatórios');
       return false;
     }
@@ -320,6 +334,7 @@ export default function WorkOrderCreateScreen() {
         // Update existing work order
         const updates: Partial<WorkOrder> = {
           clientName: clientName.trim(),
+          clientId,
           clientAddress: clientAddress.trim(),
           clientContact: clientContact.trim(),
           serviceType: serviceType as WorkOrderServiceType,
@@ -357,6 +372,7 @@ export default function WorkOrderCreateScreen() {
         // Create new work order
         const newWorkOrder: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'> = {
           clientName: clientName.trim(),
+          clientId,
           clientAddress: clientAddress.trim(),
           clientContact: clientContact.trim(),
           serviceType: serviceType as WorkOrderServiceType,
@@ -463,25 +479,32 @@ export default function WorkOrderCreateScreen() {
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + theme.spacing.md }]}
         >
           {/* 1. Client Info */}
-          <Input
+          <ClientAutocomplete
             label={t('workOrders.clientName') || 'Nome do Cliente'}
-            value={clientName}
-            onChangeText={setClientName}
+            clients={clients}
+            selectedClientId={clientId}
             placeholder={t('workOrders.clientNamePlaceholder') || 'Digite o nome do cliente'}
+            onSelectClient={(client) => {
+              setClientId(client.id);
+              setClientName(client.name);
+              setClientAddress(client.address || '');
+              setClientContact(client.contact || '');
+            }}
+            onManageClientsPress={() => router.push('/clients')}
           />
 
           <Input
             label={t('workOrders.clientContact') || 'Contato do Cliente'}
             value={clientContact}
-            onChangeText={setClientContact}
-            placeholder={t('workOrders.clientContactPlaceholder') || 'Telefone, email, etc.'}
+            editable={false}
+            placeholder="-"
           />
 
           <Input
             label={t('workOrders.clientAddress') || 'Endereço do Cliente'}
             value={clientAddress}
-            onChangeText={setClientAddress}
-            placeholder={t('workOrders.clientAddressPlaceholder') || 'Digite o endereço completo'}
+            editable={false}
+            placeholder="-"
             multiline
             numberOfLines={2}
           />
