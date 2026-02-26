@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useRouteParams } from '../src/hooks/use-route-params';
@@ -61,7 +62,7 @@ export default function ProductionCreateScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const { productionId } = useRouteParams<{ productionId: string }>('/production-create');
+  const { productionId, quickAttachmentAction } = useRouteParams<{ productionId: string; quickAttachmentAction?: string }>('/production-create');
   const goBack = useGoBack();
 
   const [orderNumber, setOrderNumber] = useState('');
@@ -86,6 +87,7 @@ export default function ProductionCreateScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isAutoOrderNumber, setIsAutoOrderNumber] = useState(false);
   const [loadingOrderNumber, setLoadingOrderNumber] = useState(false);
+  const [quickActionHandled, setQuickActionHandled] = useState(false);
 
   const isEditing = !!productionId;
 
@@ -253,8 +255,31 @@ export default function ProductionCreateScreen() {
   };
 
   const handleTakePhoto = async () => {
-    if (attachments.length >= MAX_ATTACHMENTS) {
+    const isQuickCameraFlow = isEditing && quickAttachmentAction === 'camera' && !!productionId;
+    let baseAttachments = attachments;
+
+    if (isQuickCameraFlow) {
+      try {
+        const latestProduction = await repos.productionRepo.getProductionById(productionId);
+        if (!latestProduction) {
+          Alert.alert(t('common.error'), t('production.updateStatusError') || 'Order not found');
+          safeBack(router);
+          return;
+        }
+        baseAttachments = latestProduction.attachments || [];
+      } catch (loadError) {
+        console.error('Error loading latest attachments for quick camera flow:', loadError);
+        Alert.alert(t('common.error'), t('production.addAttachmentError'));
+        safeBack(router);
+        return;
+      }
+    }
+
+    if (baseAttachments.length >= MAX_ATTACHMENTS) {
       Alert.alert(t('common.error'), t('production.maxAttachments'));
+      if (isQuickCameraFlow) {
+        safeBack(router);
+      }
       return;
     }
     try {
@@ -283,6 +308,30 @@ export default function ProductionCreateScreen() {
         storagePath: asset.uri,
         createdAt: new Date().toISOString(),
       };
+      const nextAttachments = [...baseAttachments, newAttachment];
+
+      if (isQuickCameraFlow) {
+        try {
+          setIsCreating(true);
+          await repos.productionRepo.updateProduction(
+            productionId,
+            { attachments: nextAttachments },
+            user?.id
+          );
+          if (Platform.OS === 'web') {
+            window.alert(t('common.success') || 'Saved');
+          } else {
+            Alert.alert(t('common.success'), t('production.orderUpdated') || 'Order updated');
+          }
+          safeBack(router);
+          return;
+        } catch (saveError) {
+          console.error('Error saving quick camera attachment:', saveError);
+          Alert.alert(t('common.error'), t('production.addAttachmentError'));
+        } finally {
+          setIsCreating(false);
+        }
+      }
 
       setAttachments([...attachments, newAttachment]);
     } catch (error) {
@@ -393,6 +442,14 @@ export default function ProductionCreateScreen() {
   const handleRemoveAttachment = (id: string) => {
     setAttachments(attachments.filter((att) => att.id !== id));
   };
+
+  useEffect(() => {
+    if (!isEditing || quickActionHandled) return;
+    if (quickAttachmentAction !== 'camera') return;
+    if (isLoading) return;
+    setQuickActionHandled(true);
+    handleTakePhoto();
+  }, [isEditing, quickAttachmentAction, isLoading, quickActionHandled]);
 
   const showAlert = (title: string, message: string) => {
     if (Platform.OS === 'web') {
@@ -707,20 +764,49 @@ export default function ProductionCreateScreen() {
             </View>
           )}
 
-          {attachments.map((attachment) => (
-            <View
-              key={attachment.id}
-              style={[styles.attachmentCard, { backgroundColor: colors.cardBackground }]}
-            >
-              <Text style={[styles.attachmentName, { color: colors.text }]}>{attachment.filename}</Text>
-              <TouchableOpacity
-                onPress={() => handleRemoveAttachment(attachment.id)}
-                style={[styles.removeButton, { backgroundColor: colors.error + '20' }]}
-              >
-                <Ionicons name="close" size={20} color={colors.error} />
-              </TouchableOpacity>
+          {attachments.length > 0 && (
+            <View style={styles.attachmentGrid}>
+              {attachments.map((attachment) => {
+                const isImage = attachment.mimeType?.startsWith('image/');
+                const isPdf = attachment.mimeType === 'application/pdf';
+                return (
+                  <View
+                    key={attachment.id}
+                    style={[styles.attachmentThumbCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+                  >
+                    {isImage ? (
+                      <Image
+                        source={{ uri: attachment.storagePath }}
+                        style={styles.attachmentThumbImage}
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
+                      />
+                    ) : (
+                      <View style={[styles.attachmentThumbFallback, { backgroundColor: colors.backgroundSecondary }]}>
+                        <Ionicons
+                          name={isPdf ? 'document-text-outline' : 'videocam-outline'}
+                          size={24}
+                          color={colors.textSecondary}
+                        />
+                        <Text
+                          numberOfLines={2}
+                          style={[styles.attachmentThumbName, { color: colors.textSecondary }]}
+                        >
+                          {attachment.filename}
+                        </Text>
+                      </View>
+                    )}
+                    <TouchableOpacity
+                      onPress={() => handleRemoveAttachment(attachment.id)}
+                      style={[styles.removeFloatingButton, { backgroundColor: colors.error }]}
+                    >
+                      <Ionicons name="close" size={16} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
             </View>
-          ))}
+          )}
         </View>
 
         <View style={styles.buttonContainer}>
@@ -838,6 +924,46 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: theme.typography.fontSize.md,
     marginRight: theme.spacing.sm,
+  },
+  attachmentGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+  },
+  attachmentThumbCard: {
+    width: 110,
+    height: 110,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    overflow: 'hidden',
+    position: 'relative',
+    ...theme.shadows.sm,
+  },
+  attachmentThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  attachmentThumbFallback: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.xs,
+    gap: theme.spacing.xs,
+  },
+  attachmentThumbName: {
+    fontSize: theme.typography.fontSize.xs,
+    textAlign: 'center',
+  },
+  removeFloatingButton: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   autoOrderRow: {
     marginBottom: theme.spacing.md,

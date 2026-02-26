@@ -5,6 +5,7 @@ import {
     Alert,
     Dimensions,
     Image,
+    Linking,
     Modal,
     Platform,
     ScrollView,
@@ -14,6 +15,10 @@ import {
     TouchableWithoutFeedback,
     View
 } from 'react-native';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
+import * as IntentLauncher from 'expo-intent-launcher';
 import { formatDate as formatDateUtil, formatDateTime as formatDateTimeUtil } from '../src/utils/date-format';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DropdownOption } from '../src/components/shared/Dropdown';
@@ -26,9 +31,9 @@ import { useAuth } from '../src/store/auth-store';
 import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 import { theme } from '../src/theme';
 import { downloadAndOpenAttachment, getSignedUrlFromStorage } from '../src/utils/attachments';
-import { confirmDelete } from '../src/utils/confirm-dialog';
+import { confirmDelete, confirmDialog } from '../src/utils/confirm-dialog';
 import { pushWithParams } from '../src/utils/navigation';
-import { shareViaWhatsApp } from '../src/utils/share-links';
+import { generateHybridLinks, shareViaWhatsApp } from '../src/utils/share-links';
 import { useRouteParams } from '../src/hooks/use-route-params';
 import { GlassType, InventoryItem, PaintType, Production, ProductionStatus, ProductionStatusHistory, StructureType, User } from '../src/types';
 
@@ -520,13 +525,24 @@ export default function ProductionDetailScreen() {
       });
 
       await loadProduction();
-      Alert.alert(t('common.success'), t('production.workOrderLinkedSuccess'), [
-        {
-          text: t('production.openLinkedWorkOrder'),
-          onPress: () => pushWithParams(router, '/work-order-detail', { workOrderId: createdWorkOrder.id }),
-        },
-        { text: t('common.confirm') },
-      ]);
+      if (Platform.OS === 'web') {
+        confirmDialog(
+          t('common.success'),
+          `${t('production.workOrderLinkedSuccess')}\n\n${t('production.openLinkedWorkOrder')}?`,
+          () => pushWithParams(router, '/work-order-detail', { workOrderId: createdWorkOrder.id }),
+          undefined,
+          t('common.confirm'),
+          t('common.cancel')
+        );
+      } else {
+        Alert.alert(t('common.success'), t('production.workOrderLinkedSuccess'), [
+          {
+            text: t('production.openLinkedWorkOrder'),
+            onPress: () => pushWithParams(router, '/work-order-detail', { workOrderId: createdWorkOrder.id }),
+          },
+          { text: t('common.confirm') },
+        ]);
+      }
     } catch (error) {
       console.error('Error linking work order:', error);
       Alert.alert(t('common.error'), t('production.workOrderLinkedError'));
@@ -551,18 +567,15 @@ export default function ProductionDetailScreen() {
         setIsLinkingWorkOrder(false);
       }
     }
-    Alert.alert(
+    confirmDialog(
       t('production.linkWorkOrderConfirmTitle'),
       t('production.linkWorkOrderConfirmMessage'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('production.linkWorkOrderAction'),
-          onPress: () => {
-            linkWorkOrder();
-          },
-        },
-      ]
+      () => {
+        linkWorkOrder();
+      },
+      undefined,
+      t('production.linkWorkOrderAction'),
+      t('common.cancel')
     );
   };
 
@@ -580,10 +593,209 @@ export default function ProductionDetailScreen() {
 
   const handleShare = async () => {
     if (!productionId) return;
+    const orderNumber = production?.orderNumber || '';
+    const clientName = production?.clientName || '';
+    const shareTitle = `Production Order ${orderNumber} - ${clientName}`.trim();
     await shareViaWhatsApp(
       { entity: 'production', params: { productionId } },
-      `Production Order ${production?.orderNumber || ''}`.trim()
+      shareTitle
     );
+  };
+
+  const handlePrintLabel = async () => {
+    if (!productionId || !production) return;
+
+    try {
+      const { webUrl } = generateHybridLinks({
+        entity: 'production',
+        params: { productionId },
+      });
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(webUrl)}`;
+      const glassValue = production.items
+        .map((item) => glassItems.get(item.glassId)?.name || getGlassTypeLabel(item.glassType))
+        .filter(Boolean)
+        .join(', ') || '-';
+      const glassTypeValue = Array.from(
+        new Set(
+          production.items
+            .map((item) => getGlassTypeLabel(item.glassType))
+            .filter(Boolean)
+        )
+      ).join(', ') || '-';
+      const esc = (value: string) =>
+        value
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <title>${esc(`${production.clientName || 'Client'} - PO ${production.orderNumber || '-'}`)}</title>
+            <style>
+              @page { size: 297mm 185mm; margin: 8mm; }
+              html, body { width: 100%; height: auto; }
+              body {
+                margin: 0;
+                font-family: Arial, sans-serif;
+                color: #111;
+                background: #ffffff;
+              }
+              .sheet {
+                width: 281mm;
+                max-width: 100%;
+                margin: 0 auto;
+              }
+              .label {
+                width: 100%;
+                height: 169mm;
+                border: 1px solid #dbe3f0;
+                border-radius: 8px;
+                box-sizing: border-box;
+                padding: 0;
+                display: flex;
+                gap: 0;
+                align-items: stretch;
+                overflow: hidden;
+                background: #ffffff;
+              }
+              .left {
+                width: 70%;
+                min-width: 0;
+                padding: 18px 14px 16px 20px;
+              }
+              .topbar {
+                background: #000000;
+                color: #fff;
+                font-size: 30px;
+                font-weight: 700;
+                letter-spacing: 0.6px;
+                padding: 10px 20px;
+              }
+              .title-row {
+                display: none;
+              }
+              .title {
+                font-size: 40px;
+                font-weight: 700;
+                margin: 0;
+                color: #0b3c79;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+              }
+              .row {
+                font-size: 50px;
+                margin-bottom: 4px;
+                line-height: 1.12;
+                text-align: left;
+              }
+              .label-key { font-weight: 700; }
+              .row-value {
+                white-space: normal;
+                overflow-wrap: anywhere;
+                word-break: break-word;
+              }
+              .qr-wrap {
+                width: 30%;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: flex-start;
+                background: #ffffff;
+                border-left: 1px solid #dbe3f0;
+                padding: 16px 10px 10px;
+              }
+              .qr {
+                width: 96%;
+                max-width: 78mm;
+                aspect-ratio: 1 / 1;
+                object-fit: contain;
+                border: 1px solid #dbe3f0;
+                border-radius: 4px;
+                background: #fff;
+                padding: 5px;
+              }
+              .qr-caption {
+                margin-top: 8px;
+                font-size: 33px;
+                color: #5b6b86;
+                text-align: center;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="sheet">
+            <div class="label">
+              <div style="width:70%;min-width:0;display:flex;flex-direction:column;">
+                <div class="topbar">PO - Production Order ${esc(production.orderNumber || '-')}</div>
+                <div class="left">
+                <div class="row"><span class="label-key">Client:</span><span class="row-value">${esc(production.clientName || '-')}</span></div>
+                <div class="row"><span class="label-key">Order Type:</span><span class="row-value">${esc(getOrderTypeLabel(production.orderType) || '-')}</span></div>
+                <div class="row"><span class="label-key">Due Date:</span><span class="row-value">${esc(formatDate(production.dueDate) || '-')}</span></div>
+                <div class="row"><span class="label-key">Glass:</span><span class="row-value">${esc(glassValue)}</span></div>
+                <div class="row"><span class="label-key">Glass Type:</span><span class="row-value">${esc(glassTypeValue)}</span></div>
+                </div>
+              </div>
+              <div class="qr-wrap">
+                <img class="qr" src="${qrUrl}" alt="QR Code" />
+                <div class="qr-caption">Scan to open PO</div>
+              </div>
+            </div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const printWindow = window.open(url, '_blank', 'noopener,noreferrer');
+        if (printWindow) {
+          printWindow.onload = () => {
+            setTimeout(() => {
+              if (printWindow && !printWindow.closed) {
+                printWindow.focus();
+                printWindow.print();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+              }
+            }, 400);
+          };
+          return;
+        }
+      }
+
+      const { uri } = await Print.printToFileAsync({ html });
+      try {
+        if (Platform.OS === 'android') {
+          const contentUri = await FileSystemLegacy.getContentUriAsync(uri);
+          await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+            data: contentUri,
+            flags: 1,
+            type: 'application/pdf',
+          });
+        } else {
+          const canOpen = await Linking.canOpenURL(uri);
+          if (!canOpen) throw new Error('Cannot open PDF URI');
+          await Linking.openURL(uri);
+        }
+      } catch (openError) {
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri, {
+            mimeType: 'application/pdf',
+            dialogTitle: t('common.share') || 'Share',
+          });
+        } else {
+          Alert.alert(t('common.success') || 'Success', uri);
+        }
+      }
+    } catch (error) {
+      console.error('Error printing label:', error);
+      Alert.alert(t('common.error') || 'Error', t('inventory.reportGenerationError') || 'Could not generate label');
+    }
   };
 
   if (isLoading) {
@@ -732,9 +944,24 @@ export default function ProductionDetailScreen() {
 
         {production.attachments.length > 0 && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              {t('production.attachments')}
-            </Text>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                {t('production.attachments')}
+              </Text>
+              <TouchableOpacity
+                style={[styles.inlineIconButton, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary }]}
+                onPress={() => {
+                  if (!productionId) return;
+                  pushWithParams(router, '/production-create', {
+                    productionId: String(productionId),
+                    quickAttachmentAction: 'camera',
+                  });
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="camera-outline" size={16} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
             {/* Image thumbnails grid */}
             {production.attachments.some((a) => a.mimeType.startsWith('image/')) && (
               <View style={styles.thumbnailGrid}>
@@ -785,6 +1012,13 @@ export default function ProductionDetailScreen() {
             activeOpacity={0.7}
           >
             <Ionicons name="share-social-outline" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.iconButton, { backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border }]}
+            onPress={handlePrintLabel}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="print-outline" size={24} color={colors.text} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.iconButton, { backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border }]}
@@ -1029,6 +1263,20 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.fontWeight.bold,
     marginBottom: theme.spacing.md,
   },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  inlineIconButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: theme.spacing.md,
+  },
   itemCard: {
     padding: theme.spacing.md,
     borderRadius: theme.borderRadius.md,
@@ -1087,8 +1335,9 @@ const styles = StyleSheet.create({
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: theme.spacing.md,
+    gap: theme.spacing.xs,
     marginTop: theme.spacing.xl,
+    paddingHorizontal: theme.spacing.xs,
   },
   iconButton: {
     width: 48,

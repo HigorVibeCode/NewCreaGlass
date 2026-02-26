@@ -39,10 +39,8 @@ export const ClientAutocomplete: React.FC<ClientAutocompleteProps> = ({
 
   const filteredClients = useMemo(() => {
     const term = query.trim().toLowerCase();
-    if (!term) return clients.slice(0, 8);
-    return clients
-      .filter((client) => client.name.toLowerCase().includes(term))
-      .slice(0, 8);
+    if (!term) return clients;
+    return clients.filter((client) => client.name.toLowerCase().includes(term));
   }, [clients, query]);
 
   const handleSelect = (client: Client) => {
@@ -84,7 +82,11 @@ export const ClientAutocomplete: React.FC<ClientAutocompleteProps> = ({
           {filteredClients.length === 0 ? (
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{t('clients.empty')}</Text>
           ) : (
-            <ScrollView keyboardShouldPersistTaps="handled">
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+            >
               {filteredClients.map((item) => (
                 <TouchableOpacity
                   key={item.id}

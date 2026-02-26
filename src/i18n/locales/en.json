@@ -24,7 +24,8 @@
     "hello": "Hello",
     "select": "Select...",
     "unknownUser": "Unknown User",
-    "share": "Share"
+    "share": "Share",
+    "print": "Print"
   },
   "auth": {
     "login": "Login",

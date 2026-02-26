@@ -112,7 +112,7 @@ export default function InventoryGroupScreen() {
       | { type: 'new'; uri: string; isMain: boolean }
     >
   >([]);
-  const didOpenEditFromParam = useRef(false);
+  const lastProcessedEditItemId = useRef<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   // Declare loadItems first using useCallback
@@ -152,14 +152,18 @@ export default function InventoryGroupScreen() {
   }, [groupId, loadGroup, loadItems]);
 
   useEffect(() => {
-    if (groupId && editItemId && items.length > 0 && !didOpenEditFromParam.current) {
-      const item = items.find((i) => i.id === editItemId);
-      if (item) {
-        didOpenEditFromParam.current = true;
-        handleEditItem(item);
-        router.replace({ pathname: '/inventory-group', params: { groupId } });
-      }
+    if (!editItemId) {
+      lastProcessedEditItemId.current = null;
+      return;
     }
+    if (!groupId || items.length === 0) return;
+    if (lastProcessedEditItemId.current === editItemId) return;
+
+    const item = items.find((i) => i.id === editItemId);
+    if (!item) return;
+
+    lastProcessedEditItemId.current = editItemId;
+    handleEditItem(item);
   }, [groupId, editItemId, items]);
 
   useFocusEffect(
@@ -642,24 +646,6 @@ export default function InventoryGroupScreen() {
                           </Text>
                         )}
                       </View>
-                      <View style={styles.itemHeaderRight}>
-                        <PermissionGuard permission="inventory.item.adjustStock">
-                          <TouchableOpacity
-                            style={[styles.calculatorButton, { backgroundColor: colors.success + '20' }]}
-                            onPress={() => pushWithParams(router, '/inventory-stock-count', { itemId: item.id })}
-                          >
-                            <Ionicons name="calculator" size={20} color={colors.success} />
-                          </TouchableOpacity>
-                        </PermissionGuard>
-                        <PermissionGuard permission="inventory.item.update">
-                          <TouchableOpacity
-                            style={[styles.editButton, { backgroundColor: colors.textTertiary + '20' }]}
-                            onPress={() => handleEditItem(item)}
-                          >
-                            <Ionicons name="create" size={20} color={colors.textTertiary} />
-                          </TouchableOpacity>
-                        </PermissionGuard>
-                      </View>
                     </View>
                     
                     {isGlassGroup ? (
@@ -800,6 +786,7 @@ export default function InventoryGroupScreen() {
                         options={[
                           { label: '3S', value: '3S' },
                           { label: 'Crea Glass', value: 'Crea Glass' },
+                          { label: 'Kromatix', value: 'Kromatix' },
                         ]}
                         onSelect={setSupplier}
                       />
@@ -1090,25 +1077,6 @@ const styles = StyleSheet.create({
   },
   itemHeaderLeft: {
     flex: 1,
-  },
-  itemHeaderRight: {
-    flexDirection: 'row',
-    gap: theme.spacing.xs,
-    marginLeft: theme.spacing.sm,
-  },
-  calculatorButton: {
-    width: 36,
-    height: 36,
-    borderRadius: theme.borderRadius.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  editButton: {
-    width: 36,
-    height: 36,
-    borderRadius: theme.borderRadius.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   itemName: {
     fontSize: theme.typography.fontSize.md,

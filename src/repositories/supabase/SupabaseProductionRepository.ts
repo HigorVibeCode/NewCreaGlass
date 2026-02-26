@@ -223,16 +223,34 @@ export class SupabaseProductionRepository implements ProductionRepository {
 
     const previousStatus = currentProduction.status;
 
-    const { data, error } = await supabase
-      .from('productions')
-      .update(updateData)
-      .eq('id', productionId)
-      .select()
-      .single();
+    let data: any;
+    if (Object.keys(updateData).length > 0) {
+      const { data: updatedData, error } = await supabase
+        .from('productions')
+        .update(updateData)
+        .eq('id', productionId)
+        .select()
+        .single();
 
-    if (error) {
-      console.error('Error updating production:', error);
-      throw new Error('Failed to update production');
+      if (error) {
+        console.error('Error updating production:', error);
+        throw new Error('Failed to update production');
+      }
+      data = updatedData;
+    } else {
+      // When only related entities (e.g. attachments) are being updated,
+      // skip base table update and reuse current row data.
+      const { data: currentData, error } = await supabase
+        .from('productions')
+        .select('*')
+        .eq('id', productionId)
+        .single();
+
+      if (error || !currentData) {
+        console.error('Error loading production for related update:', error);
+        throw new Error('Failed to update production');
+      }
+      data = currentData;
     }
 
     // Update items if provided

@@ -21,7 +21,8 @@
     "yes": "Sim",
     "no": "Não",
     "select": "Selecionar...",
-    "share": "Compartilhar"
+    "share": "Compartilhar",
+    "print": "Imprimir"
   },
   "auth": {
     "login": "Login",
@@ -905,7 +906,8 @@
     "select": "Selecionar...",
     "actionCannotBeUndone": "Esta ação não pode ser desfeita.",
     "areYouSure": "Tem certeza?",
-    "ok": "OK"
+    "ok": "OK",
+    "print": "Imprimir"
   },
   "analytics": {
     "title": "Analytics",

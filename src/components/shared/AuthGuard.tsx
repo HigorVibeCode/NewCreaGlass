@@ -217,6 +217,13 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
 
   const navigateSafely = (route: string) => {
     if (isNavigatingRef.current) return;
+    const currentPath = `/${segments.join('/')}`;
+    if (currentPath === route) {
+      if (!webRouteResolved) {
+        setWebRouteResolved(true);
+      }
+      return;
+    }
     isNavigatingRef.current = true;
 
     try {

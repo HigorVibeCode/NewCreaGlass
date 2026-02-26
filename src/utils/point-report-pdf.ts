@@ -6,6 +6,8 @@ export interface DayRow {
   dateLabel: string;
   entrada: string;
   saida: string;
+  entradaSource: string;
+  saidaSource: string;
   totalDay: string;
   local: string;
   incomplete: boolean;
@@ -46,6 +48,15 @@ function formatTime(iso: string): string {
 
 function formatDateLabel(iso: string): string {
   return formatDateCentral(iso);
+}
+
+function getMarkingSource(entry?: TimeEntry): string {
+  if (!entry) return '—';
+  const location = (entry.locationAddress || '').trim().toLowerCase();
+  if (location.includes('autom') || location.includes('auto')) {
+    return 'Automatic';
+  }
+  return 'Manual';
 }
 
 /** Formata duração em minutos como HH:MM (horas e minutos inteiros). */
@@ -100,6 +111,8 @@ export function buildDayRows(entries: TimeEntry[]): DayRow[] {
       const clockOut = dayEntries.find((e) => e.entryType === 'clock_out');
       const entradaTime = clockIn ? formatTime(getEffectiveRecordedAt(clockIn)) : INCOMPLETE;
       const saidaTime = clockOut ? formatTime(getEffectiveRecordedAt(clockOut)) : INCOMPLETE;
+      const entradaSource = getMarkingSource(clockIn);
+      const saidaSource = getMarkingSource(clockOut);
       const incomplete = !clockIn || !clockOut;
 
       // Dedução fixa: 15 min se café ativado, 45 min se almoço ativado
@@ -122,6 +135,8 @@ export function buildDayRows(entries: TimeEntry[]): DayRow[] {
         dateLabel,
         entrada: entradaTime,
         saida: saidaTime,
+        entradaSource,
+        saidaSource,
         totalDay: incomplete ? INCOMPLETE : minutesToHoursLabel(totalMinutes),
         local,
         incomplete,
@@ -138,6 +153,8 @@ export function buildDayRows(entries: TimeEntry[]): DayRow[] {
           dateLabel,
           entrada,
           saida: INCOMPLETE,
+          entradaSource: getMarkingSource(first),
+          saidaSource: '—',
           totalDay: INCOMPLETE,
           local,
           incomplete: true,
@@ -168,6 +185,8 @@ export function buildDayRows(entries: TimeEntry[]): DayRow[] {
         dateLabel,
         entrada,
         saida: invalid ? INCOMPLETE : lastTime,
+        entradaSource: getMarkingSource(first),
+        saidaSource: invalid ? '—' : getMarkingSource(dayEntries[dayEntries.length - 1]),
         totalDay: invalid ? INCOMPLETE : minutesToHoursLabel(safeTotal),
         local,
         incomplete: invalid,
@@ -225,8 +244,8 @@ export function buildPointReportHtml(options: {
       (r) => `
     <tr>
       <td style="padding:6px 8px;border:1px solid #ddd;">${escapeHtml(r.dateLabel)}${r.adjusted ? ' (ADJUSTED)' : ''}</td>
-      <td style="padding:6px 8px;border:1px solid #ddd;">${escapeHtml(r.entrada)}</td>
-      <td style="padding:6px 8px;border:1px solid #ddd;">${escapeHtml(r.saida)}</td>
+      <td style="padding:6px 8px;border:1px solid #ddd;">${escapeHtml(r.entrada)}${r.entrada !== INCOMPLETE ? ` - ${r.entradaSource === 'Automatic' ? 'AUT' : 'MAN'}` : ''}</td>
+      <td style="padding:6px 8px;border:1px solid #ddd;">${escapeHtml(r.saida)}${r.saida !== INCOMPLETE ? ` - ${r.saidaSource === 'Automatic' ? 'AUT' : 'MAN'}` : ''}</td>
       <td style="padding:6px 8px;border:1px solid #ddd;">${escapeHtml(r.totalDay)}</td>
       <td style="padding:6px 8px;border:1px solid #ddd;font-size:11px;">${escapeHtml(r.local)}</td>
       <td style="padding:6px 8px;border:1px solid #ddd;font-size:11px;">${escapeHtml(r.adjustDescription ?? '-')}</td>

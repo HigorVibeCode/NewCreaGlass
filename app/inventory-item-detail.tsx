@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Linking,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useRouteParams } from '../src/hooks/use-route-params';
@@ -20,10 +22,14 @@ import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { PermissionGuard } from '../src/components/shared/PermissionGuard';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
-import { useGoBack, safeBack } from '../src/hooks/use-go-back';
+import { useGoBack } from '../src/hooks/use-go-back';
 import { prefetchSignedUrls } from '../src/utils/signed-url-cache';
 import { pushWithParams } from '../src/utils/navigation';
-import { shareViaWhatsApp } from '../src/utils/share-links';
+import { generateHybridLinks, shareViaWhatsApp } from '../src/utils/share-links';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
+import * as IntentLauncher from 'expo-intent-launcher';
 
 function DetailImage({ storagePath }: { storagePath: string }) {
   const colors = useThemeColors();
@@ -90,10 +96,15 @@ export default function InventoryItemDetailScreen() {
   const isSupplies = !isGlass && (item?.images?.length || item?.position != null || item?.color != null);
 
   const handleEdit = () => {
-    if (!groupId || !item) return;
-    router.replace({
-      pathname: '/inventory-group',
-      params: { groupId, editItemId: item.id },
+    if (!item) return;
+    const targetGroupId = groupId || item.groupId;
+    if (!targetGroupId) {
+      Alert.alert(t('common.error'), t('inventory.loadItemError'));
+      return;
+    }
+    pushWithParams(router, '/inventory-group', {
+      groupId: String(targetGroupId),
+      editItemId: item.id,
     });
   };
 
@@ -103,6 +114,170 @@ export default function InventoryItemDetailScreen() {
       { entity: 'inventoryItem', params: { itemId, groupId } },
       `Inventory Item ${item?.name || ''}`.trim()
     );
+  };
+
+  const handlePrintLabel = async () => {
+    if (!itemId || !groupId || !item) return;
+    try {
+      const { webUrl } = generateHybridLinks({
+        entity: 'inventoryItem',
+        params: { itemId, groupId },
+      });
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(webUrl)}`;
+      const esc = (value: string) =>
+        value
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+
+      const itemType = isGlass ? 'Glass' : isSupplies ? 'Supplies' : 'Profiles';
+      const subtitle = `Group: ${itemType}`;
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <style>
+              @page { size: 297mm 145mm; margin: 8mm; }
+              html, body { width: 100%; height: auto; }
+              body { margin: 0; font-family: Arial, sans-serif; color: #111; background: #fff; }
+              .sheet { width: 281mm; max-width: 100%; margin: 0 auto; }
+              .label {
+                width: 100%;
+                height: 129mm;
+                border: 1px solid #dbe3f0;
+                border-radius: 8px;
+                box-sizing: border-box;
+                display: flex;
+                overflow: hidden;
+                background: #fff;
+              }
+              .left-wrap { width: 70%; min-width: 0; display: flex; flex-direction: column; }
+              .topbar {
+                background: #000;
+                color: #fff;
+                font-size: 30px;
+                font-weight: 700;
+                letter-spacing: 0.4px;
+                padding: 10px 20px;
+              }
+              .left {
+                width: 100%;
+                min-width: 0;
+                padding: 18px 20px 16px;
+                box-sizing: border-box;
+              }
+              .item-name {
+                font-size: 70px;
+                line-height: 1.02;
+                font-weight: 800;
+                margin: 0 0 10px 0;
+                word-break: break-word;
+              }
+              .meta {
+                font-size: 36px;
+                color: #222;
+                margin: 0;
+                line-height: 1.15;
+                word-break: break-word;
+              }
+              .qr-wrap {
+                width: 30%;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: flex-start;
+                background: #fff;
+                border-left: 1px solid #dbe3f0;
+                padding: 16px 10px 10px;
+                box-sizing: border-box;
+              }
+              .qr {
+                width: 96%;
+                max-width: 78mm;
+                aspect-ratio: 1 / 1;
+                object-fit: contain;
+                border: 1px solid #dbe3f0;
+                border-radius: 4px;
+                background: #fff;
+                padding: 5px;
+              }
+              .qr-caption {
+                margin-top: 8px;
+                font-size: 33px;
+                color: #5b6b86;
+                text-align: center;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="sheet">
+              <div class="label">
+                <div class="left-wrap">
+                  <div class="topbar">Inventory Item Label</div>
+                  <div class="left">
+                    <p class="item-name">${esc(item.name || '-')}</p>
+                    <p class="meta">${esc(subtitle)}</p>
+                  </div>
+                </div>
+                <div class="qr-wrap">
+                  <img class="qr" src="${qrUrl}" alt="QR Code" />
+                  <div class="qr-caption">Scan to open item</div>
+                </div>
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const printWindow = window.open(url, '_blank', 'noopener,noreferrer');
+        if (printWindow) {
+          printWindow.onload = () => {
+            setTimeout(() => {
+              if (printWindow && !printWindow.closed) {
+                printWindow.focus();
+                printWindow.print();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+              }
+            }, 400);
+          };
+          return;
+        }
+      }
+
+      const { uri } = await Print.printToFileAsync({ html });
+      try {
+        if (Platform.OS === 'android') {
+          const contentUri = await FileSystemLegacy.getContentUriAsync(uri);
+          await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+            data: contentUri,
+            flags: 1,
+            type: 'application/pdf',
+          });
+        } else {
+          const canOpen = await Linking.canOpenURL(uri);
+          if (!canOpen) throw new Error('Cannot open PDF URI');
+          await Linking.openURL(uri);
+        }
+      } catch {
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri, {
+            mimeType: 'application/pdf',
+            dialogTitle: t('common.share') || 'Share',
+          });
+        } else {
+          Alert.alert(t('common.success') || 'Success', uri);
+        }
+      }
+    } catch (error) {
+      console.error('Error printing inventory label:', error);
+      Alert.alert(t('common.error') || 'Error', 'Could not generate item label');
+    }
   };
 
   if (isLoading) {
@@ -258,6 +433,14 @@ export default function InventoryItemDetailScreen() {
             >
               <Ionicons name="share-social-outline" size={24} color={colors.text} />
               <Text style={[styles.actionButtonText, { color: colors.text }]}>{t('common.share')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
+              onPress={handlePrintLabel}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="print-outline" size={24} color={colors.text} />
+              <Text style={[styles.actionButtonText, { color: colors.text }]}>{t('common.print')}</Text>
             </TouchableOpacity>
             <PermissionGuard permission="inventory.item.adjustStock">
               <TouchableOpacity

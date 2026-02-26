@@ -430,12 +430,15 @@ export default function InventoryScreen() {
           <style>
             @page {
               size: A4 landscape;
-              margin: 10mm;
+              margin: 14mm;
             }
             body {
               font-family: Arial, sans-serif;
               margin: 0;
               color: #333;
+            }
+            .page {
+              padding: 0 4mm;
             }
             .header {
               border-bottom: 3px solid #0066cc;
@@ -476,18 +479,21 @@ export default function InventoryScreen() {
             }
             .info-row {
               display: flex;
-              justify-content: space-between;
+              justify-content: flex-start;
+              align-items: baseline;
+              gap: 8px;
               margin-bottom: 8px;
               font-size: 12px;
             }
             .info-label {
               font-weight: bold;
               color: #555;
+              min-width: 120px;
             }
             table {
               width: 100%;
               border-collapse: collapse;
-              margin-top: 20px;
+              margin-top: 12px;
               font-size: 10px;
               table-layout: fixed;
             }
@@ -524,6 +530,7 @@ export default function InventoryScreen() {
           </style>
         </head>
         <body>
+          <div class="page">
           <div class="header">
             <div class="header-left">
               <h1>${t('inventory.inventoryReport')}</h1>
@@ -572,6 +579,7 @@ export default function InventoryScreen() {
           <div class="footer">
             <p>${t('inventory.reportGeneratedBy')} Crea Glass System</p>
             <p>${t('inventory.reportId')}: ${reportId}</p>
+          </div>
           </div>
         </body>
       </html>

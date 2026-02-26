@@ -172,8 +172,9 @@ async function showWebCopyDialog(link: string): Promise<void> {
 export async function shareViaWhatsApp(config: ShareLinkConfig, title?: string) {
   const { webUrl, deepLink } = generateHybridLinks(config);
   const shareTitle = title || 'Open item';
-  // WhatsApp reliably detects clickable links when using HTTPS URLs.
-  const text = `${webUrl}\n\n*${shareTitle}*`;
+  // Production-first: share canonical HTTPS URL so Universal/App Links can open app directly.
+  const text =
+    `${webUrl}\n\n*${shareTitle}*`;
 
   if (Platform.OS === 'web') {
     // Web: show simple dialog with the link + copy + OK
