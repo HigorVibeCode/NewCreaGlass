@@ -4,23 +4,36 @@ import { supabase } from '../../services/supabase';
 
 export class SupabaseClientsRepository implements ClientsRepository {
   async getAllClients(search?: string): Promise<Client[]> {
-    let query = supabase
-      .from('clients')
-      .select('*')
-      .eq('is_active', true)
-      .order('name', { ascending: true });
+    const pageSize = 1000;
+    const allRows: any[] = [];
+    let from = 0;
+    let hasMore = true;
 
-    if (search && search.trim()) {
-      query = query.ilike('name', `%${search.trim()}%`);
+    while (hasMore) {
+      let query = supabase
+        .from('clients')
+        .select('*')
+        .eq('is_active', true)
+        .order('name', { ascending: true })
+        .range(from, from + pageSize - 1);
+
+      if (search && search.trim()) {
+        query = query.ilike('name', `%${search.trim()}%`);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        console.error('Error fetching clients:', error);
+        throw new Error('Failed to fetch clients');
+      }
+
+      const chunk = data || [];
+      allRows.push(...chunk);
+      hasMore = chunk.length === pageSize;
+      from += pageSize;
     }
 
-    const { data, error } = await query;
-    if (error) {
-      console.error('Error fetching clients:', error);
-      throw new Error('Failed to fetch clients');
-    }
-
-    return (data || []).map(this.mapToClient);
+    return allRows.map(this.mapToClient);
   }
 
   async getClientById(clientId: string): Promise<Client | null> {

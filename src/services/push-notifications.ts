@@ -303,6 +303,14 @@ export class PushNotificationService {
       return `/event-detail?eventId=${payloadJson.eventId}`;
     }
 
+    if (type === 'event.reminder24h' && payloadJson.eventId) {
+      return `/event-detail?eventId=${payloadJson.eventId}`;
+    }
+
+    if (type === 'workOrder.reminder24h' && payloadJson.workOrderId) {
+      return `/work-order-detail?workOrderId=${payloadJson.workOrderId}`;
+    }
+
     // Default: go to notifications screen
     return '/notifications';
   }
@@ -469,6 +477,18 @@ export class PushNotificationService {
           body: `Novo evento criado${dateText ? ` - ${dateText}` : ''}`,
         };
       }
+
+      case 'event.reminder24h':
+        return {
+          title: 'Lembrete de Evento',
+          body: payloadJson.reminderLabel || 'Tomorrow',
+        };
+
+      case 'workOrder.reminder24h':
+        return {
+          title: 'Lembrete de Ordem de Serviço',
+          body: payloadJson.reminderLabel || 'Tomorrow',
+        };
       
       default:
         return {

@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { repos } from '../services/container';
-import { Production, ProductionStatus, ProductionStatusHistory, GlassType, Event, InventoryGroup, InventoryItem } from '../types';
+import { Production, ProductionStatus, ProductionStatusHistory, GlassType, Event, InventoryGroup, InventoryItem, Client } from '../types';
 
 export interface AnalyticsData {
+  clients: Client[];
   productions: Production[];
   statusHistories: Map<string, ProductionStatusHistory[]>;
   events: Event[];
@@ -46,6 +47,7 @@ const STATUS_GROUP_COLORS: Record<string, string> = {
 };
 
 export function useAnalyticsData(): AnalyticsData {
+  const [clients, setClients] = useState<Client[]>([]);
   const [productions, setProductions] = useState<Production[]>([]);
   const [statusHistories, setStatusHistories] = useState<Map<string, ProductionStatusHistory[]>>(new Map());
   const [events, setEvents] = useState<Event[]>([]);
@@ -59,7 +61,8 @@ export function useAnalyticsData(): AnalyticsData {
     setIsLoading(true);
     setError(null);
     try {
-      const [allProds, allEvents, allWorkOrders, allGroups, allItems] = await Promise.all([
+      const [allClients, allProds, allEvents, allWorkOrders, allGroups, allItems] = await Promise.all([
+        repos.clientsRepo.getAllClients().catch(() => [] as Client[]),
         repos.productionRepo.getAllProductions(),
         repos.eventsRepo.getAllEvents().catch(() => [] as Event[]),
         repos.workOrdersRepo.getAllWorkOrders().catch(() => [] as any[]),
@@ -67,6 +70,7 @@ export function useAnalyticsData(): AnalyticsData {
         repos.inventoryRepo.getAllItems().catch(() => [] as InventoryItem[]),
       ]);
 
+      setClients(allClients);
       setProductions(allProds);
       setEvents(allEvents);
       setWorkOrders(allWorkOrders);
@@ -93,7 +97,7 @@ export function useAnalyticsData(): AnalyticsData {
 
   useEffect(() => { load(); }, [load]);
 
-  return { productions, statusHistories, events, workOrders, inventoryGroups, inventoryItems, isLoading, error, reload: load };
+  return { clients, productions, statusHistories, events, workOrders, inventoryGroups, inventoryItems, isLoading, error, reload: load };
 }
 
 // --- Derived metrics helpers ---
@@ -539,4 +543,136 @@ export function getReworkRate(productions: Production[]) {
       rate: data.total > 0 ? Math.round((data.issues / data.total) * 100) : 0,
     })),
   };
+}
+
+// --- Clients analytics ---
+
+function normalizeText(value?: string | null): string {
+  return (value || '').trim().toLowerCase();
+}
+
+function getClientIdentifier(entity: { clientId?: string; clientName?: string }): string {
+  return entity.clientId || `name:${normalizeText(entity.clientName)}`;
+}
+
+function getClientLastActivityIso(
+  client: Client,
+  productions: Production[],
+  workOrders: any[]
+): string | null {
+  let latest = 0;
+  for (const p of productions) {
+    const matchById = !!client.id && p.clientId === client.id;
+    const matchByName = normalizeText(p.clientName) === normalizeText(client.name);
+    if (matchById || matchByName) {
+      const ts = new Date(p.createdAt).getTime();
+      if (!isNaN(ts) && ts > latest) latest = ts;
+    }
+  }
+  for (const wo of workOrders) {
+    const matchById = !!client.id && wo.clientId === client.id;
+    const matchByName = normalizeText(wo.clientName) === normalizeText(client.name);
+    if (matchById || matchByName) {
+      const ts = new Date(wo.createdAt || wo.updatedAt || wo.scheduledDate || 0).getTime();
+      if (!isNaN(ts) && ts > latest) latest = ts;
+    }
+  }
+  return latest > 0 ? new Date(latest).toISOString() : null;
+}
+
+export function getClientsOverview(clients: Client[], productions: Production[], workOrders: any[]) {
+  const usedClients = new Set<string>();
+  for (const p of productions) usedClients.add(getClientIdentifier({ clientId: p.clientId, clientName: p.clientName }));
+  for (const wo of workOrders) usedClients.add(getClientIdentifier({ clientId: wo.clientId, clientName: wo.clientName }));
+
+  const withActivity = clients.filter((c) => {
+    const idKey = c.id;
+    const nameKey = `name:${normalizeText(c.name)}`;
+    return usedClients.has(idKey) || usedClients.has(nameKey);
+  });
+
+  const withoutActivity = clients.filter((c) => !withActivity.includes(c));
+  const withContact = clients.filter((c) => !!c.contact?.trim()).length;
+  const withAddress = clients.filter((c) => !!c.address?.trim()).length;
+
+  return {
+    total: clients.length,
+    withActivity: withActivity.length,
+    withoutActivity: withoutActivity.length,
+    withContact,
+    withAddress,
+  };
+}
+
+export function getClientEngagement(clients: Client[], productions: Production[], workOrders: any[], limit: number = 10) {
+  const map = new Map<string, { client: Client; productionCount: number; workOrderCount: number; lastActivityIso: string | null }>();
+
+  for (const client of clients) {
+    map.set(client.id, {
+      client,
+      productionCount: 0,
+      workOrderCount: 0,
+      lastActivityIso: null,
+    });
+  }
+
+  for (const p of productions) {
+    const client = clients.find((c) => (p.clientId && c.id === p.clientId) || normalizeText(c.name) === normalizeText(p.clientName));
+    if (!client) continue;
+    const entry = map.get(client.id);
+    if (!entry) continue;
+    entry.productionCount += 1;
+    const ts = new Date(p.createdAt).toISOString();
+    if (!entry.lastActivityIso || new Date(ts) > new Date(entry.lastActivityIso)) entry.lastActivityIso = ts;
+  }
+
+  for (const wo of workOrders) {
+    const client = clients.find((c) => (wo.clientId && c.id === wo.clientId) || normalizeText(c.name) === normalizeText(wo.clientName));
+    if (!client) continue;
+    const entry = map.get(client.id);
+    if (!entry) continue;
+    entry.workOrderCount += 1;
+    const dateRef = wo.createdAt || wo.updatedAt || wo.scheduledDate || new Date().toISOString();
+    const ts = new Date(dateRef).toISOString();
+    if (!entry.lastActivityIso || new Date(ts) > new Date(entry.lastActivityIso)) entry.lastActivityIso = ts;
+  }
+
+  return Array.from(map.values())
+    .map((e) => ({
+      id: e.client.id,
+      name: e.client.name,
+      productionCount: e.productionCount,
+      workOrderCount: e.workOrderCount,
+      total: e.productionCount + e.workOrderCount,
+      lastActivityIso: e.lastActivityIso,
+    }))
+    .filter((e) => e.total > 0)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, limit);
+}
+
+export function getInactiveClients(clients: Client[], productions: Production[], workOrders: any[], inactivityDays: number = 30) {
+  const now = Date.now();
+  const cutoff = now - inactivityDays * 24 * 60 * 60 * 1000;
+  const result: { id: string; name: string; lastActivityIso: string | null; daysWithoutActivity: number | null }[] = [];
+
+  for (const client of clients) {
+    const last = getClientLastActivityIso(client, productions, workOrders);
+    if (!last) {
+      result.push({ id: client.id, name: client.name, lastActivityIso: null, daysWithoutActivity: null });
+      continue;
+    }
+    const lastMs = new Date(last).getTime();
+    if (isNaN(lastMs)) continue;
+    if (lastMs <= cutoff) {
+      const days = Math.floor((now - lastMs) / 86400000);
+      result.push({ id: client.id, name: client.name, lastActivityIso: last, daysWithoutActivity: days });
+    }
+  }
+
+  return result.sort((a, b) => {
+    const aDays = a.daysWithoutActivity ?? 999999;
+    const bDays = b.daysWithoutActivity ?? 999999;
+    return bDays - aDays;
+  });
 }

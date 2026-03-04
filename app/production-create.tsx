@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useRouteParams } from '../src/hooks/use-route-params';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -579,6 +579,41 @@ export default function ProductionCreateScreen() {
       ]
     : [{ label: t('common.select'), value: '' }];
 
+  const lowStockGlassIds = useMemo(
+    () =>
+      new Set(
+        glassItems
+          .filter((item) => item.lowStockThreshold > 0 && item.stock <= item.lowStockThreshold)
+          .map((item) => item.id)
+      ),
+    [glassItems]
+  );
+
+  const selectedGlassItem = useMemo(
+    () => glassItems.find((item) => item.id === productionItem.glassId) || null,
+    [glassItems, productionItem.glassId]
+  );
+
+  const isSelectedGlassLowStock = !!selectedGlassItem && selectedGlassItem.lowStockThreshold > 0 && selectedGlassItem.stock <= selectedGlassItem.lowStockThreshold;
+
+  const handleSelectGlass = useCallback(
+    (glassId: string) => {
+      handleUpdateItem('glassId', glassId);
+      const selected = glassItems.find((item) => item.id === glassId);
+      if (selected && selected.lowStockThreshold > 0 && selected.stock <= selected.lowStockThreshold) {
+        showAlert(
+          t('inventory.lowStock'),
+          t('production.lowStockSelectedWarning', {
+            itemName: selected.name,
+            stock: selected.stock,
+            threshold: selected.lowStockThreshold,
+          })
+        );
+      }
+    },
+    [glassItems, t]
+  );
+
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
@@ -683,8 +718,21 @@ export default function ProductionCreateScreen() {
               label={t('production.glass')}
               value={productionItem.glassId}
               options={glassOptions}
-              onSelect={(value) => handleUpdateItem('glassId', value)}
+              onSelect={handleSelectGlass}
+              getOptionTextColor={(option) => (lowStockGlassIds.has(option.value) ? colors.error : undefined)}
             />
+            {isSelectedGlassLowStock && selectedGlassItem && (
+              <View style={[styles.lowStockAlert, { backgroundColor: colors.error + '12', borderColor: colors.error + '55' }]}>
+                <Ionicons name="warning-outline" size={16} color={colors.error} />
+                <Text style={[styles.lowStockAlertText, { color: colors.error }]}>
+                  {t('production.lowStockSelectedWarning', {
+                    itemName: selectedGlassItem.name,
+                    stock: selectedGlassItem.stock,
+                    threshold: selectedGlassItem.lowStockThreshold,
+                  })}
+                </Text>
+              </View>
+            )}
 
             <Dropdown
               label={t('production.glassType')}
@@ -903,6 +951,22 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.md,
     marginBottom: theme.spacing.md,
     ...theme.shadows.sm,
+  },
+  lowStockAlert: {
+    marginTop: -theme.spacing.md,
+    marginBottom: theme.spacing.md,
+    borderRadius: theme.borderRadius.sm,
+    borderWidth: 1,
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  lowStockAlertText: {
+    flex: 1,
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
   removeButton: {
     width: 32,

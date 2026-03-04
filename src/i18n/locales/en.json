@@ -116,6 +116,8 @@
     "totalHours": "Total",
     "adjustClockIn": "Adjust clock in",
     "adjustClockOut": "Adjust clock out",
+    "adjustCoffeeTime": "Adjust coffee time",
+    "adjustLunchTime": "Adjust lunch time",
     "coffeePause": "Coffee Break",
     "lunchPause": "Lunch Break",
     "coffeePauseActive": "Coffee break in progress",
@@ -394,6 +396,7 @@
     "createOrderError": "Failed to create order",
     "orderCreated": "Order created successfully",
     "loadGlassItemsError": "Failed to load glass items",
+    "lowStockSelectedWarning": "{{itemName}} is low on stock ({{stock}} / minimum {{threshold}}).",
     "addAttachmentError": "Failed to add attachment",
     "deleteOrderConfirm": "Are you sure you want to delete this production order?",
     "orderDeleted": "Order deleted successfully",
@@ -980,7 +983,8 @@
       "production": "Production",
       "events": "Events",
       "workOrders": "Work Orders",
-      "inventory": "Inventory"
+      "inventory": "Inventory",
+      "clients": "Clients"
     },
     "charts": {
       "ordersPerWeek": "Orders per Week",
@@ -1008,7 +1012,27 @@
       "woByDay": { "title": "Work Orders by Day", "subtitle": "Starts, finishes and duration per day" },
       "invLowStock": { "title": "Low Stock Alerts", "subtitle": "Items below minimum threshold" },
       "invByGroup": { "title": "Stock by Group", "subtitle": "Inventory totals per group" },
-      "invSupplier": { "title": "Supplier Breakdown", "subtitle": "Items distribution by supplier" }
+      "invSupplier": { "title": "Supplier Breakdown", "subtitle": "Items distribution by supplier" },
+      "clientsOverview": { "title": "Clients Overview", "subtitle": "Total base, activity and profile completeness" },
+      "clientsEngagement": { "title": "Client Engagement", "subtitle": "Ranking by production orders and work orders" },
+      "clientsInactive": { "title": "Inactive Clients", "subtitle": "Clients with no recent activity or no history" }
+    },
+    "clientsMetrics": {
+      "total": "Total clients",
+      "withActivity": "With activity",
+      "withoutActivity": "Without activity",
+      "activityCoverage": "Activity coverage",
+      "dataQuality": "Profile quality",
+      "productionOrders": "Production orders",
+      "workOrders": "Work orders",
+      "period30": "30d",
+      "period60": "60d",
+      "period90": "90d",
+      "periodAll": "All",
+      "inactiveHint": "Inactive means {{days}}+ days without activity or no activity at all.",
+      "inactiveHintAll": "Shows clients without any recorded activity.",
+      "lastActivity": "Last activity",
+      "never": "Never"
     }
   }
 }

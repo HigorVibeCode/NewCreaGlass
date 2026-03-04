@@ -182,6 +182,22 @@ export function formatNotificationText(notification: Notification, t?: (key: str
       return dateText ? `${baseText} - ${dateText}` : baseText;
     }
 
+    case 'event.reminder24h':
+    case 'workOrder.reminder24h': {
+      if (payloadJson?.reminderLabel) {
+        return String(payloadJson.reminderLabel);
+      }
+      if (payloadJson?.scheduledTime && payloadJson?.clientName) {
+        const timeStr = String(payloadJson.scheduledTime).trim().split(':').slice(0, 2).join(':');
+        return `Tomorrow ${timeStr}h - ${payloadJson.clientName}`;
+      }
+      if (payloadJson?.startTime && payloadJson?.title) {
+        const timeStr = String(payloadJson.startTime).trim().split(':').slice(0, 2).join(':');
+        return `Tomorrow ${timeStr}h - ${payloadJson.title}`;
+      }
+      return type;
+    }
+
     case 'training.assigned': {
       const trainingTitle = payloadJson?.trainingTitle || 'Treinamento';
       return `${translate('notifications.trainingAssigned') || 'Novo Treinamento'}: ${trainingTitle}`;

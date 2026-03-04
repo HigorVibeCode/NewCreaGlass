@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, FlatList, Modal, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { Alert, FlatList, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
@@ -125,6 +125,24 @@ export default function ClientsScreen() {
     );
   };
 
+  const renderClientCard = (item: Client) => (
+    <View style={[styles.clientCard, { backgroundColor: colors.cardBackground }]}>
+      <View style={styles.clientInfo}>
+        <Text style={[styles.clientName, { color: colors.text }]}>{item.name}</Text>
+        {!!item.address && <Text style={[styles.clientMeta, { color: colors.textSecondary }]} numberOfLines={1}>{item.address}</Text>}
+        {!!item.contact && <Text style={[styles.clientMeta, { color: colors.textSecondary }]}>{item.contact}</Text>}
+      </View>
+      <View style={styles.cardActions}>
+        <TouchableOpacity onPress={() => openEditModal(item)}>
+          <Ionicons name="create-outline" size={20} color={colors.primary} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => handleDelete(item)}>
+          <Ionicons name="trash-outline" size={20} color={colors.error} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   return (
     <ScreenWrapper>
       <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border, paddingTop: insets.top + theme.spacing.md }]}>
@@ -157,29 +175,24 @@ export default function ClientsScreen() {
           </TouchableOpacity>
         </View>
 
-        <FlatList
-          data={filteredClients}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => (
-            <View style={[styles.clientCard, { backgroundColor: colors.cardBackground }]}>
-              <View style={styles.clientInfo}>
-                <Text style={[styles.clientName, { color: colors.text }]}>{item.name}</Text>
-                {!!item.address && <Text style={[styles.clientMeta, { color: colors.textSecondary }]} numberOfLines={1}>{item.address}</Text>}
-                {!!item.contact && <Text style={[styles.clientMeta, { color: colors.textSecondary }]}>{item.contact}</Text>}
-              </View>
-              <View style={styles.cardActions}>
-                <TouchableOpacity onPress={() => openEditModal(item)}>
-                  <Ionicons name="create-outline" size={20} color={colors.primary} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => handleDelete(item)}>
-                  <Ionicons name="trash-outline" size={20} color={colors.error} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-          ListEmptyComponent={<Text style={[styles.emptyText, { color: colors.textSecondary }]}>{t('clients.empty')}</Text>}
-        />
+        {Platform.OS === 'web' ? (
+          <ScrollView style={styles.webListScroll} contentContainerStyle={styles.listContent}>
+            {filteredClients.length === 0 ? (
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{t('clients.empty')}</Text>
+            ) : (
+              filteredClients.map((item) => <View key={item.id}>{renderClientCard(item)}</View>)
+            )}
+          </ScrollView>
+        ) : (
+          <FlatList
+            style={styles.mobileList}
+            data={filteredClients}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            renderItem={({ item }) => renderClientCard(item)}
+            ListEmptyComponent={<Text style={[styles.emptyText, { color: colors.textSecondary }]}>{t('clients.empty')}</Text>}
+          />
+        )}
       </View>
 
       <Modal
@@ -245,6 +258,8 @@ const styles = StyleSheet.create({
   },
   formActions: { flexDirection: 'row', gap: theme.spacing.sm },
   formButton: { flex: 1 },
+  mobileList: { flex: 1 },
+  webListScroll: { flex: 1 },
   listContent: { gap: theme.spacing.sm, paddingBottom: theme.spacing.xl },
   clientCard: { borderRadius: theme.borderRadius.md, padding: theme.spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', ...theme.shadows.sm },
   clientInfo: { flex: 1, marginRight: theme.spacing.md },

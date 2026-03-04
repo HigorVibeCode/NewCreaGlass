@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../theme';
 import { useThemeColors } from '../../hooks/use-theme-colors';
@@ -82,27 +82,48 @@ export const ClientAutocomplete: React.FC<ClientAutocompleteProps> = ({
           {filteredClients.length === 0 ? (
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{t('clients.empty')}</Text>
           ) : (
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              nestedScrollEnabled
-              showsVerticalScrollIndicator
-            >
-              {filteredClients.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[styles.resultItem, { borderBottomColor: colors.borderLight }]}
-                  onPress={() => handleSelect(item)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.resultTitle, { color: colors.text }]}>{item.name}</Text>
-                  {!!item.address && (
-                    <Text style={[styles.resultSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-                      {item.address}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            Platform.OS === 'web' ? (
+              <View style={styles.resultsWebScroll as any}>
+                {filteredClients.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[styles.resultItem, { borderBottomColor: colors.borderLight }]}
+                    onPress={() => handleSelect(item)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.resultTitle, { color: colors.text }]}>{item.name}</Text>
+                    {!!item.address && (
+                      <Text style={[styles.resultSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+                        {item.address}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : (
+              <ScrollView
+                style={styles.resultsScroll}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+                showsVerticalScrollIndicator
+              >
+                {filteredClients.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[styles.resultItem, { borderBottomColor: colors.borderLight }]}
+                    onPress={() => handleSelect(item)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.resultTitle, { color: colors.text }]}>{item.name}</Text>
+                    {!!item.address && (
+                      <Text style={[styles.resultSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+                        {item.address}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )
           )}
         </View>
       )}
@@ -146,8 +167,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: theme.borderRadius.md,
     marginTop: theme.spacing.xs,
+  },
+  resultsScroll: {
     maxHeight: 220,
-    overflow: 'hidden',
+  },
+  resultsWebScroll: {
+    maxHeight: 220,
+    overflowY: 'auto',
   },
   resultItem: {
     paddingHorizontal: theme.spacing.md,

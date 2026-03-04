@@ -72,6 +72,16 @@ const SECTIONS: Section[] = [
       { id: 'invSupplier', route: '/analytics-inv-supplier', icon: 'business-outline', iconColor: '#f59e0b', iconBgColor: '#fef3c7' },
     ],
   },
+  {
+    titleKey: 'analytics.sections.clients',
+    icon: 'people',
+    accentColor: '#ef4444',
+    reports: [
+      { id: 'clientsOverview', route: '/analytics-clients-overview', icon: 'people-outline', iconColor: '#ef4444', iconBgColor: '#fee2e2' },
+      { id: 'clientsEngagement', route: '/analytics-clients-engagement', icon: 'bar-chart-outline', iconColor: '#3b82f6', iconBgColor: '#dbeafe' },
+      { id: 'clientsInactive', route: '/analytics-clients-inactive', icon: 'time-outline', iconColor: '#f59e0b', iconBgColor: '#fef3c7' },
+    ],
+  },
 ];
 
 export default function AnalyticsScreen() {

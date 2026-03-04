@@ -113,6 +113,8 @@
     "totalHours": "Total",
     "adjustClockIn": "Ajustar entrada",
     "adjustClockOut": "Ajustar saída",
+    "adjustCoffeeTime": "Ajustar horário do café",
+    "adjustLunchTime": "Ajustar horário do almoço",
     "coffeePause": "Pausa Café",
     "lunchPause": "Pausa Almoço",
     "coffeePauseActive": "Pausa para café em andamento",
@@ -391,6 +393,7 @@
     "createOrderError": "Falha ao criar ordem",
     "orderCreated": "Ordem criada com sucesso",
     "loadGlassItemsError": "Falha ao carregar itens de vidro",
+    "lowStockSelectedWarning": "{{itemName}} está com estoque baixo ({{stock}} / mínimo {{threshold}}).",
     "addAttachmentError": "Falha ao adicionar anexo",
     "deleteOrderConfirm": "Tem certeza que deseja excluir esta ordem de produção?",
     "orderDeleted": "Ordem excluída com sucesso",
@@ -1003,7 +1006,8 @@
       "production": "Produção",
       "events": "Eventos",
       "workOrders": "Ordens de Serviço",
-      "inventory": "Inventário"
+      "inventory": "Inventário",
+      "clients": "Clientes"
     },
     "charts": {
       "ordersPerWeek": "Pedidos por Semana",
@@ -1031,7 +1035,27 @@
       "woByDay": { "title": "Work Orders por Dia", "subtitle": "Início, fim e duração por dia" },
       "invLowStock": { "title": "Alertas de Estoque", "subtitle": "Itens abaixo do mínimo" },
       "invByGroup": { "title": "Estoque por Grupo", "subtitle": "Totais de inventário por grupo" },
-      "invSupplier": { "title": "Por Fornecedor", "subtitle": "Distribuição de itens por fornecedor" }
+      "invSupplier": { "title": "Por Fornecedor", "subtitle": "Distribuição de itens por fornecedor" },
+      "clientsOverview": { "title": "Visão Geral de Clientes", "subtitle": "Base total, atividade e qualidade de cadastro" },
+      "clientsEngagement": { "title": "Engajamento de Clientes", "subtitle": "Ranking por pedidos de produção e ordens de serviço" },
+      "clientsInactive": { "title": "Clientes Inativos", "subtitle": "Clientes sem atividade recente ou sem histórico" }
+    },
+    "clientsMetrics": {
+      "total": "Total de clientes",
+      "withActivity": "Com atividade",
+      "withoutActivity": "Sem atividade",
+      "activityCoverage": "Cobertura de atividade",
+      "dataQuality": "Qualidade de cadastro",
+      "productionOrders": "Pedidos produção",
+      "workOrders": "Ordens serviço",
+      "period30": "30d",
+      "period60": "60d",
+      "period90": "90d",
+      "periodAll": "Tudo",
+      "inactiveHint": "Considera inativo quem está há {{days}} dias sem atividade ou sem atividade registrada.",
+      "inactiveHintAll": "Mostra todos os clientes sem atividade registrada.",
+      "lastActivity": "Última atividade",
+      "never": "Nunca"
     }
   }
 }

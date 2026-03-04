@@ -148,7 +148,7 @@ export default function PointScreen() {
   const [adjustDescription, setAdjustDescription] = useState('');
   const [savingAdjust, setSavingAdjust] = useState(false);
   const [nfcMode, setNfcMode] = useState(false);
-  const [adjustTarget, setAdjustTarget] = useState<'clock_in' | 'clock_out'>('clock_in');
+  const [adjustTarget, setAdjustTarget] = useState<'clock_in' | 'clock_out' | 'coffee_start' | 'lunch_start'>('clock_in');
   // Estado local para ativar o timer do botão imediatamente (sem esperar refetch)
   const [localCoffeePauseStart, setLocalCoffeePauseStart] = useState<string | null>(null);
   const [localLunchPauseStart, setLocalLunchPauseStart] = useState<string | null>(null);
@@ -371,7 +371,7 @@ export default function PointScreen() {
     [user, isMaster]
   );
 
-  const openAdjustModal = useCallback((entry: TimeEntry, target: 'clock_in' | 'clock_out') => {
+  const openAdjustModal = useCallback((entry: TimeEntry, target: 'clock_in' | 'clock_out' | 'coffee_start' | 'lunch_start') => {
     const d = new Date(getEffectiveRecordedAt(entry));
     const h = String(d.getHours()).padStart(2, '0');
     const m = String(d.getMinutes()).padStart(2, '0');
@@ -586,7 +586,9 @@ export default function PointScreen() {
 
     const canAdjustIn = canAdjustEntry(clockIn);
     const canAdjustOut = canAdjustEntry(clockOut);
-    const hasAnyAdjust = canAdjustIn || canAdjustOut;
+    const canAdjustCoffee = canAdjustEntry(coffeeStart);
+    const canAdjustLunch = canAdjustEntry(lunchStart);
+    const hasAnyAdjust = canAdjustIn || canAdjustOut || canAdjustCoffee || canAdjustLunch;
 
     return (
       <View
@@ -721,6 +723,30 @@ export default function PointScreen() {
                 <Ionicons name="create-outline" size={14} color="#22c55e" />
                 <Text style={[styles.adjustBtnText, { color: '#22c55e' }]}>
                   {t('point.adjustClockIn')}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {canAdjustCoffee && coffeeStart && (
+              <TouchableOpacity
+                style={[styles.adjustBtn, { borderColor: '#92400e' }]}
+                onPress={() => openAdjustModal(coffeeStart, 'coffee_start')}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="create-outline" size={14} color="#92400e" />
+                <Text style={[styles.adjustBtnText, { color: '#92400e' }]}>
+                  {t('point.adjustCoffeeTime')}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {canAdjustLunch && lunchStart && (
+              <TouchableOpacity
+                style={[styles.adjustBtn, { borderColor: '#0369a1' }]}
+                onPress={() => openAdjustModal(lunchStart, 'lunch_start')}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="create-outline" size={14} color="#0369a1" />
+                <Text style={[styles.adjustBtnText, { color: '#0369a1' }]}>
+                  {t('point.adjustLunchTime')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -1002,7 +1028,13 @@ export default function PointScreen() {
             <TouchableWithoutFeedback>
               <View style={[styles.modalBox, { backgroundColor: colors.background }]}>
                 <Text style={[styles.modalTitle, { color: colors.text }]}>
-                  {adjustTarget === 'clock_in' ? t('point.adjustClockIn') : t('point.adjustClockOut')}
+                  {adjustTarget === 'clock_in'
+                    ? t('point.adjustClockIn')
+                    : adjustTarget === 'clock_out'
+                      ? t('point.adjustClockOut')
+                      : adjustTarget === 'coffee_start'
+                        ? t('point.adjustCoffeeTime')
+                        : t('point.adjustLunchTime')}
                 </Text>
                 <TimePicker
                   label={t('point.newTime')}
