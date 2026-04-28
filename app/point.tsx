@@ -59,11 +59,33 @@ interface DayGroup {
   isAutomatic: boolean;       // qualquer entry com locationAddress === 'Automático'
 }
 
+interface MonthGroup {
+  monthKey: string;           // YYYY-MM
+  monthLabel: string;         // "Abril 2026"
+  totalWorkedMs: number;
+  days: DayGroup[];
+}
+
 const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const SWISS_TIMEZONE = 'Europe/Zurich';
+
+function toSwissDateKeyFromDate(date: Date): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: SWISS_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const year = parts.find((p) => p.type === 'year')?.value;
+  const month = parts.find((p) => p.type === 'month')?.value;
+  const day = parts.find((p) => p.type === 'day')?.value;
+  if (!year || !month || !day) return date.toISOString().slice(0, 10);
+  return `${year}-${month}-${day}`;
+}
 
 function toDateKey(iso: string): string {
   const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return toSwissDateKeyFromDate(d);
 }
 
 function isWeekend(dateKey: string): boolean {
@@ -78,6 +100,28 @@ function formatHourMin(totalMs: number): string {
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function formatMonthLabel(dateKey: string): string {
+  const d = new Date(`${dateKey}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return dateKey.slice(0, 7);
+  return new Intl.DateTimeFormat('pt-BR', {
+    month: 'long',
+    year: 'numeric',
+  }).format(d);
+}
+
+function getDayWorkedMs(group: DayGroup): number {
+  if (!group.clockIn || !group.clockOut) return 0;
+  const inMs = new Date(getEffectiveRecordedAt(group.clockIn)).getTime();
+  const outMs = new Date(getEffectiveRecordedAt(group.clockOut)).getTime();
+  if (!Number.isFinite(inMs) || !Number.isFinite(outMs) || outMs <= inMs) return 0;
+
+  let pauseMs = 0;
+  if (group.coffeeStart) pauseMs += COFFEE_DURATION_MS;
+  if (group.lunchStart) pauseMs += LUNCH_DURATION_MS;
+
+  return Math.max(0, outMs - inMs - pauseMs);
 }
 
 /* ─── Timer hook (subtrai pausas completas + pausa ativa limitada à duração fixa) ─── */
@@ -152,9 +196,10 @@ export default function PointScreen() {
   // Estado local para ativar o timer do botão imediatamente (sem esperar refetch)
   const [localCoffeePauseStart, setLocalCoffeePauseStart] = useState<string | null>(null);
   const [localLunchPauseStart, setLocalLunchPauseStart] = useState<string | null>(null);
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
 
   /* ─── Agrupar entries por dia ─── */
-  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayKey = toSwissDateKeyFromDate(new Date());
 
   const dayGroups: DayGroup[] = useMemo(() => {
     const map = new Map<string, {
@@ -227,6 +272,40 @@ export default function PointScreen() {
   const hasCoffeeToday = todayGroup?.coffeeStart != null || !!localCoffeePauseStart;
   const hasLunchToday = todayGroup?.lunchStart != null || !!localLunchPauseStart;
 
+  const monthGroups: MonthGroup[] = useMemo(() => {
+    const map = new Map<string, MonthGroup>();
+
+    for (const group of dayGroups) {
+      const monthKey = group.dateKey.slice(0, 7);
+      if (!map.has(monthKey)) {
+        map.set(monthKey, {
+          monthKey,
+          monthLabel: formatMonthLabel(group.dateKey),
+          totalWorkedMs: 0,
+          days: [],
+        });
+      }
+
+      const monthGroup = map.get(monthKey)!;
+      monthGroup.days.push(group);
+      monthGroup.totalWorkedMs += getDayWorkedMs(group);
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.monthKey.localeCompare(a.monthKey));
+  }, [dayGroups]);
+
+  const toggleMonthExpansion = useCallback((monthKey: string) => {
+    setExpandedMonths((prev) => {
+      const next = new Set(prev);
+      if (next.has(monthKey)) {
+        next.delete(monthKey);
+      } else {
+        next.add(monthKey);
+      }
+      return next;
+    });
+  }, []);
+
   // Sincronizar: quando o banco confirmar a pausa, limpar estado local
   useEffect(() => {
     if (todayGroup?.coffeeStart && localCoffeePauseStart) setLocalCoffeePauseStart(null);
@@ -272,6 +351,44 @@ export default function PointScreen() {
   const liveTimerLabel = useLiveTimer(liveTimerStartIso, todayPauseMs, activePauseStartIso, activePauseCapMs);
   const coffeeCountdown = usePauseCountdown(coffeeStartIso, COFFEE_DURATION_MS);
   const lunchCountdown = usePauseCountdown(lunchStartIso, LUNCH_DURATION_MS);
+
+  const todayWorkedLabel = useMemo(() => {
+    if (hasTodayClockIn && hasTodayClockOut && todayGroup?.clockIn && todayGroup?.clockOut) {
+      const inMs = new Date(getEffectiveRecordedAt(todayGroup.clockIn)).getTime();
+      const outMs = new Date(getEffectiveRecordedAt(todayGroup.clockOut)).getTime();
+      if (Number.isFinite(inMs) && Number.isFinite(outMs) && outMs > inMs) {
+        return formatHourMin(outMs - inMs - todayPauseMs);
+      }
+    }
+    if (liveTimerStartIso) {
+      return liveTimerLabel;
+    }
+    return '00:00:00';
+  }, [
+    hasTodayClockIn,
+    hasTodayClockOut,
+    todayGroup?.clockIn,
+    todayGroup?.clockOut,
+    todayPauseMs,
+    liveTimerStartIso,
+    liveTimerLabel,
+  ]);
+
+  const workStatusIcon = hasTodayClockOut
+    ? 'stop-circle-outline'
+    : anyPauseActive
+      ? 'pause-circle-outline'
+      : liveTimerStartIso
+        ? 'play-circle-outline'
+        : 'time-outline';
+
+  const workStatusColor = hasTodayClockOut
+    ? '#ef4444'
+    : anyPauseActive
+      ? '#f59e0b'
+      : liveTimerStartIso
+        ? '#22c55e'
+        : colors.textSecondary;
 
   // Encerrar pausa vencida com timestamp correto (start + duração fixa)
   const autoEndOverduePause = useCallback(async (entryType: EntryType, correctEndIso: string) => {
@@ -801,6 +918,17 @@ export default function PointScreen() {
               {t('point.title')}
             </Text>
           </View>
+          <View style={[styles.userTimerBadge, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+            <Text style={[styles.userTimerName, { color: colors.text }]} numberOfLines={1}>
+              {user?.username || '-'}
+            </Text>
+            <View style={styles.userTimerStatusRow}>
+              <Ionicons name={workStatusIcon as any} size={14} color={workStatusColor} />
+              <Text style={[styles.userTimerValue, { color: workStatusColor }]}>
+                {todayWorkedLabel}
+              </Text>
+            </View>
+          </View>
           <TouchableOpacity
             style={styles.reportsButton}
             onPress={() => router.push('/point-reports')}
@@ -966,7 +1094,35 @@ export default function PointScreen() {
           </View>
         ) : (
           <View style={styles.list}>
-            {dayGroups.map(renderDayCard)}
+            {monthGroups.map((month) => (
+              <View key={month.monthKey} style={styles.monthSection}>
+                <TouchableOpacity
+                  style={[styles.monthHeader, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
+                  onPress={() => toggleMonthExpansion(month.monthKey)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.monthHeaderLeft}>
+                    <Ionicons
+                      name={expandedMonths.has(month.monthKey) ? 'chevron-down' : 'chevron-forward'}
+                      size={16}
+                      color={colors.textSecondary}
+                    />
+                    <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
+                    <Text style={[styles.monthTitle, { color: colors.text }]}>
+                      {month.monthLabel}
+                    </Text>
+                  </View>
+                  <Text style={[styles.monthTotal, { color: colors.primary }]}>
+                    {t('point.totalHours')}: {formatHourMin(month.totalWorkedMs)}
+                  </Text>
+                </TouchableOpacity>
+                {expandedMonths.has(month.monthKey) && (
+                  <View style={styles.monthDaysList}>
+                    {month.days.map(renderDayCard)}
+                  </View>
+                )}
+              </View>
+            ))}
           </View>
         )}
       </ScrollView>
@@ -1111,6 +1267,31 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.lg,
     fontWeight: theme.typography.fontWeight.bold,
   },
+  userTimerBadge: {
+    marginLeft: theme.spacing.xs,
+    marginRight: theme.spacing.xs,
+    borderWidth: 1,
+    borderRadius: theme.borderRadius.sm,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 4,
+    minWidth: 108,
+    maxWidth: 148,
+  },
+  userTimerName: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.semibold,
+  },
+  userTimerStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  userTimerValue: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.bold,
+    fontVariant: ['tabular-nums'],
+  },
   reportsButton: {
     width: 40,
     height: 40,
@@ -1214,6 +1395,36 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.sm,
   },
   list: {
+    gap: theme.spacing.sm,
+  },
+  monthSection: {
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
+  },
+  monthHeader: {
+    borderWidth: 1,
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  monthHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  monthTitle: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.bold,
+    textTransform: 'capitalize',
+  },
+  monthTotal: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.semibold,
+  },
+  monthDaysList: {
     gap: theme.spacing.sm,
   },
   /* Day card */

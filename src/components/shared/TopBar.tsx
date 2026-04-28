@@ -10,7 +10,9 @@ import { theme } from '../../theme';
 import { usePermissions } from '../../hooks/use-permissions';
 import { ThreeDotsMenu } from './ThreeDotsMenu';
 import { useThemeColors } from '../../hooks/use-theme-colors';
-import { useUnreadNotificationsCountQuery } from '../../services/queries';
+import { useMyTimeEntriesQuery, useUnreadNotificationsCountQuery } from '../../services/queries';
+import { TimeEntry } from '../../types';
+import { getEffectiveRecordedAt } from '../../utils/point-report-pdf';
 
 const BloodPriorityIcon: React.FC<{ count: number; onPress: () => void }> = ({ count, onPress }) => {
   'use no memo';
@@ -103,6 +105,37 @@ interface TopBarProps {
   title?: string;
 }
 
+const COFFEE_DURATION_MS = 15 * 60 * 1000;
+const LUNCH_DURATION_MS = 45 * 60 * 1000;
+const SWISS_TIMEZONE = 'Europe/Zurich';
+
+function toSwissDateKeyFromDate(date: Date): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: SWISS_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const year = parts.find((p) => p.type === 'year')?.value;
+  const month = parts.find((p) => p.type === 'month')?.value;
+  const day = parts.find((p) => p.type === 'day')?.value;
+  if (!year || !month || !day) return date.toISOString().slice(0, 10);
+  return `${year}-${month}-${day}`;
+}
+
+function toSwissDateKeyFromIso(iso: string): string {
+  return toSwissDateKeyFromDate(new Date(iso));
+}
+
+function formatDuration(totalMs: number): string {
+  if (!Number.isFinite(totalMs) || totalMs < 0) return '00:00:00';
+  const totalSec = Math.floor(totalMs / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 export const TopBar: React.FC<TopBarProps> = () => {
   'use no memo';
   const router = useRouter();
@@ -112,8 +145,10 @@ export const TopBar: React.FC<TopBarProps> = () => {
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const { data: unreadCount = 0 } = useUnreadNotificationsCountQuery(user?.id);
+  const { data: timeEntries = [] } = useMyTimeEntriesQuery(user?.id);
   const [bloodPriorityUnread, setBloodPriorityUnread] = React.useState(0);
   const [showMenu, setShowMenu] = useState(false);
+  const [nowMs, setNowMs] = useState(Date.now());
 
   const loadBloodPriorityCount = React.useCallback(async () => {
     if (!user) return;
@@ -131,6 +166,64 @@ export const TopBar: React.FC<TopBarProps> = () => {
     return () => clearInterval(interval);
   }, [loadBloodPriorityCount]);
 
+  const todayKey = toSwissDateKeyFromDate(new Date());
+  const todayEntries = timeEntries.filter((entry) => {
+    const effective = getEffectiveRecordedAt(entry as TimeEntry);
+    return effective && toSwissDateKeyFromIso(effective) === todayKey;
+  });
+
+  const clockIn = todayEntries.find((entry) => entry.entryType === 'clock_in') || null;
+  const clockOut = todayEntries.find((entry) => entry.entryType === 'clock_out') || null;
+  const coffeeStart = todayEntries.find((entry) => entry.entryType === 'coffee_start') || null;
+  const coffeeEnd = todayEntries.find((entry) => entry.entryType === 'coffee_end') || null;
+  const lunchStart = todayEntries.find((entry) => entry.entryType === 'lunch_start') || null;
+  const lunchEnd = todayEntries.find((entry) => entry.entryType === 'lunch_end') || null;
+
+  const coffeeActive = !!(coffeeStart && !coffeeEnd);
+  const lunchActive = !!(lunchStart && !lunchEnd);
+  const anyPauseActive = coffeeActive || lunchActive;
+  const hasClockIn = !!clockIn;
+  const hasClockOut = !!clockOut;
+
+  const isWorkRunning = hasClockIn && !hasClockOut;
+
+  useEffect(() => {
+    if (!isWorkRunning) return;
+    const interval = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [isWorkRunning]);
+
+  const fixedPauseMs =
+    (coffeeStart ? COFFEE_DURATION_MS : 0) +
+    (lunchStart ? LUNCH_DURATION_MS : 0);
+
+  let todayWorkedMs = 0;
+  if (clockIn) {
+    const inMs = new Date(getEffectiveRecordedAt(clockIn)).getTime();
+    const endMs = clockOut
+      ? new Date(getEffectiveRecordedAt(clockOut)).getTime()
+      : nowMs;
+    if (Number.isFinite(inMs) && Number.isFinite(endMs) && endMs > inMs) {
+      todayWorkedMs = Math.max(0, endMs - inMs - fixedPauseMs);
+    }
+  }
+
+  const workStatusIcon = hasClockOut
+    ? 'stop-circle-outline'
+    : anyPauseActive
+      ? 'pause-circle-outline'
+      : isWorkRunning
+        ? 'play-circle-outline'
+        : 'time-outline';
+
+  const workStatusColor = hasClockOut
+    ? '#ef4444'
+    : anyPauseActive
+      ? '#f59e0b'
+      : isWorkRunning
+        ? '#22c55e'
+        : colors.textSecondary;
+
   const username = user?.username || 'User';
 
   return (
@@ -144,7 +237,19 @@ export const TopBar: React.FC<TopBarProps> = () => {
         },
       ]}>
         <View style={styles.leftSection}>
-          <Text style={[styles.greeting, { color: colors.text }]}>{t('common.hello')}, {username}</Text>
+          <View style={styles.greetingRow}>
+            <Text style={[styles.greeting, { color: colors.text }]}>{t('common.hello')}, {username}</Text>
+            <TouchableOpacity
+              style={[styles.workStatusBadge, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
+              onPress={() => router.push('/point')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name={workStatusIcon as any} size={14} color={workStatusColor} />
+              <Text style={[styles.workStatusValue, { color: workStatusColor }]}>
+                {formatDuration(todayWorkedMs)}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
         <View style={styles.rightSection}>
           <BloodPriorityIcon
@@ -213,10 +318,31 @@ const styles = StyleSheet.create({
   leftSection: {
     flex: 1,
   },
+  greetingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
   greeting: {
     fontSize: theme.typography.fontSize.xl,
     fontWeight: theme.typography.fontWeight.bold,
     lineHeight: theme.typography.lineHeight.xl,
+    flexShrink: 1,
+  },
+  workStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: theme.spacing.xs,
+    borderWidth: 1,
+    borderRadius: theme.borderRadius.sm,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 4,
+  },
+  workStatusValue: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.bold,
+    fontVariant: ['tabular-nums'],
   },
   rightSection: {
     flexDirection: 'row',

@@ -13,6 +13,38 @@ const MONTH_ABBR = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
+const SWISS_TIMEZONE = 'Europe/Zurich';
+
+function getSwissDateParts(d: Date): { day: number; month: number; year: number } | null {
+  if (isNaN(d.getTime())) return null;
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: SWISS_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d);
+  const day = Number(parts.find((p) => p.type === 'day')?.value);
+  const month = Number(parts.find((p) => p.type === 'month')?.value);
+  const year = Number(parts.find((p) => p.type === 'year')?.value);
+  if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) return null;
+  return { day, month, year };
+}
+
+function getSwissTimeParts(d: Date): { hour: string; minute: string; second: string } | null {
+  if (isNaN(d.getTime())) return null;
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: SWISS_TIMEZONE,
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(d);
+  const hour = parts.find((p) => p.type === 'hour')?.value;
+  const minute = parts.find((p) => p.type === 'minute')?.value;
+  const second = parts.find((p) => p.type === 'second')?.value;
+  if (!hour || !minute || !second) return null;
+  return { hour, minute, second };
+}
 
 /**
  * Parse a value into a Date object.
@@ -37,7 +69,9 @@ function toDate(value: string | Date | undefined | null): Date | null {
 export function formatDate(value: string | Date | undefined | null): string {
   const d = toDate(value);
   if (!d) return '—';
-  return `${d.getDate()} ${MONTH_ABBR[d.getMonth()]} ${d.getFullYear()}`;
+  const parts = getSwissDateParts(d);
+  if (!parts) return '—';
+  return `${parts.day} ${MONTH_ABBR[parts.month - 1]} ${parts.year}`;
 }
 
 /**
@@ -52,15 +86,17 @@ export function formatDateTime(
   const d = toDate(value);
   if (!d) return '—';
 
-  const datePart = `${d.getDate()} ${MONTH_ABBR[d.getMonth()]} ${d.getFullYear()}`;
+  const dateParts = getSwissDateParts(d);
+  if (!dateParts) return '—';
+  const datePart = `${dateParts.day} ${MONTH_ABBR[dateParts.month - 1]} ${dateParts.year}`;
 
   if (time) {
     return `${datePart}, ${time}`;
   }
 
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  return `${datePart}, ${hh}:${mm}`;
+  const timeParts = getSwissTimeParts(d);
+  if (!timeParts) return datePart;
+  return `${datePart}, ${timeParts.hour}:${timeParts.minute}`;
 }
 
 /**
@@ -70,11 +106,11 @@ export function formatTimestamp(value: string | Date | undefined | null): string
   const d = toDate(value);
   if (!d) return '—';
 
-  const datePart = `${d.getDate()} ${MONTH_ABBR[d.getMonth()]} ${d.getFullYear()}`;
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const ss = String(d.getSeconds()).padStart(2, '0');
-  return `${datePart}, ${hh}:${mm}:${ss}`;
+  const dateParts = getSwissDateParts(d);
+  const timeParts = getSwissTimeParts(d);
+  if (!dateParts || !timeParts) return '—';
+  const datePart = `${dateParts.day} ${MONTH_ABBR[dateParts.month - 1]} ${dateParts.year}`;
+  return `${datePart}, ${timeParts.hour}:${timeParts.minute}:${timeParts.second}`;
 }
 
 /**
@@ -83,9 +119,9 @@ export function formatTimestamp(value: string | Date | undefined | null): string
 export function formatTime(value: string | Date | undefined | null): string {
   const d = toDate(value);
   if (!d) return '—';
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  return `${hh}:${mm}`;
+  const parts = getSwissTimeParts(d);
+  if (!parts) return '—';
+  return `${parts.hour}:${parts.minute}`;
 }
 
 /**
@@ -102,5 +138,9 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export function formatWeekday(value: string | Date | undefined | null): string {
   const d = toDate(value);
   if (!d) return '—';
-  return WEEKDAYS[d.getDay()];
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone: SWISS_TIMEZONE,
+    weekday: 'short',
+  }).format(d);
+  return WEEKDAYS.includes(weekday) ? weekday : weekday.slice(0, 3);
 }

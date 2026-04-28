@@ -5,6 +5,8 @@ import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../../src/hooks/use-i18n';
 import { ScreenWrapper } from '../../src/components/shared/ScreenWrapper';
+import { DatePicker } from '../../src/components/shared/DatePicker';
+import { Dropdown } from '../../src/components/shared/Dropdown';
 import { DropdownOption } from '../../src/components/shared/Dropdown';
 import { PermissionGuard } from '../../src/components/shared/PermissionGuard';
 import { repos } from '../../src/services/container';
@@ -126,18 +128,40 @@ export default function ProductionScreen() {
   const [selectedStatus, setSelectedStatus] = useState<ProductionStatus | 'all'>('all');
   const [isLoading, setIsLoading] = useState(false);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
-  const [companyFilterModalVisible, setCompanyFilterModalVisible] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<ProductionCompany | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedGlassId, setSelectedGlassId] = useState<string>('all');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [draftStatus, setDraftStatus] = useState<ProductionStatus | 'all'>('all');
+  const [draftCompany, setDraftCompany] = useState<ProductionCompany | 'all'>('all');
+  const [draftSearchTerm, setDraftSearchTerm] = useState('');
+  const [draftGlassId, setDraftGlassId] = useState<string>('all');
+  const [draftFromDate, setDraftFromDate] = useState('');
+  const [draftToDate, setDraftToDate] = useState('');
   const [showFinished, setShowFinished] = useState(false); // false = oculta cancelled/packed/dispatch/delivered/completed
   const [glassItems, setGlassItems] = useState<Map<string, InventoryItem>>(new Map());
   const [waitingHoursMap, setWaitingHoursMap] = useState<Map<string, number>>(new Map());
 
+  const resetFiltersToInitialState = useCallback(() => {
+    setSelectedStatus('all');
+    setSelectedCompany('all');
+    setSearchTerm('');
+    setSelectedGlassId('all');
+    setFromDate('');
+    setToDate('');
+    setDraftStatus('all');
+    setDraftCompany('all');
+    setDraftSearchTerm('');
+    setDraftGlassId('all');
+    setDraftFromDate('');
+    setDraftToDate('');
+  }, []);
+
   const loadProductions = useCallback(async () => {
     setIsLoading(true);
     try {
-      const status = selectedStatus === 'all' ? undefined : selectedStatus;
-      const fetchedProductions = await repos.productionRepo.getAllProductions(status);
+      const fetchedProductions = await repos.productionRepo.getAllProductions();
       setAllProductions(fetchedProductions);
 
       const glassIds = new Set<string>();
@@ -197,13 +221,15 @@ export default function ProductionScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedStatus]);
+  }, []);
 
   useEffect(() => {
     if (isFocused) {
+      // Regra A: sempre entrar na tela com filtros zerados
+      resetFiltersToInitialState();
       loadProductions();
     }
-  }, [isFocused, loadProductions]);
+  }, [isFocused, loadProductions, resetFiltersToInitialState]);
 
   const handleCreateProduction = () => {
     router.push('/production-create');
@@ -346,20 +372,64 @@ export default function ProductionScreen() {
     }
   };
 
-  const handleFilterSelect = (value: string) => {
-    setSelectedStatus(value as ProductionStatus | 'all');
-    setFilterModalVisible(false);
-  };
-
   const companyOptions: DropdownOption[] = [
     { label: t('production.allCompanies'), value: 'all' },
     { label: '3S', value: '3S' },
     { label: 'Crea Glass', value: 'Crea Glass' },
   ];
 
-  const handleCompanyFilterSelect = (value: string) => {
-    setSelectedCompany(value as ProductionCompany | 'all');
-    setCompanyFilterModalVisible(false);
+  const glassOptions: DropdownOption[] = useMemo(() => {
+    const usedGlassIds = new Set<string>();
+    allProductions.forEach((production) => {
+      production.items.forEach((item) => {
+        if (item.glassId) usedGlassIds.add(item.glassId);
+      });
+    });
+
+    const options = Array.from(usedGlassIds)
+      .map((glassId) => {
+        const glass = glassItems.get(glassId);
+        return glass ? { label: glass.name, value: glass.id } : null;
+      })
+      .filter((option): option is DropdownOption => option !== null)
+      .sort((a, b) => a.label.localeCompare(b.label));
+
+    return [{ label: 'Todos os vidros', value: 'all' }, ...options];
+  }, [allProductions, glassItems]);
+
+  const hasActiveFilters = useMemo(() => {
+    return (
+      selectedStatus !== 'all' ||
+      selectedCompany !== 'all' ||
+      !!searchTerm.trim() ||
+      selectedGlassId !== 'all' ||
+      !!fromDate.trim() ||
+      !!toDate.trim()
+    );
+  }, [selectedStatus, selectedCompany, searchTerm, selectedGlassId, fromDate, toDate]);
+
+  const openFilterModal = () => {
+    setDraftStatus(selectedStatus);
+    setDraftCompany(selectedCompany);
+    setDraftSearchTerm(searchTerm);
+    setDraftGlassId(selectedGlassId);
+    setDraftFromDate(fromDate);
+    setDraftToDate(toDate);
+    setFilterModalVisible(true);
+  };
+
+  const applyFilters = () => {
+    setSelectedStatus(draftStatus);
+    setSelectedCompany(draftCompany);
+    setSearchTerm(draftSearchTerm.trim());
+    setSelectedGlassId(draftGlassId);
+    setFromDate(draftFromDate.trim());
+    setToDate(draftToDate.trim());
+    setFilterModalVisible(false);
+  };
+
+  const clearFilters = () => {
+    resetFiltersToInitialState();
   };
 
   // Statuses hidden by default when showFinished is off
@@ -374,6 +444,10 @@ export default function ProductionScreen() {
     // Hide finished/archived statuses unless toggle is active
     if (!showFinished) {
       filtered = filtered.filter(p => !HIDDEN_STATUSES.includes(p.status));
+    }
+
+    if (selectedStatus !== 'all') {
+      filtered = filtered.filter(p => p.status === selectedStatus);
     }
 
     // Apply company filter
@@ -420,6 +494,23 @@ export default function ProductionScreen() {
         return false;
       });
     }
+
+    if (selectedGlassId !== 'all') {
+      filtered = filtered.filter(production =>
+        production.items?.some(item => {
+          return item.glassId === selectedGlassId;
+        })
+      );
+    }
+
+    if (fromDate) {
+      const fromTimestamp = new Date(`${fromDate}T00:00:00`).getTime();
+      filtered = filtered.filter(p => new Date(p.createdAt).getTime() >= fromTimestamp);
+    }
+    if (toDate) {
+      const toTimestamp = new Date(`${toDate}T23:59:59`).getTime();
+      filtered = filtered.filter(p => new Date(p.createdAt).getTime() <= toTimestamp);
+    }
     
     // Sort by due date (ascending - closest dates first)
     return filtered.sort((a, b) => {
@@ -427,7 +518,7 @@ export default function ProductionScreen() {
       const dateB = new Date(b.dueDate).getTime();
       return dateA - dateB;
     });
-  }, [allProductions, searchTerm, selectedCompany, showFinished, glassItems]);
+  }, [allProductions, searchTerm, selectedGlassId, fromDate, toDate, selectedCompany, selectedStatus, showFinished]);
 
   // Update productions when filtered list changes
   useEffect(() => {
@@ -439,28 +530,16 @@ export default function ProductionScreen() {
       <ScrollView style={styles.scrollView}>
         <View style={styles.content}>
           <View style={styles.topBar}>
-            {/* Search Bar - largura reduzida para caber todos os botões */}
-            <View style={[styles.searchContainer, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
-              <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
-              <TextInput
-                style={[styles.searchInput, { color: colors.text }]}
-                placeholder={t('production.searchPlaceholder') || 'Buscar por cliente, número, tipo ou item...'}
-                placeholderTextColor={colors.textTertiary}
-                value={searchTerm}
-                onChangeText={setSearchTerm}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              {searchTerm.length > 0 && (
-                <TouchableOpacity
-                  onPress={() => setSearchTerm('')}
-                  style={styles.clearButton}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
-              )}
-            </View>
+            <TouchableOpacity
+              style={[
+                styles.searchButton,
+                { backgroundColor: colors.backgroundSecondary, borderColor: hasActiveFilters ? colors.primary : colors.border },
+              ]}
+              onPress={openFilterModal}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="search" size={20} color={hasActiveFilters ? colors.primary : colors.text} />
+            </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.filterButton,
@@ -474,24 +553,6 @@ export default function ProductionScreen() {
                 size={20}
                 color={showFinished ? colors.primary : colors.text}
               />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterButton, { backgroundColor: colors.backgroundSecondary }]}
-              onPress={() => setFilterModalVisible(true)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="filter" size={20} color={colors.text} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.filterButton,
-                { backgroundColor: colors.backgroundSecondary },
-                selectedCompany !== 'all' && { backgroundColor: colors.primary + '30' },
-              ]}
-              onPress={() => setCompanyFilterModalVisible(true)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="business" size={20} color={selectedCompany !== 'all' ? colors.primary : colors.text} />
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.filterButton, { backgroundColor: colors.backgroundSecondary }]}
@@ -523,95 +584,79 @@ export default function ProductionScreen() {
                   <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
                     <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
                       <Text style={[styles.modalTitle, { color: colors.text }]}>
-                        {t('production.filterByStatus')}
+                        {t('production.searchPlaceholder') || 'Filtros de Produção'}
                       </Text>
                       <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
                         <Ionicons name="close" size={24} color={colors.text} />
                       </TouchableOpacity>
                     </View>
                     <ScrollView style={styles.optionsList} nestedScrollEnabled>
-                      {statusOptions.map((option) => (
-                        <TouchableOpacity
-                          key={option.value}
-                          style={[
-                            styles.optionItem,
-                            { borderBottomColor: colors.borderLight },
-                            selectedStatus === option.value && { backgroundColor: colors.primary + '10' },
-                          ]}
-                          onPress={() => handleFilterSelect(option.value)}
-                          activeOpacity={0.7}
-                        >
-                          <Text
-                            style={[
-                              styles.optionText,
-                              { color: colors.text },
-                              selectedStatus === option.value && { 
-                                fontWeight: theme.typography.fontWeight.semibold, 
-                                color: colors.primary 
-                              },
-                            ]}
-                          >
-                            {option.label}
-                          </Text>
-                          {selectedStatus === option.value && (
-                            <Ionicons name="checkmark" size={20} color={colors.primary} />
-                          )}
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                </TouchableWithoutFeedback>
-              </View>
-            </TouchableWithoutFeedback>
-          </Modal>
+                      <View style={styles.filterFields}>
+                        <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Busca geral</Text>
+                        <View style={[styles.filterInputContainer, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+                          <TextInput
+                            style={[styles.filterInput, { color: colors.text }]}
+                            placeholder={t('production.searchPlaceholder') || 'Cliente, numero, tipo...'}
+                            placeholderTextColor={colors.textTertiary}
+                            value={draftSearchTerm}
+                            onChangeText={setDraftSearchTerm}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                          />
+                        </View>
 
-          <Modal
-            visible={companyFilterModalVisible}
-            transparent
-            animationType="fade"
-            onRequestClose={() => setCompanyFilterModalVisible(false)}
-          >
-            <TouchableWithoutFeedback onPress={() => setCompanyFilterModalVisible(false)}>
-              <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
-                <TouchableWithoutFeedback>
-                  <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
-                    <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-                      <Text style={[styles.modalTitle, { color: colors.text }]}>
-                        {t('production.filterByCompany')}
-                      </Text>
-                      <TouchableOpacity onPress={() => setCompanyFilterModalVisible(false)}>
-                        <Ionicons name="close" size={24} color={colors.text} />
-                      </TouchableOpacity>
-                    </View>
-                    <ScrollView style={styles.optionsList} nestedScrollEnabled>
-                      {companyOptions.map((option) => (
+                        <Dropdown
+                          label="Vidro"
+                          value={draftGlassId}
+                          options={glassOptions}
+                          onSelect={setDraftGlassId}
+                        />
+
+                        <Dropdown
+                          label="Status"
+                          value={draftStatus}
+                          options={statusOptions}
+                          onSelect={(value) => setDraftStatus(value as ProductionStatus | 'all')}
+                        />
+
+                        <Dropdown
+                          label="Empresa"
+                          value={draftCompany}
+                          options={companyOptions}
+                          onSelect={(value) => setDraftCompany(value as ProductionCompany | 'all')}
+                        />
+
+                        <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Periodo de criacao</Text>
+                        <DatePicker
+                          label="Data inicial"
+                          value={draftFromDate}
+                          onSelect={setDraftFromDate}
+                          placeholder="Selecionar data inicial"
+                        />
+                        <DatePicker
+                          label="Data final"
+                          value={draftToDate}
+                          onSelect={setDraftToDate}
+                          placeholder="Selecionar data final"
+                        />
+                      </View>
+
+                      <View style={styles.filterActions}>
                         <TouchableOpacity
-                          key={option.value}
-                          style={[
-                            styles.optionItem,
-                            { borderBottomColor: colors.borderLight },
-                            selectedCompany === option.value && { backgroundColor: colors.primary + '10' },
-                          ]}
-                          onPress={() => handleCompanyFilterSelect(option.value)}
+                          style={[styles.actionButton, { backgroundColor: colors.backgroundSecondary }]}
+                          onPress={clearFilters}
                           activeOpacity={0.7}
                         >
-                          <Text
-                            style={[
-                              styles.optionText,
-                              { color: colors.text },
-                              selectedCompany === option.value && { 
-                                fontWeight: theme.typography.fontWeight.semibold, 
-                                color: colors.primary 
-                              },
-                            ]}
-                          >
-                            {option.label}
-                          </Text>
-                          {selectedCompany === option.value && (
-                            <Ionicons name="checkmark" size={20} color={colors.primary} />
-                          )}
+                          <Text style={[styles.actionButtonText, { color: colors.text }]}>Limpar</Text>
                         </TouchableOpacity>
-                      ))}
+                        <TouchableOpacity
+                          style={[styles.actionButton, { backgroundColor: colors.primary }]}
+                          onPress={applyFilters}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.actionButtonText, { color: colors.textInverse }]}>Aplicar</Text>
+                        </TouchableOpacity>
+                      </View>
                     </ScrollView>
                   </View>
                 </TouchableWithoutFeedback>
@@ -702,29 +747,24 @@ const styles = StyleSheet.create({
   content: {
     padding: theme.spacing.md,
   },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  filterFields: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
+    gap: theme.spacing.xs,
+  },
+  fieldLabel: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+    marginTop: theme.spacing.xs,
+  },
+  filterInputContainer: {
+    borderWidth: 1,
     borderRadius: theme.borderRadius.md,
     paddingHorizontal: theme.spacing.md,
-    borderWidth: 1,
-    flex: 1,
-    maxWidth: 200,
-    marginRight: theme.spacing.sm,
-    minWidth: 0,
   },
-  searchIcon: {
-    marginRight: theme.spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
+  filterInput: {
     fontSize: theme.typography.fontSize.md,
     paddingVertical: theme.spacing.sm,
-    minWidth: 0,
-  },
-  clearButton: {
-    marginLeft: theme.spacing.xs,
-    padding: theme.spacing.xs,
   },
   topBar: {
     flexDirection: 'row',
@@ -747,6 +787,16 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.sm,
     justifyContent: 'center',
     alignItems: 'center',
+    ...theme.shadows.sm,
+  },
+  searchButton: {
+    height: 36,
+    minWidth: 72,
+    borderRadius: theme.borderRadius.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    paddingHorizontal: theme.spacing.md,
     ...theme.shadows.sm,
   },
   modalOverlay: {
@@ -775,17 +825,23 @@ const styles = StyleSheet.create({
   optionsList: {
     maxHeight: 400,
   },
-  optionItem: {
+  filterActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: theme.spacing.md,
+    gap: theme.spacing.sm,
     paddingHorizontal: theme.spacing.lg,
-    borderBottomWidth: 1,
+    paddingVertical: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
   },
-  optionText: {
-    fontSize: theme.typography.fontSize.md,
+  actionButton: {
     flex: 1,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionButtonText: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
   addButton: {
     width: 36,

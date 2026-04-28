@@ -6,6 +6,8 @@ export interface DayRow {
   dateLabel: string;
   entrada: string;
   saida: string;
+  cafe: string;
+  almoco: string;
   entradaSource: string;
   saidaSource: string;
   totalDay: string;
@@ -28,21 +30,41 @@ export function getEffectiveRecordedAt(entry: TimeEntry): string {
 }
 
 const INCOMPLETE = 'INCOMPLETE';
+const SWISS_TIMEZONE = 'Europe/Zurich';
+
+function toSwissDateKey(date: Date): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: SWISS_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const year = parts.find((p) => p.type === 'year')?.value;
+  const month = parts.find((p) => p.type === 'month')?.value;
+  const day = parts.find((p) => p.type === 'day')?.value;
+  if (!year || !month || !day) return date.toISOString().slice(0, 10);
+  return `${year}-${month}-${day}`;
+}
 
 function toDateKey(iso: string): string {
   const d = new Date(iso);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return toSwissDateKey(d);
 }
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '—';
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const ss = String(d.getSeconds()).padStart(2, '0');
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: SWISS_TIMEZONE,
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(d);
+  const hh = parts.find((p) => p.type === 'hour')?.value;
+  const mm = parts.find((p) => p.type === 'minute')?.value;
+  const ss = parts.find((p) => p.type === 'second')?.value;
+  if (!hh || !mm || !ss) return '—';
   return `${hh}:${mm}:${ss}`;
 }
 
@@ -109,16 +131,26 @@ export function buildDayRows(entries: TimeEntry[]): DayRow[] {
     if (hasEntryTypes) {
       const clockIn = dayEntries.find((e) => e.entryType === 'clock_in');
       const clockOut = dayEntries.find((e) => e.entryType === 'clock_out');
+      const coffeeStart = dayEntries.find((e) => e.entryType === 'coffee_start');
+      const lunchStart = dayEntries.find((e) => e.entryType === 'lunch_start');
       const entradaTime = clockIn ? formatTime(getEffectiveRecordedAt(clockIn)) : INCOMPLETE;
       const saidaTime = clockOut ? formatTime(getEffectiveRecordedAt(clockOut)) : INCOMPLETE;
+      const coffeeLabel = coffeeStart
+        ? `${formatTime(getEffectiveRecordedAt(coffeeStart))} - ${formatTime(
+            new Date(new Date(getEffectiveRecordedAt(coffeeStart)).getTime() + 15 * 60 * 1000).toISOString()
+          )}`
+        : '—';
+      const lunchLabel = lunchStart
+        ? `${formatTime(getEffectiveRecordedAt(lunchStart))} - ${formatTime(
+            new Date(new Date(getEffectiveRecordedAt(lunchStart)).getTime() + 45 * 60 * 1000).toISOString()
+          )}`
+        : '—';
       const entradaSource = getMarkingSource(clockIn);
       const saidaSource = getMarkingSource(clockOut);
       const incomplete = !clockIn || !clockOut;
 
       // Dedução fixa: 15 min se café ativado, 45 min se almoço ativado
       let pauseMinutes = 0;
-      const coffeeStart = dayEntries.find((e) => e.entryType === 'coffee_start');
-      const lunchStart = dayEntries.find((e) => e.entryType === 'lunch_start');
       if (coffeeStart) pauseMinutes += 15;
       if (lunchStart) pauseMinutes += 45;
 
@@ -135,6 +167,8 @@ export function buildDayRows(entries: TimeEntry[]): DayRow[] {
         dateLabel,
         entrada: entradaTime,
         saida: saidaTime,
+        cafe: coffeeLabel,
+        almoco: lunchLabel,
         entradaSource,
         saidaSource,
         totalDay: incomplete ? INCOMPLETE : minutesToHoursLabel(totalMinutes),
@@ -153,6 +187,8 @@ export function buildDayRows(entries: TimeEntry[]): DayRow[] {
           dateLabel,
           entrada,
           saida: INCOMPLETE,
+          cafe: '—',
+          almoco: '—',
           entradaSource: getMarkingSource(first),
           saidaSource: '—',
           totalDay: INCOMPLETE,
@@ -185,6 +221,8 @@ export function buildDayRows(entries: TimeEntry[]): DayRow[] {
         dateLabel,
         entrada,
         saida: invalid ? INCOMPLETE : lastTime,
+        cafe: '—',
+        almoco: '—',
         entradaSource: getMarkingSource(first),
         saidaSource: invalid ? '—' : getMarkingSource(dayEntries[dayEntries.length - 1]),
         totalDay: invalid ? INCOMPLETE : minutesToHoursLabel(safeTotal),
@@ -246,6 +284,8 @@ export function buildPointReportHtml(options: {
       <td style="padding:6px 8px;border:1px solid #ddd;">${escapeHtml(r.dateLabel)}${r.adjusted ? ' (ADJUSTED)' : ''}</td>
       <td style="padding:6px 8px;border:1px solid #ddd;">${escapeHtml(r.entrada)}${r.entrada !== INCOMPLETE ? ` - ${r.entradaSource === 'Automatic' ? 'AUT' : 'MAN'}` : ''}</td>
       <td style="padding:6px 8px;border:1px solid #ddd;">${escapeHtml(r.saida)}${r.saida !== INCOMPLETE ? ` - ${r.saidaSource === 'Automatic' ? 'AUT' : 'MAN'}` : ''}</td>
+      <td style="padding:6px 8px;border:1px solid #ddd;">${escapeHtml(r.cafe)}</td>
+      <td style="padding:6px 8px;border:1px solid #ddd;">${escapeHtml(r.almoco)}</td>
       <td style="padding:6px 8px;border:1px solid #ddd;">${escapeHtml(r.totalDay)}</td>
       <td style="padding:6px 8px;border:1px solid #ddd;font-size:11px;">${escapeHtml(r.local)}</td>
       <td style="padding:6px 8px;border:1px solid #ddd;font-size:11px;">${escapeHtml(r.adjustDescription ?? '-')}</td>
@@ -281,6 +321,7 @@ export function buildPointReportHtml(options: {
     <div class="meta">Period: ${periodFrom} to ${periodTo}</div>
     <div class="meta">Issued at: ${emittedAt}</div>
     <div class="meta">User: ${escapeHtml(identification)}</div>
+    <div class="meta">Break policy: Coffee 15 min, Lunch 45 min</div>
   </div>
   <table>
     <thead>
@@ -288,6 +329,8 @@ export function buildPointReportHtml(options: {
         <th>Date</th>
         <th>Clock In</th>
         <th>Clock Out</th>
+        <th>Coffee Break</th>
+        <th>Lunch Break</th>
         <th>Day Total</th>
         <th>Location</th>
         <th>Reason</th>

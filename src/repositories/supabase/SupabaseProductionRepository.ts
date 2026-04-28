@@ -168,6 +168,7 @@ export class SupabaseProductionRepository implements ProductionRepository {
               uri: storagePath,
               name: attachment.filename,
               type: attachment.mimeType,
+              webFile: attachment.webFile,
             });
           } catch (uploadError) {
             console.error('Error uploading attachment:', uploadError);
@@ -295,6 +296,7 @@ export class SupabaseProductionRepository implements ProductionRepository {
               uri: attachment.storagePath,
               name: attachment.filename,
               type: attachment.mimeType,
+              webFile: attachment.webFile,
             });
           } catch (uploadError) {
             console.error('Error uploading attachment:', uploadError);
@@ -420,7 +422,7 @@ export class SupabaseProductionRepository implements ProductionRepository {
     return (data || []).map(this.mapToStatusHistory);
   }
 
-  async uploadAttachment(file: { uri: string; name: string; type: string }): Promise<string> {
+  async uploadAttachment(file: { uri: string; name: string; type: string; webFile?: File }): Promise<string> {
     const filename = file.name;
     const fileUri = file.uri;
     const mimeType = file.type;
@@ -433,7 +435,10 @@ export class SupabaseProductionRepository implements ProductionRepository {
     try {
       let fileData: Blob | Uint8Array | string;
 
-      if (Platform.OS === 'web' && typeof fetch !== 'undefined') {
+      if (Platform.OS === 'web' && file.webFile instanceof File) {
+        // Prefer browser File handle on web to avoid stale blob/data URIs.
+        fileData = file.webFile;
+      } else if (Platform.OS === 'web' && typeof fetch !== 'undefined') {
         const response = await fetch(fileUri);
         fileData = await response.blob();
       } else if (fileUri.startsWith('file://') || fileUri.startsWith('content://')) {

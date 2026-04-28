@@ -473,17 +473,15 @@ export default function TrainingDetailScreen() {
                 : training.title}
             </Text>
             <View style={styles.headerRight}>
-              {(training.category === 'onboarding' || training.category === 'mandatory') && (
-                <PermissionGuard permission="documents.update">
-                  <TouchableOpacity
-                    style={styles.editButton}
-                    onPress={() => pushWithParams(router, '/training-create', { trainingId: training.id, category: training.category })}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="pencil-outline" size={24} color={colors.primary} />
-                  </TouchableOpacity>
-                </PermissionGuard>
-              )}
+              <PermissionGuard permission="documents.update">
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => pushWithParams(router, '/training-create', { trainingId: training.id, category: training.category })}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="pencil-outline" size={24} color={colors.primary} />
+                </TouchableOpacity>
+              </PermissionGuard>
               <PermissionGuard permission="documents.delete">
                 <TouchableOpacity
                   style={styles.deleteButton}

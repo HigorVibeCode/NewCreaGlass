@@ -252,10 +252,12 @@ export class SupabaseEquipmentDocumentsRepository implements EquipmentDocumentsR
     const now = new Date();
     const pad = (n: number) => n.toString().padStart(2, '0');
     const dateStr = `${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()}`;
-    const timeStr = `${pad(now.getHours())}h${pad(now.getMinutes())}`;
+    const timeStr = `${pad(now.getHours())}h${pad(now.getMinutes())}${pad(now.getSeconds())}`;
     const ext = originalName.includes('.') ? originalName.substring(originalName.lastIndexOf('.')) : '';
     const typeLabel = mimeType.startsWith('image/') ? 'Foto' : mimeType.startsWith('video/') ? 'Video' : 'Arquivo';
-    const displayFilename = `${typeLabel}_${dateStr}_${timeStr}${ext}`;
+    // Add a short suffix to avoid collisions when multiple files are uploaded together.
+    const uniqueSuffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+    const displayFilename = `${typeLabel}_${dateStr}_${timeStr}_${uniqueSuffix}${ext}`;
 
     const uniqueFilename = `equip_${documentId}_${Date.now()}${ext}`;
 

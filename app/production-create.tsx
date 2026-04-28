@@ -306,6 +306,7 @@ export default function ProductionCreateScreen() {
         filename,
         mimeType,
         storagePath: asset.uri,
+        webFile: (asset as any).file,
         createdAt: new Date().toISOString(),
       };
       const nextAttachments = [...baseAttachments, newAttachment];
@@ -370,6 +371,7 @@ export default function ProductionCreateScreen() {
         filename,
         mimeType,
         storagePath: asset.uri,
+        webFile: (asset as any).file,
         createdAt: new Date().toISOString(),
       };
 
@@ -429,6 +431,7 @@ export default function ProductionCreateScreen() {
         filename: file.name,
         mimeType: fileMimeType,
         storagePath: file.uri,
+        webFile: (file as any).file,
         createdAt: new Date().toISOString(),
       };
 

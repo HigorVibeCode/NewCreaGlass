@@ -239,6 +239,8 @@ export interface ProductionAttachment {
   filename: string;
   mimeType: string;
   storagePath: string;
+  /** Web-only in-memory file handle used before persisting to storage */
+  webFile?: File;
   /** Raw storage key from DB — kept intact across load/save cycles so signed URLs never overwrite the real key */
   originalStoragePath?: string;
   createdAt: string;

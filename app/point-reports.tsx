@@ -6,7 +6,6 @@ import {
   Text,
   TouchableOpacity,
   ActivityIndicator,
-  Linking,
   Platform,
   Alert,
 } from 'react-native';
@@ -28,15 +27,13 @@ import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { Dropdown, DropdownOption } from '../src/components/shared/Dropdown';
 import { DatePicker } from '../src/components/shared/DatePicker';
 import { theme } from '../src/theme';
-import { TimeEntry } from '../src/types';
 import {
   buildDayRows,
   totalHoursInPeriod,
   buildPointReportHtml,
-  getEffectiveRecordedAt,
 } from '../src/utils/point-report-pdf';
 import { getLogoBase64 } from '../src/utils/logo-base64';
-import { formatDateTime, formatTimestamp, formatDate } from '../src/utils/date-format';
+import { formatTimestamp, formatDate } from '../src/utils/date-format';
 
 function formatEmittedAt(): string {
   return formatTimestamp(new Date());
@@ -209,6 +206,14 @@ export default function PointReportsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.filters}>
+          {isMaster && (
+            <Dropdown
+              label={t('point.filterUser')}
+              value={selectedUserId}
+              options={userOptions}
+              onSelect={setSelectedUserId}
+            />
+          )}
           <DatePicker
             label={t('point.dateFrom')}
             value={dateFrom}
@@ -221,30 +226,20 @@ export default function PointReportsScreen() {
             onSelect={setDateTo}
             placeholder={t('point.dateTo')}
           />
-          {isMaster && (
-            <Dropdown
-              label={t('point.filterUser')}
-              value={selectedUserId}
-              options={userOptions}
-              onSelect={setSelectedUserId}
-            />
-          )}
         </View>
 
-        {(entries.length > 0 || dayRows.length > 0) && (
-          <Button
-            title={t('point.exportPdf')}
-            variant="outline"
-            onPress={handleExportPdf}
-            loading={exportingPdf}
-            disabled={exportingPdf}
-            style={styles.exportButton}
-          />
-        )}
+        <Button
+          title={t('point.exportPdf')}
+          variant="outline"
+          onPress={handleExportPdf}
+          loading={exportingPdf}
+          disabled={exportingPdf || dayRows.length === 0}
+          style={styles.exportButton}
+        />
 
         {isLoading ? (
           <ActivityIndicator size="small" color={colors.primary} style={styles.loader} />
-        ) : entries.length === 0 ? (
+        ) : dayRows.length === 0 ? (
           <View style={styles.empty}>
             <Ionicons name="document-text-outline" size={40} color={colors.textTertiary} />
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
@@ -252,43 +247,11 @@ export default function PointReportsScreen() {
             </Text>
           </View>
         ) : (
-          <View style={styles.list}>
-            {entries.map((entry: TimeEntry) => (
-              <View
-                key={entry.id}
-                style={[styles.card, { backgroundColor: colors.cardBackground }]}
-              >
-                <View style={styles.cardRow}>
-                  <Text style={[styles.cardUser, { color: colors.text }]}>{entry.userName}</Text>
-                  <Text style={[styles.cardDateTime, { color: colors.primary }]}>
-                    {formatDateTime(getEffectiveRecordedAt(entry))}
-                    {entry.isAdjusted ? ` (${t('point.adjusted')})` : ''}
-                  </Text>
-                </View>
-                {entry.locationAddress ? (
-                  <View style={styles.cardRow}>
-                    <Ionicons name="location-outline" size={16} color={colors.textSecondary} />
-                    <Text style={[styles.cardAddress, { color: colors.textSecondary }]} numberOfLines={2}>
-                      {entry.locationAddress}
-                    </Text>
-                  </View>
-                ) : null}
-                {entry.locationAddress && (
-                  <TouchableOpacity
-                    style={styles.mapLink}
-                    onPress={() => {
-                      const q = encodeURIComponent(entry.locationAddress!);
-                      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${q}`);
-                    }}
-                  >
-                    <Ionicons name="map-outline" size={16} color={colors.primary} />
-                    <Text style={[styles.mapLinkText, { color: colors.primary }]}>
-                      {t('point.openMap')}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            ))}
+          <View style={[styles.generatorReadyCard, { backgroundColor: colors.cardBackground }]}>
+            <Ionicons name="checkmark-circle-outline" size={20} color={colors.primary} />
+            <Text style={[styles.generatorReadyText, { color: colors.textSecondary }]}>
+              {`${dayRows.length} ${t('point.myEntries')} - ${t('point.exportPdf')}`}
+            </Text>
           </View>
         )}
       </ScrollView>
@@ -352,40 +315,16 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.md,
     marginTop: theme.spacing.sm,
   },
-  list: { gap: theme.spacing.sm },
-  card: {
+  generatorReadyCard: {
+    borderRadius: theme.borderRadius.md,
     borderRadius: theme.borderRadius.md,
     padding: theme.spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
     ...theme.shadows.sm,
   },
-  cardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: theme.spacing.sm,
-    marginBottom: theme.spacing.xs,
-  },
-  cardUser: {
-    fontSize: theme.typography.fontSize.md,
-    fontWeight: theme.typography.fontWeight.medium,
-    flex: 1,
-  },
-  cardDateTime: {
-    fontSize: theme.typography.fontSize.sm,
-  },
-  cardAddress: {
-    fontSize: theme.typography.fontSize.sm,
-    flex: 1,
-    marginLeft: 20,
-    marginBottom: theme.spacing.xs,
-  },
-  mapLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.xs,
-    marginTop: theme.spacing.xs,
-  },
-  mapLinkText: {
+  generatorReadyText: {
     fontSize: theme.typography.fontSize.sm,
   },
 });
