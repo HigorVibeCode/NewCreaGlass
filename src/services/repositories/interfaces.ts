@@ -1,6 +1,9 @@
 import {
     BloodPriorityMessage,
     BloodPriorityRead,
+    MailboxRow,
+    UserDirectMessage,
+    UserDirectMessageDetail,
     CheckIn,
     ChecklistItem,
     Client,
@@ -137,6 +140,16 @@ export interface BloodPriorityRepository {
   confirmRead(messageId: string, userId: string): Promise<void>;
 }
 
+/** Mensagens entre utilizadores, estilo email (uma mensagem = um registo; sem chat). */
+export interface DirectMessagesRepository {
+  getUnreadCount(): Promise<number>;
+  getReceivedMessages(): Promise<MailboxRow[]>;
+  getSentMessages(): Promise<MailboxRow[]>;
+  sendMessage(recipientId: string, body: string): Promise<UserDirectMessage>;
+  getMessageById(messageId: string): Promise<UserDirectMessageDetail | null>;
+  markMessageRead(messageId: string): Promise<void>;
+}
+
 // Events Repository (placeholder)
 export interface EventsRepository {
   getAllEvents(): Promise<Event[]>;
@@ -207,7 +220,7 @@ export interface TrainingRepository {
   deleteTraining(trainingId: string): Promise<void>;
   
   // Training attachments
-  addTrainingAttachment(trainingId: string, file: File | { uri: string; name: string; type: string }): Promise<import('../../types').TrainingAttachment>;
+  addTrainingAttachment(trainingId: string, file: File | { uri: string; name: string; type: string; webFile?: File }): Promise<import('../../types').TrainingAttachment>;
   deleteTrainingAttachment(attachmentId: string): Promise<void>;
   getTrainingAttachmentUrl(attachmentId: string): Promise<string>;
   
@@ -219,6 +232,7 @@ export interface TrainingRepository {
   getSignatureByCompletionId(completionId: string): Promise<import('../../types').TrainingSignature | null>;
   
   // History
+  restartTraining(trainingId: string, userId: string): Promise<void>;
   getCompletedTrainings(userId?: string): Promise<TrainingWithCompletion[]>; // If userId is provided, get user's completions; if not and user is Master, get all
   getTrainingHistory(trainingId: string, userId?: string): Promise<TrainingWithCompletion[]>; // Get all completions for a specific training
 }

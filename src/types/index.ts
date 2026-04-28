@@ -179,6 +179,34 @@ export interface BloodPriorityRead {
   minTimerSeconds: number;
 }
 
+/** Mensagens 1:1 entre utilizadores (inbox interna). */
+export interface UserDirectMessage {
+  id: string;
+  senderId: string;
+  recipientId: string;
+  body: string;
+  readAt?: string;
+  createdAt: string;
+}
+
+/** Uma linha na caixa (recebidas ou enviadas), estilo email — sem agrupamento em conversas. */
+export interface MailboxRow {
+  id: string;
+  body: string;
+  preview: string;
+  createdAt: string;
+  readAt?: string;
+  counterpartId: string;
+  counterpartName: string;
+  direction: 'received' | 'sent';
+}
+
+/** Mensagem com nomes dos intervenientes (ecrã de leitura). */
+export interface UserDirectMessageDetail extends UserDirectMessage {
+  senderName: string;
+  recipientName: string;
+}
+
 // Event types (placeholder)
 export type EventStatus = 'active' | 'completed';
 

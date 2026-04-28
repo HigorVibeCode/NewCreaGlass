@@ -10,7 +10,7 @@ import { theme } from '../../theme';
 import { usePermissions } from '../../hooks/use-permissions';
 import { ThreeDotsMenu } from './ThreeDotsMenu';
 import { useThemeColors } from '../../hooks/use-theme-colors';
-import { useMyTimeEntriesQuery, useUnreadNotificationsCountQuery } from '../../services/queries';
+import { useMyTimeEntriesQuery, useUnreadNotificationsCountQuery, useDirectMessageUnreadQuery } from '../../services/queries';
 import { TimeEntry } from '../../types';
 import { getEffectiveRecordedAt } from '../../utils/point-report-pdf';
 
@@ -145,6 +145,7 @@ export const TopBar: React.FC<TopBarProps> = () => {
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const { data: unreadCount = 0 } = useUnreadNotificationsCountQuery(user?.id);
+  const { data: dmUnreadCount = 0 } = useDirectMessageUnreadQuery(user?.id);
   const { data: timeEntries = [] } = useMyTimeEntriesQuery(user?.id);
   const [bloodPriorityUnread, setBloodPriorityUnread] = React.useState(0);
   const [showMenu, setShowMenu] = useState(false);
@@ -256,6 +257,22 @@ export const TopBar: React.FC<TopBarProps> = () => {
             count={bloodPriorityUnread}
             onPress={() => router.push('/blood-priority')}
           />
+          <TouchableOpacity
+            style={styles.iconContainer}
+            onPress={() => router.push('/user-messages')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.circularIcon, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+              <Ionicons name="mail-outline" size={18} color={colors.text} />
+            </View>
+            {dmUnreadCount > 0 && (
+              <View style={[styles.badge, { backgroundColor: colors.primary, borderColor: colors.background }]}>
+                <Text style={[styles.badgeText, { color: colors.textInverse }]}>
+                  {dmUnreadCount > 9 ? '9+' : dmUnreadCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
           {hasPermission('notifications.view') && (
             <TouchableOpacity
               style={styles.iconContainer}

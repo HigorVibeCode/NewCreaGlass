@@ -70,6 +70,7 @@ export default function TrainingDetailScreen() {
   const [completionSignature, setCompletionSignature] = useState<TrainingSignature | null>(null);
   const [showCompletedSignatureModal, setShowCompletedSignatureModal] = useState(false);
   const [completedSignatureImageUrl, setCompletedSignatureImageUrl] = useState<string | null>(null);
+  const [isRestartingTraining, setIsRestartingTraining] = useState(false);
 
   useEffect(() => {
     if (trainingId) {
@@ -144,8 +145,11 @@ export default function TrainingDetailScreen() {
             setTimeSpent(existingCompletion.timeSpentSeconds || elapsed);
           }
         } else {
-          // Não foi iniciado ainda
+          // Não foi iniciado ainda (ou após "refazer" — linha de conclusão removida)
+          setCompletion(null);
           setTrainingState('not_started');
+          setTimeSpent(0);
+          startTimeRef.current = null;
         }
       } else {
         setLoadError(true);
@@ -390,6 +394,42 @@ export default function TrainingDetailScreen() {
     }
   };
 
+  const handleRestartTrainingFromDetail = () => {
+    if (!trainingId || !user?.id || !completion?.userId) {
+      Alert.alert(t('common.error'), t('training.restartTrainingMissing'));
+      return;
+    }
+
+    const title = t('training.restartTrainingTitle');
+    const message = t('training.restartTrainingConfirm');
+
+    const run = async () => {
+      try {
+        setIsRestartingTraining(true);
+        await repos.trainingRepo.restartTraining(trainingId, completion.userId);
+        await loadTraining();
+        Alert.alert(t('common.success'), t('training.restartTrainingSuccess'));
+      } catch (error) {
+        console.error('Error restarting training:', error);
+        Alert.alert(t('common.error'), t('training.restartTrainingError'));
+      } finally {
+        setIsRestartingTraining(false);
+      }
+    };
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm(`${title}\n\n${message}`)) {
+        void run();
+      }
+      return;
+    }
+
+    Alert.alert(title, message, [
+      { text: t('common.cancel') || 'Cancelar', style: 'cancel' },
+      { text: t('training.restartTrainingAction'), style: 'destructive', onPress: () => void run() },
+    ]);
+  };
+
   const handleDelete = () => {
     if (!trainingId) return;
     
@@ -499,10 +539,11 @@ export default function TrainingDetailScreen() {
           style={styles.scrollView}
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           {/* Status Card */}
           <View style={[styles.statusCard, { backgroundColor: colors.cardBackground }]}>
-            <View style={styles.statusHeader}>
+            <View style={[styles.statusHeader, styles.statusHeaderRow]}>
               <View style={[styles.statusBadge, { 
                 backgroundColor: isCompleted 
                   ? colors.success + '20' 
@@ -521,6 +562,25 @@ export default function TrainingDetailScreen() {
                   {isCompleted ? t('training.status.completed') : trainingState === 'in_progress' ? t('training.status.inProgress') : t('training.status.notStarted')}
                 </Text>
               </View>
+              {isCompleted && completion && (
+                <TouchableOpacity
+                  style={[styles.redoTrainingButton, { borderColor: colors.warning, backgroundColor: colors.warning + '12' }]}
+                  onPress={handleRestartTrainingFromDetail}
+                  activeOpacity={0.7}
+                  disabled={isRestartingTraining}
+                >
+                  {isRestartingTraining ? (
+                    <ActivityIndicator size="small" color={colors.warning} />
+                  ) : (
+                    <>
+                      <Ionicons name="refresh" size={16} color={colors.warning} />
+                      <Text style={[styles.redoTrainingButtonText, { color: colors.warning }]}>
+                        {t('training.restartTrainingAction')}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
 
             {(training.category === 'onboarding'
@@ -1008,6 +1068,28 @@ const styles = StyleSheet.create({
   statusHeader: {
     marginBottom: theme.spacing.md,
   },
+  statusHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+  },
+  redoTrainingButton: {
+    flexShrink: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs / 2,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    minHeight: 40,
+  },
+  redoTrainingButtonText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.semibold,
+  },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1016,6 +1098,7 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.sm,
     borderRadius: theme.borderRadius.md,
     alignSelf: 'flex-start',
+    flexShrink: 0,
   },
   statusText: {
     fontSize: theme.typography.fontSize.md,

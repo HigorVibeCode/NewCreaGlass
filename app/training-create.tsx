@@ -27,6 +27,42 @@ import { Training, TrainingCategory, TrainingAttachment } from '../src/types';
 import { theme } from '../src/theme';
 
 const MAX_ATTACHMENTS = 5;
+/** Limite técnico alvo quando o projeto Supabase (Pro+) tem Storage global suficiente. No plano Free o backend impõe máx. 50 MB/object. */
+const MAX_TRAINING_ATTACHMENT_BYTES = 262144000; // 250 MB
+
+function appendSupabaseStorageSizeHint(message: string): string {
+  const m = message.toLowerCase();
+  if (!m.includes('maximum') && !m.includes('exceeded') && !m.includes('object is too')) {
+    return message;
+  }
+  return `${message}\n\n` +
+    'Limite no Supabase: no plano Free o tamanho máximo global por arquivo é 50 MB — não aumenta só com migration no repo. Para arquivos maiores: aumente em Dashboard → Storage → Configuration ("Global file size limit") no plano adequado ou use um vídeo/arquivo menor.';
+}
+
+function inferMimeTypeFromFilename(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase() || '';
+  if (ext === 'pdf') return 'application/pdf';
+  if (ext === 'mp4') return 'video/mp4';
+  if (ext === 'mov') return 'video/quicktime';
+  if (ext === 'avi') return 'video/x-msvideo';
+  if (ext === 'webm') return 'video/webm';
+  return 'application/octet-stream';
+}
+
+function showMessage(title: string, message: string) {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    window.alert(`${title}\n\n${message}`);
+    return;
+  }
+  Alert.alert(title, message);
+}
+
+function generateLocalAttachmentId(): string {
+  if (typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.randomUUID === 'function') {
+    return `attach-${globalThis.crypto.randomUUID()}`;
+  }
+  return `attach-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
 
 export default function TrainingCreateScreen() {
   const { t } = useI18n();
@@ -44,7 +80,7 @@ export default function TrainingCreateScreen() {
   const [content, setContent] = useState('');
   const [titleI18n, setTitleI18n] = useState<Record<string, string>>({});
   const [descriptionI18n, setDescriptionI18n] = useState<Record<string, string>>({});
-  const [attachments, setAttachments] = useState<Array<{ id: string; filename: string; mimeType: string; uri: string; isNew?: boolean; attachmentId?: string }>>([]);
+  const [attachments, setAttachments] = useState<Array<{ id: string; filename: string; mimeType: string; uri: string; isNew?: boolean; attachmentId?: string; webFile?: File }>>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [uploadingAttachments, setUploadingAttachments] = useState<Set<string>>(new Set());
@@ -119,63 +155,96 @@ export default function TrainingCreateScreen() {
       if (result.canceled) return;
 
       const file = result.assets[0];
-      const fileMimeType = file.mimeType || 'application/pdf';
-      const isPDF = fileMimeType === 'application/pdf';
-      const isVideo = fileMimeType.startsWith('video/');
+      const fileSize = (file as any).size as number | undefined;
+      if (typeof fileSize === 'number' && fileSize > MAX_TRAINING_ATTACHMENT_BYTES) {
+        showMessage(
+          t('common.error'),
+          `Arquivo muito grande. Limite do app: 250 MB.\n\nArquivo: ${(fileSize / (1024 * 1024)).toFixed(1)} MB`
+        );
+        return;
+      }
+      const SUPABASE_FREE_GLOBAL_MAX_BYTES = 52428800; // 50 MB — limite máximo Supabase Storage no plano Free
+      if (typeof fileSize === 'number' && fileSize > SUPABASE_FREE_GLOBAL_MAX_BYTES) {
+        showMessage(
+          'Tamanho e plano Supabase',
+          `Este arquivo tem ${(fileSize / (1024 * 1024)).toFixed(1)} MB. No plano Free do Supabase o limite global de upload é 50 MB por arquivo — o servidor recusa valores maiores, mesmo alterando apenas o bucket. Para aceitar até 250 MB você precisa de plano pago e aumentar "Global file size limit" em Storage → Configuration.\n\nPode tentar mesmo assim se o projeto já estiver atualizado no Dashboard.`
+        );
+      }
+      const inferredMime = inferMimeTypeFromFilename(file.name);
+      const fileMimeType = file.mimeType && file.mimeType !== 'application/octet-stream'
+        ? file.mimeType
+        : inferredMime;
+      const extension = file.name.split('.').pop()?.toLowerCase() || '';
+      const isPDF = fileMimeType === 'application/pdf' || extension === 'pdf';
+      const isVideo =
+        fileMimeType.startsWith('video/') ||
+        ['mp4', 'mov', 'avi', 'webm'].includes(extension);
 
       if (!isPDF && !isVideo) {
-        Alert.alert(t('common.error'), t('training.onlyPdfVideoAllowed'));
+        showMessage(t('common.error'), t('training.onlyPdfVideoAllowed'));
         return;
       }
 
       const newAttachment = {
-        id: 'attach-' + Date.now(),
+        id: generateLocalAttachmentId(),
         filename: file.name,
         mimeType: fileMimeType,
         uri: file.uri,
         isNew: true,
+        webFile: (file as any).file,
       };
 
-      setAttachments([...attachments, newAttachment]);
+      setAttachments((prev) => [...prev, newAttachment]);
     } catch (error) {
       console.error('Error picking document:', error);
-      Alert.alert(t('common.error'), t('training.selectDocumentError'));
+      showMessage(t('common.error'), t('training.selectDocumentError'));
     }
   };
 
+  const confirmRemoveStoredAttachment = (title: string, message: string, onConfirm: () => void | Promise<void>) => {
+    const run = async () => {
+      try {
+        await onConfirm();
+      } catch (error) {
+        console.error('Error deleting attachment:', error);
+        showMessage(t('common.error'), t('training.removeAttachmentError'));
+      }
+    };
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm(`${title}\n\n${message}`)) {
+        void run();
+      }
+      return;
+    }
+    Alert.alert(title, message, [
+      { text: t('common.cancel') || 'Cancelar', style: 'cancel' },
+      {
+        text: t('common.delete') || 'Excluir',
+        style: 'destructive',
+        onPress: () => void run(),
+      },
+    ]);
+  };
+
   const handleRemoveAttachment = (id: string) => {
-    const attachment = attachments.find(att => att.id === id);
+    const attachment = attachments.find((att) => att.id === id);
     if (attachment && !attachment.isNew && attachment.attachmentId) {
-      // Se é um anexo existente, confirmar exclusão
-      Alert.alert(
+      confirmRemoveStoredAttachment(
         t('common.confirm'),
         t('training.removeAttachmentConfirm'),
-        [
-          { text: t('common.cancel') || 'Cancelar', style: 'cancel' },
-          {
-            text: t('common.delete') || 'Excluir',
-            style: 'destructive',
-            onPress: async () => {
-              try {
-                await repos.trainingRepo.deleteTrainingAttachment(attachment.attachmentId!);
-                setAttachments(attachments.filter(att => att.id !== id));
-              } catch (error) {
-                console.error('Error deleting attachment:', error);
-                Alert.alert(t('common.error'), t('training.removeAttachmentError'));
-              }
-            },
-          },
-        ]
+        async () => {
+          await repos.trainingRepo.deleteTrainingAttachment(attachment.attachmentId!);
+          setAttachments((prev) => prev.filter((att) => att.id !== id));
+        }
       );
     } else {
-      // Se é um anexo novo, apenas remover da lista
-      setAttachments(attachments.filter(att => att.id !== id));
+      setAttachments((prev) => prev.filter((att) => att.id !== id));
     }
   };
 
   const validateForm = (): boolean => {
     if (!title.trim()) {
-      Alert.alert(t('common.error'), t('training.titleRequired'));
+      showMessage(t('common.error'), t('training.titleRequired'));
       return false;
     }
     return true;
@@ -218,34 +287,70 @@ export default function TrainingCreateScreen() {
 
       // Upload new attachments
       const newAttachments = attachments.filter(att => att.isNew);
+      let uploadedCount = 0;
+      let failedCount = 0;
+      const uploadErrors: string[] = [];
+      let uploadStatusMessage = '';
       if (newAttachments.length > 0) {
         setUploadingAttachments(new Set(newAttachments.map(att => att.id)));
-        try {
-          for (const attachment of newAttachments) {
-            await repos.trainingRepo.addTrainingAttachment(savedTrainingId, {
-              uri: attachment.uri,
-              name: attachment.filename,
-              type: attachment.mimeType,
-            });
+        for (const attachment of newAttachments) {
+          try {
+            const uploadPayload =
+              Platform.OS === 'web' && attachment.webFile instanceof File
+                ? {
+                    uri: attachment.uri,
+                    name: attachment.filename,
+                    type: attachment.mimeType,
+                    webFile: attachment.webFile,
+                  }
+                : {
+                    uri: attachment.uri,
+                    name: attachment.filename,
+                    type: attachment.mimeType,
+                  };
+            await repos.trainingRepo.addTrainingAttachment(savedTrainingId, uploadPayload as any);
+            uploadedCount += 1;
+          } catch (uploadErr) {
+            failedCount += 1;
+            console.error('Error uploading attachment:', attachment.filename, uploadErr);
+            const message = appendSupabaseStorageSizeHint(
+              uploadErr instanceof Error ? uploadErr.message : String(uploadErr)
+            );
+            uploadErrors.push(`${attachment.filename}: ${message}`);
           }
-        } catch (error) {
-          console.error('Error uploading attachments:', error);
-          Alert.alert(t('common.error'), t('training.uploadAttachmentsError'));
-        } finally {
-          setUploadingAttachments(new Set());
+        }
+        setUploadingAttachments(new Set());
+
+        if (failedCount > 0 && uploadedCount === 0) {
+          uploadStatusMessage = t('training.uploadAttachmentsError');
+        } else if (failedCount > 0 && uploadedCount > 0) {
+          uploadStatusMessage = `${uploadedCount} ${t('training.attachments')} enviados, ${failedCount} com falha.`;
+        } else if (uploadedCount > 0) {
+          uploadStatusMessage = `${uploadedCount} ${uploadedCount === 1 ? t('training.attachment') : t('training.attachments')} enviado(s) com sucesso.`;
+        }
+
+        if (failedCount > 0) {
+          const details = uploadErrors.length > 0 ? `\n\n${uploadErrors.slice(0, 2).join('\n')}` : '';
+          showMessage(t('common.error'), `${uploadStatusMessage || t('training.uploadAttachmentsError')}${details}`);
+          // Keep the user on this screen so they can retry attachment upload.
+          return;
         }
       }
 
-      Alert.alert(
-        t('common.success'),
-        isEditing ? t('training.trainingUpdated') : t('training.trainingCreated'),
-        [
-          { text: t('common.ok') || t('common.confirm'), onPress: () => safeBack(router) },
-        ]
-      );
+      const baseSuccess = isEditing ? t('training.trainingUpdated') : t('training.trainingCreated');
+      const finalSuccessMessage = uploadStatusMessage
+        ? `${baseSuccess}\n\n${uploadStatusMessage}`
+        : baseSuccess;
+
+      showMessage(t('common.success'), finalSuccessMessage);
+      safeBack(router);
     } catch (error) {
       console.error('Error saving training:', error);
-      Alert.alert(t('common.error'), t('training.saveError'));
+      const errorMessage =
+        error instanceof Error && error.message
+          ? `${t('training.saveError')}\n\n${error.message}`
+          : t('training.saveError');
+      showMessage(t('common.error'), errorMessage);
     } finally {
       setIsCreating(false);
     }
@@ -307,6 +412,7 @@ export default function TrainingCreateScreen() {
             style={styles.scrollView}
             contentContainerStyle={[styles.contentContainer, { paddingBottom: insets.bottom + theme.spacing.md }]}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           >
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>
@@ -388,7 +494,11 @@ export default function TrainingCreateScreen() {
                       style={[styles.attachmentItem, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
                     >
                       <View style={styles.attachmentInfo}>
-                        <Ionicons name="document-text" size={20} color={colors.primary} />
+                        <Ionicons
+                          name={attachment.mimeType.startsWith('video/') ? 'videocam' : 'document-text'}
+                          size={20}
+                          color={colors.primary}
+                        />
                         <Text style={[styles.attachmentName, { color: colors.text }]} numberOfLines={1}>
                           {attachment.filename}
                         </Text>
@@ -399,6 +509,7 @@ export default function TrainingCreateScreen() {
                         <TouchableOpacity
                           onPress={() => handleRemoveAttachment(attachment.id)}
                           style={styles.removeButton}
+                          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                         >
                           <Ionicons name="close-circle" size={24} color={colors.error} />
                         </TouchableOpacity>

@@ -18,6 +18,7 @@ import {
   TrainingRepository,
   UsersRepository,
   WorkOrdersRepository,
+  DirectMessagesRepository,
 } from './repositories/interfaces';
 
 // Import Supabase repositories
@@ -40,6 +41,7 @@ import { SupabaseDeviceTokensRepository } from '../repositories/supabase/Supabas
 import { SupabaseNotificationPreferencesRepository } from '../repositories/supabase/SupabaseNotificationPreferencesRepository';
 import { SupabasePushDeliveryLogsRepository } from '../repositories/supabase/SupabasePushDeliveryLogsRepository';
 import { SupabaseEquipmentDocumentsRepository } from '../repositories/supabase/SupabaseEquipmentDocumentsRepository';
+import { SupabaseDirectMessagesRepository } from '../repositories/supabase/SupabaseDirectMessagesRepository';
 
 // Import Mock repositories (for fallback or development)
 import { MockAuthRepository } from '../repositories/mock/MockAuthRepository';
@@ -50,6 +52,7 @@ import { MockDocumentsRepository } from '../repositories/mock/MockDocumentsRepos
 import { MockInventoryRepository } from '../repositories/mock/MockInventoryRepository';
 import { MockNotificationsRepository } from '../repositories/mock/MockNotificationsRepository';
 import { MockBloodPriorityRepository } from '../repositories/mock/MockBloodPriorityRepository';
+import { MockDirectMessagesRepository } from '../repositories/mock/MockDirectMessagesRepository';
 import { MockEventsRepository } from '../repositories/mock/MockEventsRepository';
 import { MockProductionRepository } from '../repositories/mock/MockProductionRepository';
 import { MockMaintenanceRepository } from '../repositories/mock/MockMaintenanceRepository';
@@ -70,6 +73,7 @@ export const repos = {
   inventoryRepo: (USE_MOCK_REPOSITORIES ? new MockInventoryRepository() : new SupabaseInventoryRepository()) as InventoryRepository,
   notificationsRepo: (USE_MOCK_REPOSITORIES ? new MockNotificationsRepository() : new SupabaseNotificationsRepository()) as NotificationsRepository,
   bloodPriorityRepo: (USE_MOCK_REPOSITORIES ? new MockBloodPriorityRepository() : new SupabaseBloodPriorityRepository()) as BloodPriorityRepository,
+  directMessagesRepo: (USE_MOCK_REPOSITORIES ? new MockDirectMessagesRepository() : new SupabaseDirectMessagesRepository()) as DirectMessagesRepository,
   eventsRepo: (USE_MOCK_REPOSITORIES ? new MockEventsRepository() : new SupabaseEventsRepository()) as EventsRepository,
   productionRepo: (USE_MOCK_REPOSITORIES ? new MockProductionRepository() : new SupabaseProductionRepository()) as ProductionRepository,
   maintenanceRepo: (USE_MOCK_REPOSITORIES ? new MockMaintenanceRepository() : new SupabaseMaintenanceRepository()) as MaintenanceRepository,

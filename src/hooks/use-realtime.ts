@@ -351,6 +351,19 @@ export const useRealtime = () => {
         )
         .subscribe();
 
+      const directMessagesChannel = supabase
+        .channel('user-direct-messages-changes', {
+          config: { private: true },
+        })
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'user_direct_messages' },
+          () => {
+            queryClient.invalidateQueries({ queryKey: ['directMessages'] });
+          }
+        )
+        .subscribe();
+
       channelsRef.current = [
         documentsChannel,
         inventoryChannel,
@@ -360,6 +373,7 @@ export const useRealtime = () => {
         eventsChannel,
         usersChannel,
         bloodPriorityChannel,
+        directMessagesChannel,
       ];
     };
 

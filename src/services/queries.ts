@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Permission, User, Notification, TimeEntry } from '../types';
+import { Permission, User, Notification, TimeEntry, MailboxRow, UserDirectMessage, UserDirectMessageDetail } from '../types';
 import { repos } from './container';
 
 export const usePermissionsQuery = (userId?: string) => {
@@ -90,5 +90,38 @@ export const useAllTimeEntriesQuery = (options?: {
     queryKey: ['timeEntries', 'all', options?.from, options?.to, options?.userId],
     queryFn: () => repos.timeEntriesRepo.getAllTimeEntries(options),
     enabled: options?.enabled ?? true,
+  });
+};
+
+export const useDirectMessageUnreadQuery = (userId?: string) => {
+  return useQuery<number>({
+    queryKey: ['directMessages', 'unread', userId],
+    queryFn: () => repos.directMessagesRepo.getUnreadCount(),
+    enabled: !!userId,
+    refetchInterval: 10000,
+  });
+};
+
+export const useReceivedMailboxQuery = (userId?: string) => {
+  return useQuery<MailboxRow[]>({
+    queryKey: ['directMessages', 'received', userId],
+    queryFn: () => repos.directMessagesRepo.getReceivedMessages(),
+    enabled: !!userId,
+  });
+};
+
+export const useSentMailboxQuery = (userId?: string) => {
+  return useQuery<MailboxRow[]>({
+    queryKey: ['directMessages', 'sent', userId],
+    queryFn: () => repos.directMessagesRepo.getSentMessages(),
+    enabled: !!userId,
+  });
+};
+
+export const useDirectMessageDetailQuery = (userId?: string, messageId?: string) => {
+  return useQuery<UserDirectMessageDetail | null>({
+    queryKey: ['directMessages', 'detail', userId, messageId],
+    queryFn: () => repos.directMessagesRepo.getMessageById(messageId!),
+    enabled: !!userId && !!messageId,
   });
 };

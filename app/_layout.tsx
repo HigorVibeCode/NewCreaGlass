@@ -119,6 +119,31 @@ export default function RootLayout() {
                     ...(Platform.OS === 'web' && { headerLeft: () => <WebBackButton /> }),
                   }} 
                 />
+                <Stack.Screen
+                  name="user-messages"
+                  options={{
+                    presentation: 'transparentModal',
+                    title: 'Messages',
+                    animation: 'fade',
+                    headerShown: false,
+                  }}
+                />
+                <Stack.Screen
+                  name="user-message-detail"
+                  options={{
+                    presentation: 'transparentModal',
+                    animation: 'fade',
+                    headerShown: false,
+                  }}
+                />
+                <Stack.Screen
+                  name="user-messages-compose"
+                  options={{
+                    presentation: 'transparentModal',
+                    animation: 'fade',
+                    headerShown: false,
+                  }}
+                />
                 <Stack.Screen 
                   name="inventory-group" 
                   options={{ 

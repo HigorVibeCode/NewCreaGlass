@@ -50,6 +50,7 @@ export default function TrainingsHistoryScreen() {
   const [signatureImageUrl, setSignatureImageUrl] = useState<string | null>(null);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [exportingCertificateId, setExportingCertificateId] = useState<string | null>(null);
+  const [restartingTrainingId, setRestartingTrainingId] = useState<string | null>(null);
 
   const isMaster = user?.userType === 'Master';
 
@@ -416,6 +417,48 @@ export default function TrainingsHistoryScreen() {
     }
   };
 
+  const handleRestartTraining = (training: TrainingWithCompletion) => {
+    if (!training.completion?.userId) {
+      Alert.alert(t('common.error'), t('training.restartTrainingMissing'));
+      return;
+    }
+
+    const title = t('training.restartTrainingTitle');
+    const message = t('training.restartTrainingConfirm');
+    const execute = async () => {
+      try {
+        setRestartingTrainingId(training.id);
+        await repos.trainingRepo.restartTraining(training.id, training.completion!.userId);
+        const completionId = training.completion!.id;
+        setTrainings((prev) =>
+          prev.filter((item) => !(item.id === training.id && item.completion?.id === completionId))
+        );
+        Alert.alert(t('common.success'), t('training.restartTrainingSuccess'));
+      } catch (error) {
+        console.error('Error restarting training:', error);
+        Alert.alert(t('common.error'), t('training.restartTrainingError'));
+      } finally {
+        setRestartingTrainingId(null);
+      }
+    };
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm(`${title}\n\n${message}`)) {
+        void execute();
+      }
+      return;
+    }
+
+    Alert.alert(title, message, [
+      { text: t('common.cancel') || 'Cancelar', style: 'cancel' },
+      {
+        text: t('training.restartTrainingAction'),
+        style: 'destructive',
+        onPress: () => void execute(),
+      },
+    ]);
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScreenWrapper>
@@ -468,6 +511,7 @@ export default function TrainingsHistoryScreen() {
             style={styles.scrollView}
             contentContainerStyle={styles.contentContainer}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           >
             {trainings.length === 0 ? (
               <View style={styles.emptyState}>
@@ -482,7 +526,7 @@ export default function TrainingsHistoryScreen() {
               <View style={styles.trainingsContainer}>
                 {trainings.map((training) => (
                   <View
-                    key={training.id}
+                    key={`${training.id}-${training.completion?.id ?? 'no-completion'}`}
                     style={[styles.trainingCard, { backgroundColor: colors.cardBackground }]}
                   >
                     <View style={styles.trainingHeader}>
@@ -491,11 +535,32 @@ export default function TrainingsHistoryScreen() {
                           ? getLocalizedTrainingTitle(training, currentLanguage || 'pt')
                           : training.title}
                       </Text>
-                      <View style={[styles.statusBadge, { backgroundColor: colors.success + '20' }]}>
-                        <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-                        <Text style={[styles.statusText, { color: colors.success }]}>
-                          Concluído
-                        </Text>
+                      <View style={styles.headerActions}>
+                        <View style={styles.badgeRow}>
+                          <View style={[styles.statusBadge, { backgroundColor: colors.success + '20' }]}>
+                            <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+                            <Text style={[styles.statusText, { color: colors.success }]}>
+                              Concluído
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            style={[styles.redoButton, { borderColor: colors.warning, backgroundColor: colors.warning + '12' }]}
+                            onPress={() => handleRestartTraining(training)}
+                            activeOpacity={0.7}
+                            disabled={restartingTrainingId === training.id}
+                          >
+                            {restartingTrainingId === training.id ? (
+                              <ActivityIndicator size="small" color={colors.warning} />
+                            ) : (
+                              <>
+                                <Ionicons name="refresh" size={14} color={colors.warning} />
+                                <Text style={[styles.redoButtonText, { color: colors.warning }]}>
+                                  {t('training.restartTrainingAction')}
+                                </Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
 
@@ -740,8 +805,22 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.sm,
     gap: theme.spacing.sm,
   },
+  headerActions: {
+    flexShrink: 0,
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: theme.spacing.xs,
+    justifyContent: 'flex-end',
+  },
   trainingTitle: {
     flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
     fontSize: theme.typography.fontSize.md,
     fontWeight: theme.typography.fontWeight.bold,
   },
@@ -754,6 +833,20 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.sm,
   },
   statusText: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.semibold,
+  },
+  redoButton: {
+    borderWidth: 1,
+    borderRadius: theme.borderRadius.sm,
+    paddingVertical: 5,
+    paddingHorizontal: theme.spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs / 2,
+    minHeight: 28,
+  },
+  redoButtonText: {
     fontSize: theme.typography.fontSize.xs,
     fontWeight: theme.typography.fontWeight.semibold,
   },

@@ -341,6 +341,35 @@ export class SupabaseTrainingRepository implements TrainingRepository {
     return data ? this.mapToTrainingSignature(data) : null;
   }
 
+  async restartTraining(trainingId: string, userId: string): Promise<void> {
+    const completion = await this.getTrainingCompletion(trainingId, userId);
+    if (!completion) {
+      throw new Error('Training completion not found');
+    }
+
+    const existingSignature = await this.getSignatureByCompletionId(completion.id);
+    if (existingSignature?.signaturePath) {
+      const signatureFilename = existingSignature.signaturePath.replace(`${SIGNATURES_BUCKET}/`, '');
+      try {
+        await supabase.storage.from(SIGNATURES_BUCKET).remove([signatureFilename]);
+      } catch (storageErr) {
+        console.warn('Error removing old signature file while restarting training:', storageErr);
+      }
+    }
+
+    // Remove o registo de conclusão para voltar ao estado "não iniciado" (slide para começar).
+    // training_signatures é removida em cascata (ON DELETE CASCADE).
+    const { error: deleteCompletionError } = await supabase
+      .from('training_completions')
+      .delete()
+      .eq('id', completion.id);
+
+    if (deleteCompletionError) {
+      console.error('Error deleting training completion while restarting:', deleteCompletionError);
+      throw new Error('Failed to restart training');
+    }
+  }
+
   async getCompletedTrainings(userId?: string): Promise<TrainingWithCompletion[]> {
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (!authUser) {
@@ -494,16 +523,38 @@ export class SupabaseTrainingRepository implements TrainingRepository {
 
   async addTrainingAttachment(
     trainingId: string,
-    file: File | { uri: string; name: string; type: string }
+    file: File | { uri: string; name: string; type: string; webFile?: File }
   ): Promise<TrainingAttachment> {
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (!authUser) {
       throw new Error('User not authenticated');
     }
 
-    const filename = 'name' in file ? file.name : file.uri.split('/').pop() || 'unknown';
-    const mimeType = 'type' in file ? file.type : 'application/pdf';
-    const fileUri = 'uri' in file ? file.uri : '';
+    const isNativeFile =
+      typeof globalThis.File !== 'undefined' && file instanceof globalThis.File;
+    const webFileFromPayload =
+      !isNativeFile &&
+      typeof file === 'object' &&
+      file !== null &&
+      'webFile' in file &&
+      file.webFile instanceof globalThis.File
+        ? file.webFile
+        : undefined;
+
+    const filename = 'name' in file && file.name ? file.name : ('uri' in file ? file.uri.split('/').pop() : '') || 'unknown';
+    let mimeType =
+      ('type' in file && file.type && file.type !== 'application/octet-stream')
+        ? file.type
+        : 'application/octet-stream';
+    if (mimeType === 'application/octet-stream') {
+      const ext = filename.split('.').pop()?.toLowerCase() || '';
+      if (ext === 'pdf') mimeType = 'application/pdf';
+      else if (ext === 'mp4') mimeType = 'video/mp4';
+      else if (ext === 'mov') mimeType = 'video/quicktime';
+      else if (ext === 'avi') mimeType = 'video/x-msvideo';
+      else if (ext === 'webm') mimeType = 'video/webm';
+    }
+    const fileUri = 'uri' in file && file.uri ? file.uri : '';
 
     // Generate unique filename
     const timestamp = Date.now();
@@ -514,7 +565,16 @@ export class SupabaseTrainingRepository implements TrainingRepository {
       // Read file and prepare for upload
       let fileData: Blob | Uint8Array | string;
 
-      if (Platform.OS === 'web' && typeof fetch !== 'undefined' && fileUri) {
+      // Web: sempre preferir o File real (blob/data URLs podem falhar ou truncar uploads grandes).
+      if (Platform.OS === 'web' && webFileFromPayload instanceof globalThis.File) {
+        fileData = webFileFromPayload;
+      } else if (Platform.OS === 'web' && isNativeFile) {
+        fileData = file as File;
+      } else if (
+        Platform.OS === 'web' &&
+        typeof fetch !== 'undefined' &&
+        fileUri
+      ) {
         const response = await fetch(fileUri);
         fileData = await response.blob();
       } else if (fileUri.startsWith('file://') || fileUri.startsWith('content://')) {
@@ -527,11 +587,7 @@ export class SupabaseTrainingRepository implements TrainingRepository {
           byteNumbers[i] = byteCharacters.charCodeAt(i);
         }
         fileData = new Uint8Array(byteNumbers);
-      } else if (typeof window !== 'undefined' && file instanceof File) {
-        // Web - use File directly
-        fileData = file;
       } else if ('uri' in file && typeof fetch !== 'undefined') {
-        // Try to fetch the file as blob (web/Expo Web)
         const response = await fetch(file.uri);
         fileData = await response.blob();
       } else {
