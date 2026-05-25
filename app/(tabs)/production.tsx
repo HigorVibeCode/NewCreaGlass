@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, TextInput, Animated, Easing } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, TextInput, Animated, Easing, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -135,7 +135,6 @@ export default function ProductionScreen() {
   const [toDate, setToDate] = useState('');
   const [draftStatus, setDraftStatus] = useState<ProductionStatus | 'all'>('all');
   const [draftCompany, setDraftCompany] = useState<ProductionCompany | 'all'>('all');
-  const [draftSearchTerm, setDraftSearchTerm] = useState('');
   const [draftGlassId, setDraftGlassId] = useState<string>('all');
   const [draftFromDate, setDraftFromDate] = useState('');
   const [draftToDate, setDraftToDate] = useState('');
@@ -152,7 +151,6 @@ export default function ProductionScreen() {
     setToDate('');
     setDraftStatus('all');
     setDraftCompany('all');
-    setDraftSearchTerm('');
     setDraftGlassId('all');
     setDraftFromDate('');
     setDraftToDate('');
@@ -397,21 +395,19 @@ export default function ProductionScreen() {
     return [{ label: 'Todos os vidros', value: 'all' }, ...options];
   }, [allProductions, glassItems]);
 
-  const hasActiveFilters = useMemo(() => {
+  const hasActiveAdvancedFilters = useMemo(() => {
     return (
       selectedStatus !== 'all' ||
       selectedCompany !== 'all' ||
-      !!searchTerm.trim() ||
       selectedGlassId !== 'all' ||
       !!fromDate.trim() ||
       !!toDate.trim()
     );
-  }, [selectedStatus, selectedCompany, searchTerm, selectedGlassId, fromDate, toDate]);
+  }, [selectedStatus, selectedCompany, selectedGlassId, fromDate, toDate]);
 
   const openFilterModal = () => {
     setDraftStatus(selectedStatus);
     setDraftCompany(selectedCompany);
-    setDraftSearchTerm(searchTerm);
     setDraftGlassId(selectedGlassId);
     setDraftFromDate(fromDate);
     setDraftToDate(toDate);
@@ -421,7 +417,6 @@ export default function ProductionScreen() {
   const applyFilters = () => {
     setSelectedStatus(draftStatus);
     setSelectedCompany(draftCompany);
-    setSearchTerm(draftSearchTerm.trim());
     setSelectedGlassId(draftGlassId);
     setFromDate(draftFromDate.trim());
     setToDate(draftToDate.trim());
@@ -530,15 +525,60 @@ export default function ProductionScreen() {
       <ScrollView style={styles.scrollView}>
         <View style={styles.content}>
           <View style={styles.topBar}>
+            <View
+              style={[
+                styles.searchBar,
+                {
+                  backgroundColor: colors.backgroundSecondary,
+                  borderColor: searchTerm.trim() ? colors.primary : colors.border,
+                },
+              ]}
+            >
+              <Ionicons
+                name="search"
+                size={18}
+                color={searchTerm.trim() ? colors.primary : colors.textSecondary}
+                style={styles.searchBarIcon}
+              />
+              <TextInput
+                style={[styles.searchBarInput, { color: colors.text }]}
+                placeholder={t('production.searchPlaceholder')}
+                placeholderTextColor={colors.textTertiary}
+                value={searchTerm}
+                onChangeText={setSearchTerm}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+                clearButtonMode="while-editing"
+              />
+              {searchTerm.length > 0 && Platform.OS === 'android' && (
+                <TouchableOpacity
+                  onPress={() => setSearchTerm('')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('common.close')}
+                >
+                  <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+                </TouchableOpacity>
+              )}
+            </View>
             <TouchableOpacity
               style={[
-                styles.searchButton,
-                { backgroundColor: colors.backgroundSecondary, borderColor: hasActiveFilters ? colors.primary : colors.border },
+                styles.filterButton,
+                {
+                  backgroundColor: hasActiveAdvancedFilters ? colors.primary + '30' : colors.backgroundSecondary,
+                  borderColor: hasActiveAdvancedFilters ? colors.primary : colors.border,
+                  borderWidth: hasActiveAdvancedFilters ? 1 : 0,
+                },
               ]}
               onPress={openFilterModal}
               activeOpacity={0.7}
             >
-              <Ionicons name="search" size={20} color={hasActiveFilters ? colors.primary : colors.text} />
+              <Ionicons
+                name="options-outline"
+                size={20}
+                color={hasActiveAdvancedFilters ? colors.primary : colors.text}
+              />
             </TouchableOpacity>
             <TouchableOpacity
               style={[
@@ -584,7 +624,7 @@ export default function ProductionScreen() {
                   <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
                     <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
                       <Text style={[styles.modalTitle, { color: colors.text }]}>
-                        {t('production.searchPlaceholder') || 'Filtros de Produção'}
+                        {t('common.filter')}
                       </Text>
                       <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
                         <Ionicons name="close" size={24} color={colors.text} />
@@ -592,19 +632,6 @@ export default function ProductionScreen() {
                     </View>
                     <ScrollView style={styles.optionsList} nestedScrollEnabled>
                       <View style={styles.filterFields}>
-                        <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Busca geral</Text>
-                        <View style={[styles.filterInputContainer, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
-                          <TextInput
-                            style={[styles.filterInput, { color: colors.text }]}
-                            placeholder={t('production.searchPlaceholder') || 'Cliente, numero, tipo...'}
-                            placeholderTextColor={colors.textTertiary}
-                            value={draftSearchTerm}
-                            onChangeText={setDraftSearchTerm}
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                          />
-                        </View>
-
                         <Dropdown
                           label="Vidro"
                           value={draftGlassId}
@@ -789,15 +816,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...theme.shadows.sm,
   },
-  searchButton: {
-    height: 36,
-    minWidth: 72,
-    borderRadius: theme.borderRadius.sm,
-    justifyContent: 'center',
+  searchBar: {
+    flex: 1,
+    minWidth: 0,
+    height: 40,
+    flexDirection: 'row',
     alignItems: 'center',
+    borderRadius: theme.borderRadius.sm,
     borderWidth: 1,
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: theme.spacing.sm,
     ...theme.shadows.sm,
+  },
+  searchBarIcon: {
+    marginRight: theme.spacing.xs,
+  },
+  searchBarInput: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: theme.typography.fontSize.md,
+    paddingVertical: Platform.OS === 'ios' ? theme.spacing.sm : theme.spacing.xs,
   },
   modalOverlay: {
     flex: 1,

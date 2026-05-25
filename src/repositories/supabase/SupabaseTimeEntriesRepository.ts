@@ -1,8 +1,29 @@
 import { TimeEntriesRepository } from '../../services/repositories/interfaces';
-import { TimeEntry } from '../../types';
+import { TimeEntry, EntryType } from '../../types';
 import { supabase } from '../../services/supabase';
+import {
+  buildIsoFromDateAndTime,
+  DAY_ADJUST_ENTRY_TYPES,
+  entriesForDateKey,
+  hasCompletedDayAdjustment,
+} from '../../utils/point-day';
+import { getEffectiveRecordedAt } from '../../utils/point-report-pdf';
 
-const ADJUSTMENT_MAX_DAYS = 2;
+const ENTRY_TYPE_TO_TIME_KEY: Record<EntryType, keyof {
+  clockIn: string;
+  clockOut: string;
+  coffeeStart: string;
+  coffeeEnd: string;
+  lunchStart: string;
+  lunchEnd: string;
+}> = {
+  clock_in: 'clockIn',
+  clock_out: 'clockOut',
+  coffee_start: 'coffeeStart',
+  coffee_end: 'coffeeEnd',
+  lunch_start: 'lunchStart',
+  lunch_end: 'lunchEnd',
+};
 
 function mapRow(row: any): TimeEntry {
   return {
@@ -139,10 +160,6 @@ export class SupabaseTimeEntriesRepository implements TimeEntriesRepository {
 
     if (entryRow.is_adjusted) throw new Error('Este ponto já foi ajustado');
 
-    const createdAt = new Date(entryRow.created_at).getTime();
-    const twoDaysAgo = Date.now() - ADJUSTMENT_MAX_DAYS * 24 * 60 * 60 * 1000;
-    if (createdAt < twoDaysAgo) throw new Error('Ajuste permitido apenas para pontos criados há menos de 2 dias');
-
     const { data: updated, error } = await supabase
       .from('time_entries')
       .update({
@@ -160,5 +177,87 @@ export class SupabaseTimeEntriesRepository implements TimeEntriesRepository {
       throw new Error(error.message || 'Falha ao salvar ajuste');
     }
     return mapRow(updated);
+  }
+
+  async saveDayTimeAdjustment(payload: {
+    userId: string;
+    userName: string;
+    dateKey: string;
+    adjustDescription: string;
+    times: {
+      clockIn: string;
+      clockOut: string;
+      coffeeStart: string;
+      coffeeEnd: string;
+      lunchStart: string;
+      lunchEnd: string;
+    };
+    existingEntries: TimeEntry[];
+  }): Promise<void> {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) throw new Error('User not authenticated');
+
+    const { data: userRow, error: userError } = await supabase
+      .from('users')
+      .select('user_type')
+      .eq('id', authUser.id)
+      .maybeSingle();
+    const isMaster = !userError && userRow?.user_type === 'Master';
+    const isOwner = payload.userId === authUser.id;
+    if (!isMaster && !isOwner) throw new Error('Sem permissão para ajustar este ponto');
+
+    const dayEntries = entriesForDateKey(
+      payload.existingEntries,
+      payload.userId,
+      payload.dateKey
+    );
+    if (hasCompletedDayAdjustment(dayEntries)) {
+      throw new Error('DAY_ALREADY_ADJUSTED');
+    }
+
+    const desc = payload.adjustDescription?.trim().slice(0, 20) ?? '';
+    if (!desc) throw new Error('Descrição do ajuste é obrigatória');
+
+    const findByType = (type: EntryType) =>
+      dayEntries.find((e) => e.entryType === type) ?? null;
+
+    const now = new Date().toISOString();
+
+    for (const entryType of DAY_ADJUST_ENTRY_TYPES) {
+      const timeKey = ENTRY_TYPE_TO_TIME_KEY[entryType];
+      const timeStr = payload.times[timeKey];
+      const adjustedIso = buildIsoFromDateAndTime(payload.dateKey, timeStr);
+      const existing = findByType(entryType);
+
+      if (existing) {
+        const { error } = await supabase
+          .from('time_entries')
+          .update({
+            is_adjusted: true,
+            adjusted_recorded_at: adjustedIso,
+            adjust_description: desc,
+            adjusted_at: now,
+            adjusted_by_user_id: authUser.id,
+          })
+          .eq('id', existing.id);
+        if (error) throw new Error(error.message || 'Falha ao salvar ajuste');
+      } else {
+        const { error } = await supabase.from('time_entries').insert({
+          user_id: payload.userId,
+          user_name: payload.userName,
+          recorded_at: adjustedIso,
+          entry_type: entryType,
+          location_address: null,
+          gps_accuracy: null,
+          gps_source: null,
+          is_adjusted: true,
+          adjusted_recorded_at: adjustedIso,
+          adjust_description: desc,
+          adjusted_at: now,
+          adjusted_by_user_id: authUser.id,
+        });
+        if (error) throw new Error(error.message || 'Falha ao criar marcação ajustada');
+      }
+    }
   }
 }

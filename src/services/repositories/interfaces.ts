@@ -314,4 +314,19 @@ export interface TimeEntriesRepository {
     entryId: string,
     payload: { adjustedRecordedAt: string; adjustDescription: string }
   ): Promise<TimeEntry>;
+  saveDayTimeAdjustment(payload: {
+    userId: string;
+    userName: string;
+    dateKey: string;
+    adjustDescription: string;
+    times: {
+      clockIn: string;
+      clockOut: string;
+      coffeeStart: string;
+      coffeeEnd: string;
+      lunchStart: string;
+      lunchEnd: string;
+    };
+    existingEntries: TimeEntry[];
+  }): Promise<void>;
 }

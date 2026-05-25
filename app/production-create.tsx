@@ -9,6 +9,7 @@ import {
     ActivityIndicator,
     Alert,
     KeyboardAvoidingView,
+    Modal,
     Platform,
     ScrollView,
     StyleSheet,
@@ -40,6 +41,7 @@ import {
     ProductionItem,
     StructureType,
 } from '../src/types';
+import { formatFileSize, isDxfFile } from '../src/utils/production-attachment-storage';
 
 const CREA_GLASS_START_SEQ = 20; // Sequence starts at 0020
 
@@ -55,6 +57,17 @@ interface ProductionItemForm {
   structureType: StructureType;
   paintType: PaintType;
 }
+
+interface PendingDxfFile {
+  id: string;
+  name: string;
+  size: number;
+  uri: string;
+  mimeType: string;
+  webFile?: File;
+}
+
+type DxfUploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 
 export default function ProductionCreateScreen() {
   const { t } = useI18n();
@@ -88,6 +101,10 @@ export default function ProductionCreateScreen() {
   const [isAutoOrderNumber, setIsAutoOrderNumber] = useState(false);
   const [loadingOrderNumber, setLoadingOrderNumber] = useState(false);
   const [quickActionHandled, setQuickActionHandled] = useState(false);
+  const [dxfModalVisible, setDxfModalVisible] = useState(false);
+  const [pendingDxfFiles, setPendingDxfFiles] = useState<PendingDxfFile[]>([]);
+  const [dxfUploading, setDxfUploading] = useState(false);
+  const [dxfFileStatus, setDxfFileStatus] = useState<Record<string, DxfUploadStatus>>({});
 
   const isEditing = !!productionId;
 
@@ -444,6 +461,118 @@ export default function ProductionCreateScreen() {
 
   const handleRemoveAttachment = (id: string) => {
     setAttachments(attachments.filter((att) => att.id !== id));
+  };
+
+  const handleChooseDxf = async () => {
+    const slotsLeft = MAX_ATTACHMENTS - attachments.length;
+    if (slotsLeft <= 0) {
+      Alert.alert(t('common.error'), t('production.maxAttachments'));
+      return;
+    }
+
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/dxf', 'application/x-dxf', 'image/vnd.dxf'],
+        copyToCacheDirectory: true,
+        multiple: true,
+      });
+
+      if (result.canceled || !result.assets?.length) return;
+
+      const picked: PendingDxfFile[] = [];
+      for (const asset of result.assets) {
+        const name = asset.name || 'arquivo.dxf';
+        if (!isDxfFile(name, asset.mimeType)) continue;
+        picked.push({
+          id: `dxf-pending-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          name,
+          size: asset.size ?? 0,
+          uri: asset.uri,
+          mimeType: asset.mimeType || 'application/dxf',
+          webFile: (asset as { file?: File }).file,
+        });
+      }
+
+      if (picked.length === 0) {
+        Alert.alert(t('common.error'), t('production.dxfInvalidFile'));
+        return;
+      }
+
+      const limited = picked.slice(0, slotsLeft);
+      if (picked.length > slotsLeft) {
+        Alert.alert(t('common.error'), t('production.dxfSlotsLimited', { count: String(slotsLeft) }));
+      }
+
+      setPendingDxfFiles(limited);
+      setDxfFileStatus({});
+      setDxfModalVisible(true);
+    } catch (error) {
+      console.error('Error picking DXF files:', error);
+      Alert.alert(t('common.error'), t('production.addAttachmentError'));
+    }
+  };
+
+  const handleConfirmDxfUpload = async () => {
+    if (pendingDxfFiles.length === 0 || dxfUploading) return;
+
+    setDxfUploading(true);
+    let nextAttachments = [...attachments];
+    let successCount = 0;
+    let failedCount = 0;
+
+    for (const file of pendingDxfFiles) {
+      if (nextAttachments.length >= MAX_ATTACHMENTS) break;
+
+      setDxfFileStatus((prev) => ({ ...prev, [file.id]: 'uploading' }));
+
+      try {
+        if (!isDxfFile(file.name, file.mimeType)) {
+          throw new Error('invalid dxf');
+        }
+
+        const newAttachment: ProductionAttachment = {
+          id: `attach-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          filename: file.name,
+          originalName: file.name,
+          mimeType: file.mimeType,
+          storagePath: file.uri,
+          webFile: file.webFile,
+          createdAt: new Date().toISOString(),
+        };
+
+        nextAttachments = [...nextAttachments, newAttachment];
+        setDxfFileStatus((prev) => ({ ...prev, [file.id]: 'success' }));
+        successCount += 1;
+      } catch (error) {
+        console.error('Error adding DXF attachment:', file.name, error);
+        setDxfFileStatus((prev) => ({ ...prev, [file.id]: 'error' }));
+        failedCount += 1;
+      }
+    }
+
+    setAttachments(nextAttachments);
+    setDxfUploading(false);
+
+    if (successCount > 0 || failedCount > 0) {
+      Alert.alert(
+        successCount > 0 ? t('common.success') : t('common.error'),
+        t('production.dxfUploadSummary', {
+          success: String(successCount),
+          failed: String(failedCount),
+        })
+      );
+    }
+
+    setDxfModalVisible(false);
+    setPendingDxfFiles([]);
+    setDxfFileStatus({});
+  };
+
+  const handleCloseDxfModal = () => {
+    if (dxfUploading) return;
+    setDxfModalVisible(false);
+    setPendingDxfFiles([]);
+    setDxfFileStatus({});
   };
 
   useEffect(() => {
@@ -812,6 +941,16 @@ export default function ProductionCreateScreen() {
                   {t('production.chooseDocument') || 'PDF'}
                 </Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.attachmentOption, { backgroundColor: colors.backgroundSecondary }]}
+                onPress={handleChooseDxf}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="layers-outline" size={28} color={colors.primary} />
+                <Text style={[styles.attachmentOptionLabel, { color: colors.text }]}>
+                  {t('production.chooseDxf')}
+                </Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -820,6 +959,8 @@ export default function ProductionCreateScreen() {
               {attachments.map((attachment) => {
                 const isImage = attachment.mimeType?.startsWith('image/');
                 const isPdf = attachment.mimeType === 'application/pdf';
+                const isDxf = isDxfFile(attachment.originalName || attachment.filename, attachment.mimeType);
+                const displayName = attachment.originalName || attachment.filename;
                 return (
                   <View
                     key={attachment.id}
@@ -835,7 +976,13 @@ export default function ProductionCreateScreen() {
                     ) : (
                       <View style={[styles.attachmentThumbFallback, { backgroundColor: colors.backgroundSecondary }]}>
                         <Ionicons
-                          name={isPdf ? 'document-text-outline' : 'videocam-outline'}
+                          name={
+                            isDxf
+                              ? 'layers-outline'
+                              : isPdf
+                                ? 'document-text-outline'
+                                : 'videocam-outline'
+                          }
                           size={24}
                           color={colors.textSecondary}
                         />
@@ -843,7 +990,7 @@ export default function ProductionCreateScreen() {
                           numberOfLines={2}
                           style={[styles.attachmentThumbName, { color: colors.textSecondary }]}
                         >
-                          {attachment.filename}
+                          {displayName}
                         </Text>
                       </View>
                     )}
@@ -875,6 +1022,73 @@ export default function ProductionCreateScreen() {
           />
         </View>
       </ScrollView>
+
+      <Modal
+        visible={dxfModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={handleCloseDxfModal}
+      >
+        <View style={styles.dxfModalOverlay}>
+          <View style={[styles.dxfModalContent, { backgroundColor: colors.cardBackground }]}>
+            <Text style={[styles.dxfModalTitle, { color: colors.text }]}>
+              {t('production.dxfPreviewTitle')}
+            </Text>
+            <ScrollView style={styles.dxfModalList} keyboardShouldPersistTaps="handled">
+              {pendingDxfFiles.map((file) => {
+                const status = dxfFileStatus[file.id] || 'idle';
+                return (
+                  <View
+                    key={file.id}
+                    style={[styles.dxfPreviewRow, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary }]}
+                  >
+                    <Ionicons name="layers-outline" size={22} color={colors.primary} />
+                    <View style={styles.dxfPreviewInfo}>
+                      <Text numberOfLines={2} style={[styles.dxfPreviewName, { color: colors.text }]}>
+                        {file.name}
+                      </Text>
+                      <Text style={[styles.dxfPreviewSize, { color: colors.textSecondary }]}>
+                        {formatFileSize(file.size)}
+                      </Text>
+                    </View>
+                    {status === 'uploading' && <ActivityIndicator size="small" color={colors.primary} />}
+                    {status === 'success' && (
+                      <Ionicons name="checkmark-circle" size={22} color="#22c55e" />
+                    )}
+                    {status === 'error' && (
+                      <Ionicons name="close-circle" size={22} color={colors.error} />
+                    )}
+                    {status === 'idle' && !dxfUploading && (
+                      <TouchableOpacity
+                        onPress={() => setPendingDxfFiles((prev) => prev.filter((f) => f.id !== file.id))}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name="trash-outline" size={20} color={colors.textSecondary} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })}
+            </ScrollView>
+            <View style={styles.dxfModalActions}>
+              <Button
+                title={t('common.cancel')}
+                onPress={handleCloseDxfModal}
+                variant="outline"
+                style={styles.dxfModalButton}
+                disabled={dxfUploading}
+              />
+              <Button
+                title={dxfUploading ? t('production.dxfUploading') : t('production.dxfConfirmUpload')}
+                onPress={handleConfirmDxfUpload}
+                loading={dxfUploading}
+                style={styles.dxfModalButton}
+                disabled={pendingDxfFiles.length === 0 || dxfUploading}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -931,11 +1145,13 @@ const styles = StyleSheet.create({
   },
   attachmentOptions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: theme.spacing.md,
     marginBottom: theme.spacing.md,
   },
   attachmentOption: {
-    flex: 1,
+    width: '47%',
+    flexGrow: 0,
     alignItems: 'center',
     justifyContent: 'center',
     padding: theme.spacing.md,
@@ -1021,6 +1237,53 @@ const styles = StyleSheet.create({
   attachmentThumbName: {
     fontSize: theme.typography.fontSize.xs,
     textAlign: 'center',
+  },
+  dxfModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  dxfModalContent: {
+    borderTopLeftRadius: theme.borderRadius.lg,
+    borderTopRightRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    maxHeight: '70%',
+  },
+  dxfModalTitle: {
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.bold,
+    marginBottom: theme.spacing.md,
+  },
+  dxfModalList: {
+    maxHeight: 280,
+    marginBottom: theme.spacing.md,
+  },
+  dxfPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    marginBottom: theme.spacing.sm,
+  },
+  dxfPreviewInfo: {
+    flex: 1,
+  },
+  dxfPreviewName: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  dxfPreviewSize: {
+    fontSize: theme.typography.fontSize.sm,
+    marginTop: 2,
+  },
+  dxfModalActions: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+  },
+  dxfModalButton: {
+    flex: 1,
   },
   removeFloatingButton: {
     position: 'absolute',

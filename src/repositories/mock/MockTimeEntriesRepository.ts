@@ -1,6 +1,21 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TimeEntriesRepository } from '../../services/repositories/interfaces';
-import { TimeEntry } from '../../types';
+import { TimeEntry, EntryType } from '../../types';
+import {
+  buildIsoFromDateAndTime,
+  DAY_ADJUST_ENTRY_TYPES,
+  entriesForDateKey,
+  hasCompletedDayAdjustment,
+} from '../../utils/point-day';
+
+const ENTRY_TYPE_TO_TIME_KEY: Record<EntryType, 'clockIn' | 'clockOut' | 'coffeeStart' | 'coffeeEnd' | 'lunchStart' | 'lunchEnd'> = {
+  clock_in: 'clockIn',
+  clock_out: 'clockOut',
+  coffee_start: 'coffeeStart',
+  coffee_end: 'coffeeEnd',
+  lunch_start: 'lunchStart',
+  lunch_end: 'lunchEnd',
+};
 
 const STORAGE_KEY = 'mock_time_entries';
 
@@ -81,10 +96,6 @@ export class MockTimeEntriesRepository implements TimeEntriesRepository {
     if (!desc) throw new Error('Descrição do ajuste é obrigatória');
     const entry = entries[idx];
     if (entry.isAdjusted) throw new Error('Este ponto já foi ajustado');
-    const twoDaysAgo = Date.now() - 2 * 24 * 60 * 60 * 1000;
-    if (new Date(entry.createdAt).getTime() < twoDaysAgo) {
-      throw new Error('Ajuste permitido apenas para pontos criados há menos de 2 dias');
-    }
     const updated: TimeEntry = {
       ...entry,
       isAdjusted: true,
@@ -96,5 +107,73 @@ export class MockTimeEntriesRepository implements TimeEntriesRepository {
     entries[idx] = updated;
     await this.saveEntries(entries);
     return updated;
+  }
+
+  async saveDayTimeAdjustment(payload: {
+    userId: string;
+    userName: string;
+    dateKey: string;
+    adjustDescription: string;
+    times: {
+      clockIn: string;
+      clockOut: string;
+      coffeeStart: string;
+      coffeeEnd: string;
+      lunchStart: string;
+      lunchEnd: string;
+    };
+    existingEntries: TimeEntry[];
+  }): Promise<void> {
+    const dayEntries = entriesForDateKey(
+      payload.existingEntries,
+      payload.userId,
+      payload.dateKey
+    );
+    if (hasCompletedDayAdjustment(dayEntries)) throw new Error('DAY_ALREADY_ADJUSTED');
+
+    const desc = payload.adjustDescription?.trim().slice(0, 20) ?? '';
+    if (!desc) throw new Error('Descrição do ajuste é obrigatória');
+
+    const entries = await this.getEntries();
+    const now = new Date().toISOString();
+    const findByType = (type: EntryType) =>
+      dayEntries.find((e) => e.entryType === type) ?? null;
+
+    for (const entryType of DAY_ADJUST_ENTRY_TYPES) {
+      const timeKey = ENTRY_TYPE_TO_TIME_KEY[entryType];
+      const adjustedIso = buildIsoFromDateAndTime(payload.dateKey, payload.times[timeKey]);
+      const existing = findByType(entryType);
+
+      if (existing) {
+        const idx = entries.findIndex((e) => e.id === existing.id);
+        if (idx === -1) continue;
+        entries[idx] = {
+          ...entries[idx],
+          isAdjusted: true,
+          adjustedRecordedAt: adjustedIso,
+          adjustDescription: desc,
+          adjustedAt: now,
+          adjustedByUserId: payload.userId,
+        };
+      } else {
+        entries.unshift({
+          id: 'te-' + Date.now() + '-' + entryType,
+          userId: payload.userId,
+          userName: payload.userName,
+          recordedAt: adjustedIso,
+          entryType,
+          locationAddress: null,
+          gpsAccuracy: null,
+          gpsSource: null,
+          createdAt: now,
+          isAdjusted: true,
+          adjustedRecordedAt: adjustedIso,
+          adjustDescription: desc,
+          adjustedAt: now,
+          adjustedByUserId: payload.userId,
+        });
+      }
+    }
+    await this.saveEntries(entries);
   }
 }

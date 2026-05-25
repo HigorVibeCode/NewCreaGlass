@@ -1,6 +1,37 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { InventoryRepository } from '../../services/repositories/interfaces';
+import {
+  INVENTORY_GROUP_NAMES,
+  LEGACY_INVENTORY_GROUP_IDS,
+} from '../../constants/inventory-groups';
 import { InventoryGroup, InventoryHistory, InventoryItem, InventoryItemImage } from '../../types';
+
+const FIXED_INVENTORY_GROUPS: InventoryGroup[] = [
+  {
+    id: LEGACY_INVENTORY_GROUP_IDS.GLASS,
+    name: INVENTORY_GROUP_NAMES.GLASS,
+    createdBy: 'system',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: LEGACY_INVENTORY_GROUP_IDS.PROFILES,
+    name: INVENTORY_GROUP_NAMES.PROFILES,
+    createdBy: 'system',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: LEGACY_INVENTORY_GROUP_IDS.SUPPLIES,
+    name: INVENTORY_GROUP_NAMES.SUPPLIES,
+    createdBy: 'system',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: LEGACY_INVENTORY_GROUP_IDS.MONTAGE_ACCESSORIES,
+    name: INVENTORY_GROUP_NAMES.MONTAGE_ACCESSORIES,
+    createdBy: 'system',
+    createdAt: new Date().toISOString(),
+  },
+];
 
 const STORAGE_KEY_GROUPS = 'mock_inventory_groups';
 const STORAGE_KEY_ITEMS = 'mock_inventory_items';
@@ -11,29 +42,8 @@ export class MockInventoryRepository implements InventoryRepository {
   private async getGroups(): Promise<InventoryGroup[]> {
     const stored = await AsyncStorage.getItem(STORAGE_KEY_GROUPS);
     if (!stored) {
-      // Initialize with 3 fixed groups
-      const fixedGroups: InventoryGroup[] = [
-        {
-          id: 'group-glass',
-          name: 'Glass',
-          createdBy: 'system',
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: 'group-supplies',
-          name: 'Profiles',
-          createdBy: 'system',
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: 'group-spare-parts',
-          name: 'Supplies',
-          createdBy: 'system',
-          createdAt: new Date().toISOString(),
-        },
-      ];
-      await this.saveGroups(fixedGroups);
-      return fixedGroups;
+      await this.saveGroups(FIXED_INVENTORY_GROUPS);
+      return FIXED_INVENTORY_GROUPS;
     }
     return JSON.parse(stored);
   }
@@ -43,32 +53,12 @@ export class MockInventoryRepository implements InventoryRepository {
   }
   
   async getAllGroups(): Promise<InventoryGroup[]> {
-    // Always return the 3 fixed groups
-    return [
-      {
-        id: 'group-glass',
-        name: 'Glass',
-        createdBy: 'system',
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'group-supplies',
-        name: 'Profiles',
-        createdBy: 'system',
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'group-spare-parts',
-        name: 'Supplies',
-        createdBy: 'system',
-        createdAt: new Date().toISOString(),
-      },
-    ];
+    return FIXED_INVENTORY_GROUPS;
   }
   
   async createGroup(group: Omit<InventoryGroup, 'id' | 'createdAt'>): Promise<InventoryGroup> {
     // Groups cannot be created - they are fixed
-    throw new Error('Cannot create groups - only 3 fixed groups exist');
+    throw new Error('Cannot create groups - only fixed groups exist');
   }
   
   private async getItems(): Promise<InventoryItem[]> {

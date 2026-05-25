@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { InventoryRepository } from '../../services/repositories/interfaces';
+import { LEGACY_GROUP_ID_TO_NAME } from '../../constants/inventory-groups';
 import { InventoryGroup, InventoryHistory, InventoryItem, InventoryItemImage } from '../../types';
 import { supabase } from '../../services/supabase';
 import { getCachedSignedUrl, invalidateSignedUrl, prefetchSignedUrls } from '../../utils/signed-url-cache';
@@ -64,11 +65,7 @@ export class SupabaseInventoryRepository implements InventoryRepository {
     
     if (groupId.startsWith('group-')) {
       // Convert old string IDs to actual group names
-      const groupNameMap: Record<string, string> = {
-        'group-glass': 'Glass',
-        'group-supplies': 'Profiles',
-        'group-spare-parts': 'Supplies',
-      };
+      const groupNameMap = LEGACY_GROUP_ID_TO_NAME;
       
       const groupName = groupNameMap[groupId];
       if (groupName) {

@@ -16,6 +16,12 @@ import { Input } from '../src/components/shared/Input';
 import { Dropdown } from '../src/components/shared/Dropdown';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { repos } from '../src/services/container';
+import {
+  hasInventoryImageCards,
+  isGlassInventoryGroup,
+  isProfilesInventoryGroup,
+  isSuppliesInventoryGroup,
+} from '../src/constants/inventory-groups';
 import { InventoryGroup, InventoryItem } from '../src/types';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
@@ -174,10 +180,10 @@ export default function InventoryGroupScreen() {
     }, [groupId, loadItems])
   );
 
-  const isGlassGroup = group?.name === 'Glass';
-  const isSuppliesGroup = group?.name === 'Profiles';
-  const isSuppliesItemGroup = group?.name === 'Supplies';
-  const hasImageCards = isSuppliesGroup || isSuppliesItemGroup;
+  const isGlassGroup = isGlassInventoryGroup(group?.name);
+  const isSuppliesGroup = isProfilesInventoryGroup(group?.name);
+  const isSuppliesItemGroup = isSuppliesInventoryGroup(group?.name);
+  const hasImageCards = hasInventoryImageCards(group?.name);
 
   const filteredItems = useMemo(() => {
     if (!searchTerm.trim()) return items;

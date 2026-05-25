@@ -264,9 +264,12 @@ export type PaintType = 'none' | 'solid' | 'gradient' | 'printed' | 'satiniert' 
 
 export interface ProductionAttachment {
   id: string;
+  /** Nome exibido ao usuário (original do arquivo) */
   filename: string;
   mimeType: string;
   storagePath: string;
+  /** Nome original no upload — preferir para exibição quando disponível */
+  originalName?: string;
   /** Web-only in-memory file handle used before persisting to storage */
   webFile?: File;
   /** Raw storage key from DB — kept intact across load/save cycles so signed URLs never overwrite the real key */

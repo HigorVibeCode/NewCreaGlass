@@ -2,7 +2,12 @@ import { Platform } from 'react-native';
 import { ProductionRepository } from '../../services/repositories/interfaces';
 import { Production, ProductionItem, ProductionAttachment, ProductionStatus, ProductionStatusHistory } from '../../types';
 import { supabase } from '../../services/supabase';
-import { getSignedUrlFromStorage } from '../../utils/attachments';
+import { extractStorageObjectKey, getSignedUrlFromStorage } from '../../utils/attachments';
+import {
+  buildProductionStorageKey,
+  getOriginalNameFromStorageKey,
+  isDxfFile,
+} from '../../utils/production-attachment-storage';
 
 const BUCKET_NAME = 'documents';
 
@@ -63,9 +68,14 @@ export class SupabaseProductionRepository implements ProductionRepository {
     for (const att of allAttachments || []) {
       const pid = att.production_id;
       if (!attsByProd.has(pid)) attsByProd.set(pid, []);
+      const displayName =
+        att.original_name ||
+        getOriginalNameFromStorageKey(att.storage_path) ||
+        att.filename;
       attsByProd.get(pid)!.push({
         id: att.id,
-        filename: att.filename,
+        filename: displayName,
+        originalName: displayName,
         mimeType: att.mime_type,
         storagePath: att.storage_path,
         originalStoragePath: att.storage_path,
@@ -159,6 +169,7 @@ export class SupabaseProductionRepository implements ProductionRepository {
     }
 
     if (production.attachments && production.attachments.length > 0) {
+      const uploadFailures: string[] = [];
       for (const attachment of production.attachments) {
         let storagePath = attachment.storagePath;
 
@@ -166,24 +177,21 @@ export class SupabaseProductionRepository implements ProductionRepository {
           try {
             storagePath = await this.uploadAttachment({
               uri: storagePath,
-              name: attachment.filename,
+              name: attachment.originalName || attachment.filename,
               type: attachment.mimeType,
               webFile: attachment.webFile,
             });
           } catch (uploadError) {
             console.error('Error uploading attachment:', uploadError);
+            uploadFailures.push(attachment.originalName || attachment.filename);
             continue;
           }
         }
 
-        await supabase
-          .from('production_attachments')
-          .insert({
-            production_id: productionId,
-            filename: attachment.filename,
-            mime_type: attachment.mimeType,
-            storage_path: storagePath,
-          });
+        await this.insertProductionAttachmentRow(productionId, attachment, storagePath);
+      }
+      if (uploadFailures.length > 0) {
+        throw new Error(`Failed to upload attachment(s): ${uploadFailures.join(', ')}`);
       }
     }
 
@@ -287,6 +295,7 @@ export class SupabaseProductionRepository implements ProductionRepository {
         .delete()
         .eq('production_id', productionId);
 
+      const uploadFailures: string[] = [];
       for (const attachment of updates.attachments) {
         let storagePath: string;
 
@@ -294,12 +303,13 @@ export class SupabaseProductionRepository implements ProductionRepository {
           try {
             storagePath = await this.uploadAttachment({
               uri: attachment.storagePath,
-              name: attachment.filename,
+              name: attachment.originalName || attachment.filename,
               type: attachment.mimeType,
               webFile: attachment.webFile,
             });
           } catch (uploadError) {
             console.error('Error uploading attachment:', uploadError);
+            uploadFailures.push(attachment.originalName || attachment.filename);
             continue;
           }
         } else {
@@ -308,20 +318,17 @@ export class SupabaseProductionRepository implements ProductionRepository {
 
           // Guard: never persist a signed URL or expired https link as the storage key
           if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
-            // Try to extract the real filename from the signed URL
-            const match = storagePath.match(/\/([^\/]+\.[a-z0-9]+)(\?|$)/i);
-            storagePath = match ? decodeURIComponent(match[1]) : attachment.filename;
+            storagePath =
+              extractStorageObjectKey(storagePath) ||
+              attachment.originalStoragePath ||
+              attachment.filename;
           }
         }
 
-        await supabase
-          .from('production_attachments')
-          .insert({
-            production_id: productionId,
-            filename: attachment.filename,
-            mime_type: attachment.mimeType,
-            storage_path: storagePath,
-          });
+        await this.insertProductionAttachmentRow(productionId, attachment, storagePath);
+      }
+      if (uploadFailures.length > 0) {
+        throw new Error(`Failed to upload attachment(s): ${uploadFailures.join(', ')}`);
       }
     }
 
@@ -422,15 +429,55 @@ export class SupabaseProductionRepository implements ProductionRepository {
     return (data || []).map(this.mapToStatusHistory);
   }
 
+  private buildAttachmentInsertRow(
+    productionId: string,
+    attachment: ProductionAttachment,
+    storagePath: string
+  ) {
+    const displayName = attachment.originalName || attachment.filename;
+    return {
+      production_id: productionId,
+      filename: displayName,
+      original_name: displayName,
+      mime_type: attachment.mimeType,
+      storage_path: storagePath,
+    };
+  }
+
+  private async insertProductionAttachmentRow(
+    productionId: string,
+    attachment: ProductionAttachment,
+    storagePath: string
+  ): Promise<void> {
+    const row = this.buildAttachmentInsertRow(productionId, attachment, storagePath);
+    const { error } = await supabase.from('production_attachments').insert(row);
+
+    if (error?.message?.includes('original_name')) {
+      const { original_name: _removed, ...rowWithoutOriginalName } = row;
+      const { error: retryError } = await supabase
+        .from('production_attachments')
+        .insert(rowWithoutOriginalName);
+      if (retryError) {
+        console.error('Error inserting production attachment (retry):', retryError);
+        throw new Error(`Failed to save attachment: ${retryError.message}`);
+      }
+      return;
+    }
+
+    if (error) {
+      console.error('Error inserting production attachment:', error);
+      throw new Error(`Failed to save attachment: ${error.message}`);
+    }
+  }
+
   async uploadAttachment(file: { uri: string; name: string; type: string; webFile?: File }): Promise<string> {
     const filename = file.name;
     const fileUri = file.uri;
     const mimeType = file.type;
 
-    // Generate unique filename
-    const timestamp = Date.now();
-    const uniqueFilename = `${timestamp}_${filename}`;
-    const storagePath = `${BUCKET_NAME}/${uniqueFilename}`;
+    const uniqueFilename = isDxfFile(filename, mimeType)
+      ? buildProductionStorageKey(filename)
+      : `${Date.now()}_${filename}`;
 
     try {
       let fileData: Blob | Uint8Array | string;
@@ -462,20 +509,40 @@ export class SupabaseProductionRepository implements ProductionRepository {
         throw new Error('Unsupported file type or environment');
       }
 
-      // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from(BUCKET_NAME)
-        .upload(uniqueFilename, fileData, {
-          contentType: mimeType,
-          upsert: false,
-        });
+      const contentTypes = isDxfFile(filename, mimeType)
+        ? [
+            mimeType || 'application/dxf',
+            'application/x-dxf',
+            'application/octet-stream',
+          ]
+        : [mimeType];
 
-      if (uploadError) {
-        console.error('Error uploading file to storage:', uploadError);
-        throw new Error(`Failed to upload file to storage: ${uploadError.message}`);
+      let lastUploadError: { message: string } | null = null;
+      for (const contentType of contentTypes) {
+        const { error: uploadError } = await supabase.storage
+          .from(BUCKET_NAME)
+          .upload(uniqueFilename, fileData, {
+            contentType,
+            upsert: false,
+          });
+
+        if (!uploadError) {
+          return uniqueFilename;
+        }
+
+        lastUploadError = uploadError;
+        const mimeRejected =
+          uploadError.message?.toLowerCase().includes('mime') ||
+          uploadError.message?.toLowerCase().includes('not allowed');
+        if (!mimeRejected) break;
       }
 
-      return uniqueFilename; // Return just the filename, not full path
+      if (lastUploadError) {
+        console.error('Error uploading file to storage:', lastUploadError);
+        throw new Error(`Failed to upload file to storage: ${lastUploadError.message}`);
+      }
+
+      return uniqueFilename;
     } catch (error: any) {
       console.error('Error uploading attachment:', error);
       throw new Error(error?.message || 'Failed to upload attachment');
@@ -526,21 +593,27 @@ export class SupabaseProductionRepository implements ProductionRepository {
     const attachments: ProductionAttachment[] = await Promise.all(
       (attachmentsData || []).map(async (att: any) => {
         const rawStoragePath: string = att.storage_path ?? '';
+        const displayName =
+          att.original_name ||
+          getOriginalNameFromStorageKey(rawStoragePath) ||
+          att.filename;
         try {
-          const url = await this.getAttachmentUrl(rawStoragePath, att.filename);
+          const url = await this.getAttachmentUrl(rawStoragePath, displayName);
           return {
             id: att.id,
-            filename: att.filename,
+            filename: displayName,
+            originalName: displayName,
             mimeType: att.mime_type,
             storagePath: url,
             originalStoragePath: rawStoragePath,
             createdAt: att.created_at,
           };
         } catch (error) {
-          console.warn('Failed to get URL for attachment:', att.filename, error);
+          console.warn('Failed to get URL for attachment:', displayName, error);
           return {
             id: att.id,
-            filename: att.filename,
+            filename: displayName,
+            originalName: displayName,
             mimeType: att.mime_type,
             storagePath: rawStoragePath,
             originalStoragePath: rawStoragePath,

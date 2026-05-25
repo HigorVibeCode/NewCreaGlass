@@ -5,6 +5,28 @@ import * as IntentLauncher from 'expo-intent-launcher';
 import { Platform, Alert } from 'react-native';
 import { supabase, clearSupabaseAuthStorage, isRefreshTokenError } from '../services/supabase';
 import { getCachedSignedUrl } from './signed-url-cache';
+import { getOriginalNameFromStorageKey } from './production-attachment-storage';
+
+const STORAGE_KEY_UUID_PREFIX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}__/i;
+
+/** Extrai a chave do objeto no bucket a partir de path ou URL assinada. */
+export function extractStorageObjectKey(pathOrUrl: string): string | null {
+  if (!pathOrUrl) return null;
+  const trimmed = pathOrUrl.trim();
+  if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+    return trimmed.replace(/^\/+|\/+$/g, '') || null;
+  }
+  const fromSignedOrPublic = trimmed.match(/\/object\/(?:sign|public)\/documents\/(.+?)(?:\?|$)/);
+  if (fromSignedOrPublic?.[1]) {
+    return decodeURIComponent(fromSignedOrPublic[1]);
+  }
+  const fromBucketPath = trimmed.match(/\/documents\/(.+?)(?:\?|$)/);
+  if (fromBucketPath?.[1]) {
+    return decodeURIComponent(fromBucketPath[1]);
+  }
+  return null;
+}
 
 /**
  * Mostra um alerta de erro (compatível com Web e Mobile)
@@ -40,6 +62,7 @@ function inferMimeType(filename: string): string {
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     xls: 'application/vnd.ms-excel',
     xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    dxf: 'application/dxf',
   };
   
   return mimeTypes[extension] || 'application/octet-stream';
@@ -59,8 +82,12 @@ function sanitizeFilename(filename: string): string {
 export async function getSignedUrlFromStorage(storagePath: string, fallbackFilename?: string): Promise<string> {
   const BUCKET_NAME = 'documents';
   
-  // Se já for uma URL, retornar diretamente
+  // Se já for uma URL, tentar extrair a chave do objeto antes de retornar
   if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
+    const extracted = extractStorageObjectKey(storagePath);
+    if (extracted) {
+      return getSignedUrlFromStorage(extracted, fallbackFilename);
+    }
     return storagePath;
   }
 
@@ -90,6 +117,16 @@ export async function getSignedUrlFromStorage(storagePath: string, fallbackFilen
       filename = fallbackFilename;
     } else {
       return storagePath;
+    }
+  }
+
+  // Chave uuid__nome_original — assinar exatamente essa chave (não substituir pelo nome de exibição)
+  if (STORAGE_KEY_UUID_PREFIX.test(filename)) {
+    try {
+      const url = await getCachedSignedUrl(filename, 86400);
+      if (url) return url;
+    } catch {
+      // continuar com buscas alternativas
     }
   }
 
@@ -179,6 +216,11 @@ export async function getSignedUrlFromStorage(storagePath: string, fallbackFilen
         n.endsWith('_' + searchName) ||
         n.endsWith('_' + searchNameUnderscore) ||
         n.endsWith('_' + searchNameEncoded) ||
+        (STORAGE_KEY_UUID_PREFIX.test(filename) && n === filename) ||
+        (STORAGE_KEY_UUID_PREFIX.test(n) &&
+          getOriginalNameFromStorageKey(n) === searchName) ||
+        (STORAGE_KEY_UUID_PREFIX.test(n) &&
+          getOriginalNameFromStorageKey(n) === searchNameUnderscore) ||
         // Busca parcial: timestamp_baseName.ext
         (n.includes(baseName) && n.endsWith('.' + ext)) ||
         (n.includes(baseNameUnderscore) && n.endsWith('.' + ext)) ||
@@ -272,16 +314,10 @@ export async function downloadAndOpenAttachment(
           
           // Se remoteUrl já é uma URL completa (assinada), extrair o nome do arquivo dela
           if (remoteUrl.startsWith('http://') || remoteUrl.startsWith('https://')) {
-            // Tentar extrair o nome do arquivo da URL assinada
-            // Formato: .../sign/documents/FILENAME?token=...
-            // Suporta: pdf, jpg, jpeg, png, gif, webp e outras extensões
-            const match = remoteUrl.match(/\/([^\/]+\.(pdf|jpg|jpeg|png|gif|webp|bmp|tiff|svg))(\?|$)/i);
-            if (match && match[1]) {
-              // Usar apenas o nome do arquivo para regenerar
-              storagePathForRegeneration = match[1];
+            const extracted = extractStorageObjectKey(remoteUrl);
+            if (extracted) {
+              storagePathForRegeneration = extracted;
             } else {
-              // Se não conseguir extrair da URL expirada, usar o filename
-              // O filename geralmente é o nome original do arquivo ou pode ter timestamp
               storagePathForRegeneration = filename || sanitizedFilename;
             }
           } else {
@@ -420,10 +456,10 @@ export async function downloadAndOpenAttachment(
       // No mobile, URLs assinadas do Supabase podem retornar 400 com File.downloadFileAsync.
       // Gerar sempre uma URL assinada nova antes do download usando o path do storage.
       let urlToDownload = remoteUrl;
-      const signMatch = remoteUrl.match(/\/object\/sign\/[^/]+\/([^/?]+)(\?|$)/);
-      if (signMatch && signMatch[1]) {
+      const storageKeyFromUrl = extractStorageObjectKey(remoteUrl);
+      if (storageKeyFromUrl) {
         try {
-          const freshUrl = await getSignedUrlFromStorage(signMatch[1], filename || sanitizedFilename);
+          const freshUrl = await getSignedUrlFromStorage(storageKeyFromUrl, filename || sanitizedFilename);
           if (freshUrl && (freshUrl.startsWith('http://') || freshUrl.startsWith('https://'))) {
             urlToDownload = freshUrl;
           }

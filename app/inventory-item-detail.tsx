@@ -17,6 +17,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useI18n } from '../src/hooks/use-i18n';
 import { repos } from '../src/services/container';
+import {
+  hasInventoryImageCards,
+  isGlassInventoryGroup,
+  isProfilesInventoryGroup,
+} from '../src/constants/inventory-groups';
 import { InventoryItem } from '../src/types';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { PermissionGuard } from '../src/components/shared/PermissionGuard';
@@ -64,6 +69,7 @@ export default function InventoryItemDetailScreen() {
   const goBack = useGoBack('/(tabs)/inventory');
 
   const [item, setItem] = useState<InventoryItem | null>(null);
+  const [groupName, setGroupName] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
@@ -80,6 +86,13 @@ export default function InventoryItemDetailScreen() {
     try {
       const data = await repos.inventoryRepo.getItemById(itemId);
       setItem(data ?? null);
+      const targetGroupId = groupId || data?.groupId;
+      if (targetGroupId) {
+        const group = await repos.inventoryRepo.getGroupById(targetGroupId);
+        setGroupName(group?.name);
+      } else {
+        setGroupName(undefined);
+      }
       if (data?.images?.length) {
         prefetchSignedUrls(data.images.map((img) => img.storagePath).filter(Boolean)).catch(() => {});
       }
@@ -92,8 +105,14 @@ export default function InventoryItemDetailScreen() {
     }
   };
 
-  const isGlass = item?.height != null && item?.width != null;
-  const isSupplies = !isGlass && (item?.images?.length || item?.position != null || item?.color != null);
+  const isGlass =
+    isGlassInventoryGroup(groupName) ||
+    (item?.height != null && item?.width != null);
+  const isImageCardItem =
+    hasInventoryImageCards(groupName) ||
+    (!isGlass &&
+      !!(item?.images?.length || item?.position != null || item?.color != null));
+  const isProfilesItem = isProfilesInventoryGroup(groupName);
 
   const handleEdit = () => {
     if (!item) return;
@@ -131,7 +150,7 @@ export default function InventoryItemDetailScreen() {
           .replace(/>/g, '&gt;')
           .replace(/"/g, '&quot;');
 
-      const itemType = isGlass ? 'Glass' : isSupplies ? 'Supplies' : 'Profiles';
+      const itemType = groupName ?? (isGlass ? 'Glass' : isProfilesItem ? 'Profiles' : 'Supplies');
       const subtitle = `Group: ${itemType}`;
 
       const html = `
@@ -327,7 +346,7 @@ export default function InventoryItemDetailScreen() {
 
       <ScrollView style={[styles.scrollView, { backgroundColor: colors.background }]}>
         <View style={[styles.content, { backgroundColor: colors.background }]}>
-          {isSupplies && item.images && item.images.length > 0 && (
+          {isImageCardItem && item.images && item.images.length > 0 && (
             <View style={styles.imageSection}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('inventory.productImage')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageRow}>
@@ -393,7 +412,9 @@ export default function InventoryItemDetailScreen() {
             </>
           )}
 
-          {isSupplies && (item.position || item.color || item.type || item.opoOeschgerCode) && (
+          {isImageCardItem &&
+            (item.position ||
+              (isProfilesItem && (item.color || item.type || item.opoOeschgerCode))) && (
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('inventory.referenceCode')}</Text>
               <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>

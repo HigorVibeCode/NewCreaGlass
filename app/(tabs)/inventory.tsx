@@ -12,6 +12,18 @@ import * as IntentLauncher from 'expo-intent-launcher';
 import { useI18n } from '../../src/hooks/use-i18n';
 import { ScreenWrapper } from '../../src/components/shared/ScreenWrapper';
 import { Dropdown } from '../../src/components/shared/Dropdown';
+import {
+  getInventoryGroupColor,
+  getInventoryGroupIcon,
+  INVENTORY_GROUP_NAMES,
+} from '../../src/constants/inventory-groups';
+
+const INVENTORY_GROUP_DISPLAY_ORDER: string[] = [
+  INVENTORY_GROUP_NAMES.GLASS,
+  INVENTORY_GROUP_NAMES.PROFILES,
+  INVENTORY_GROUP_NAMES.SUPPLIES,
+  INVENTORY_GROUP_NAMES.MONTAGE_ACCESSORIES,
+];
 import { repos } from '../../src/services/container';
 import { InventoryGroup, InventoryItem } from '../../src/types';
 import { theme } from '../../src/theme';
@@ -34,7 +46,14 @@ export default function InventoryScreen() {
   const loadGroups = useCallback(async () => {
     try {
       const allGroups = await repos.inventoryRepo.getAllGroups();
-      setGroups(allGroups);
+      const sorted = [...allGroups].sort((a, b) => {
+        const ai = INVENTORY_GROUP_DISPLAY_ORDER.indexOf(a.name);
+        const bi = INVENTORY_GROUP_DISPLAY_ORDER.indexOf(b.name);
+        const orderA = ai === -1 ? INVENTORY_GROUP_DISPLAY_ORDER.length : ai;
+        const orderB = bi === -1 ? INVENTORY_GROUP_DISPLAY_ORDER.length : bi;
+        return orderA - orderB || a.name.localeCompare(b.name);
+      });
+      setGroups(sorted);
     } catch (error) {
       console.error('Error loading inventory groups:', error);
     }
@@ -613,16 +632,8 @@ export default function InventoryScreen() {
             ) : (
               <View style={styles.groupsList}>
                 {groups.map((group) => {
-                  const iconName: keyof typeof Ionicons.glyphMap =
-                    group.name === 'Glass' ? 'layers-outline' :
-                    group.name === 'Profiles' ? 'reorder-four-outline' :
-                    group.name === 'Supplies' ? 'cube-outline' :
-                    'cube-outline';
-                  const iconColor =
-                    group.name === 'Glass' ? '#3B82F6' :
-                    group.name === 'Profiles' ? '#F59E0B' :
-                    group.name === 'Supplies' ? '#10B981' :
-                    colors.primary;
+                  const iconName = getInventoryGroupIcon(group.name);
+                  const iconColor = getInventoryGroupColor(group.name, colors.primary);
                   return (
                     <TouchableOpacity
                       key={group.id}

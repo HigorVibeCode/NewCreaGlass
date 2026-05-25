@@ -9,7 +9,10 @@ import {
   Alert,
   Modal,
   TouchableWithoutFeedback,
+  Pressable,
   Platform,
+  KeyboardAvoidingView,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useRouteParams } from '../src/hooks/use-route-params';
@@ -25,9 +28,24 @@ import { useMyTimeEntriesQuery } from '../src/services/queries';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '../src/components/shared/Button';
 import { Input } from '../src/components/shared/Input';
-import { TimePicker } from '../src/components/shared/TimePicker';
+import { DayAdjustTimeInput } from '../src/components/shared/DayAdjustTimeInput';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { getEffectiveRecordedAt } from '../src/utils/point-report-pdf';
+import {
+  toSwissDateKeyFromDate,
+  toDateKey,
+  isWeekend,
+  pendingWeekdayKeys,
+  weekdayShort,
+  getDayStatus,
+  hasCompletedDayAdjustment,
+  timesFromDayEntries,
+  validateDayAdjustTimes,
+  computeNetWorkMs,
+  DEFAULT_DAY_TIMES,
+  DayAdjustTimes,
+  DayStatus,
+} from '../src/utils/point-day';
 import { repos } from '../src/services/container';
 import { tryBiometricAuth } from '../src/utils/point-auth';
 import { getCurrentLocationForEntry } from '../src/utils/point-location';
@@ -46,9 +64,9 @@ const WARN_BEFORE_MS = 3 * 60 * 1000;      // 3 min antes
 
 /* ─── Tipos auxiliares ─── */
 interface DayGroup {
-  dateKey: string;            // YYYY-MM-DD
-  dateLabel: string;          // "11 Feb 2026"
-  weekday: string;            // "Tue"
+  dateKey: string;
+  dateLabel: string;
+  weekday: string;
   clockIn: TimeEntry | null;
   clockOut: TimeEntry | null;
   coffeeStart: TimeEntry | null;
@@ -56,7 +74,9 @@ interface DayGroup {
   lunchStart: TimeEntry | null;
   lunchEnd: TimeEntry | null;
   isToday: boolean;
-  isAutomatic: boolean;       // qualquer entry com locationAddress === 'Automático'
+  isAutomatic: boolean;
+  status: DayStatus;
+  hasDayAdjustment: boolean;
 }
 
 interface MonthGroup {
@@ -64,34 +84,6 @@ interface MonthGroup {
   monthLabel: string;         // "Abril 2026"
   totalWorkedMs: number;
   days: DayGroup[];
-}
-
-const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const SWISS_TIMEZONE = 'Europe/Zurich';
-
-function toSwissDateKeyFromDate(date: Date): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: SWISS_TIMEZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(date);
-  const year = parts.find((p) => p.type === 'year')?.value;
-  const month = parts.find((p) => p.type === 'month')?.value;
-  const day = parts.find((p) => p.type === 'day')?.value;
-  if (!year || !month || !day) return date.toISOString().slice(0, 10);
-  return `${year}-${month}-${day}`;
-}
-
-function toDateKey(iso: string): string {
-  const d = new Date(iso);
-  return toSwissDateKeyFromDate(d);
-}
-
-function isWeekend(dateKey: string): boolean {
-  const d = new Date(dateKey + 'T12:00:00');
-  const dow = d.getDay();
-  return dow === 0 || dow === 6;
 }
 
 function formatHourMin(totalMs: number): string {
@@ -175,10 +167,11 @@ export default function PointScreen() {
   const colors = useThemeColors();
   const { effectiveTheme } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const adjustModalWidth = Math.min(480, windowWidth - theme.spacing.lg * 2);
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const goBack = useGoBack();
-  const isMaster = user?.userType === 'Master';
   const nfcHandledRef = useRef(false);
 
   const { data: entries = [], isLoading } = useMyTimeEntriesQuery(user?.id);
@@ -187,12 +180,11 @@ export default function PointScreen() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [password, setPassword] = useState('');
   const [showAdjustModal, setShowAdjustModal] = useState(false);
-  const [adjustEntry, setAdjustEntry] = useState<TimeEntry | null>(null);
-  const [adjustTime, setAdjustTime] = useState('');
+  const [adjustDayGroup, setAdjustDayGroup] = useState<DayGroup | null>(null);
+  const [adjustTimes, setAdjustTimes] = useState<DayAdjustTimes>(DEFAULT_DAY_TIMES);
   const [adjustDescription, setAdjustDescription] = useState('');
   const [savingAdjust, setSavingAdjust] = useState(false);
   const [nfcMode, setNfcMode] = useState(false);
-  const [adjustTarget, setAdjustTarget] = useState<'clock_in' | 'clock_out' | 'coffee_start' | 'lunch_start'>('clock_in');
   // Estado local para ativar o timer do botão imediatamente (sem esperar refetch)
   const [localCoffeePauseStart, setLocalCoffeePauseStart] = useState<string | null>(null);
   const [localLunchPauseStart, setLocalLunchPauseStart] = useState<string | null>(null);
@@ -233,11 +225,16 @@ export default function PointScreen() {
 
       const refEntry = g.clockIn || g.clockOut;
       const refIso = refEntry ? getEffectiveRecordedAt(refEntry) : dk;
-      const d = new Date(refIso || dk);
+      const dayEntries = [g.clockIn, g.clockOut, g.coffeeStart, g.coffeeEnd, g.lunchStart, g.lunchEnd];
+      const isAutomatic =
+        !!g.clockIn &&
+        (g.clockIn.locationAddress === 'Automático') &&
+        (!g.clockOut || g.clockOut.locationAddress === 'Automático');
+      const dayHasAdjustment = hasCompletedDayAdjustment(dayEntries);
       result.push({
         dateKey: dk,
         dateLabel: formatDateUtil(refIso || dk),
-        weekday: WEEKDAY_SHORT[d.getDay()] || '',
+        weekday: weekdayShort(dk),
         clockIn: g.clockIn,
         clockOut: g.clockOut,
         coffeeStart: g.coffeeStart,
@@ -245,16 +242,30 @@ export default function PointScreen() {
         lunchStart: g.lunchStart,
         lunchEnd: g.lunchEnd,
         isToday: dk === todayKey,
-        isAutomatic:
-          (g.clockIn?.locationAddress === 'Automático') ||
-          (g.clockOut?.locationAddress === 'Automático') ||
-          (g.coffeeStart?.locationAddress === 'Automático') ||
-          (g.coffeeEnd?.locationAddress === 'Automático') ||
-          (g.lunchStart?.locationAddress === 'Automático') ||
-          (g.lunchEnd?.locationAddress === 'Automático') ||
-          false,
+        isAutomatic,
+        hasDayAdjustment: dayHasAdjustment,
+        status: getDayStatus(dk, g.clockIn, dayEntries, isAutomatic),
       });
     }
+
+    for (const dk of pendingWeekdayKeys(result, todayKey)) {
+      result.push({
+        dateKey: dk,
+        dateLabel: formatDateUtil(`${dk}T12:00:00`),
+        weekday: weekdayShort(dk),
+        clockIn: null,
+        clockOut: null,
+        coffeeStart: null,
+        coffeeEnd: null,
+        lunchStart: null,
+        lunchEnd: null,
+        isToday: dk === todayKey,
+        isAutomatic: false,
+        hasDayAdjustment: false,
+        status: 'pending',
+      });
+    }
+
     result.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
     return result;
   }, [entries, todayKey]);
@@ -474,40 +485,44 @@ export default function PointScreen() {
     return () => clearTimeout(timer);
   }, [params.nfc, user]);
 
-  const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
-  const canAdjustEntry = useCallback(
-    (entry: TimeEntry | null) => {
-      if (!entry || !user) return false;
-      if (entry.isAdjusted) return false;
-      const isOwner = entry.userId === user.id;
-      if (!isOwner && !isMaster) return false;
-      const created = new Date(entry.createdAt).getTime();
-      if (Date.now() - created >= TWO_DAYS_MS) return false;
-      return true;
-    },
-    [user, isMaster]
-  );
+  const buildAdjustTimesFromGroup = useCallback((group: DayGroup): DayAdjustTimes => {
+    return timesFromDayEntries(
+      group.clockIn,
+      group.clockOut,
+      group.coffeeStart,
+      group.coffeeEnd,
+      group.lunchStart,
+      group.lunchEnd
+    );
+  }, []);
 
-  const openAdjustModal = useCallback((entry: TimeEntry, target: 'clock_in' | 'clock_out' | 'coffee_start' | 'lunch_start') => {
-    const d = new Date(getEffectiveRecordedAt(entry));
-    const h = String(d.getHours()).padStart(2, '0');
-    const m = String(d.getMinutes()).padStart(2, '0');
-    setAdjustEntry(entry);
-    setAdjustTarget(target);
-    setAdjustTime(`${h}:${m}`);
+  const openDayAdjustModal = useCallback((group: DayGroup) => {
+    const initialTimes = buildAdjustTimesFromGroup(group);
+    setAdjustDayGroup(group);
+    setAdjustTimes({ ...initialTimes });
     setAdjustDescription('');
     setShowAdjustModal(true);
+  }, [buildAdjustTimesFromGroup]);
+
+  const closeDayAdjustModal = useCallback(() => {
+    setShowAdjustModal(false);
+    setAdjustDayGroup(null);
+    setAdjustDescription('');
+    setAdjustTimes(DEFAULT_DAY_TIMES);
   }, []);
 
-  const buildAdjustedIso = useCallback((entry: TimeEntry, timeStr: string): string => {
-    const base = new Date(getEffectiveRecordedAt(entry));
-    const [h, min] = timeStr.split(':').map(Number);
-    base.setHours(h ?? 0, min ?? 0, 0, 0);
-    return base.toISOString();
+  const setAdjustTimeField = useCallback((field: keyof DayAdjustTimes, time: string) => {
+    setAdjustTimes((prev) => ({ ...prev, [field]: time }));
   }, []);
 
-  const handleSaveAdjust = useCallback(async () => {
-    if (!adjustEntry) return;
+  const adjustNetWorkLabel = useMemo(() => {
+    const ms = computeNetWorkMs(adjustTimes);
+    if (!Number.isFinite(ms) || ms <= 0) return '—';
+    return formatHourMin(ms);
+  }, [adjustTimes]);
+
+  const handleSaveDayAdjust = useCallback(async () => {
+    if (!adjustDayGroup || !user) return;
     const desc = adjustDescription.trim();
     if (!desc) {
       Alert.alert(t('common.error'), t('point.adjustDescriptionRequired'));
@@ -517,23 +532,76 @@ export default function PointScreen() {
       Alert.alert(t('common.error'), t('point.adjustDescriptionMaxLength'));
       return;
     }
+    const validation = validateDayAdjustTimes(adjustTimes);
+    if (!validation.valid) {
+      const msg =
+        validation.error === 'clockOutBeforeIn'
+          ? t('point.workDurationClockOutBeforeIn')
+          : validation.error === 'coffeeInvalid'
+            ? t('point.workDurationCoffeeInvalid')
+            : validation.error === 'lunchInvalid'
+              ? t('point.workDurationLunchInvalid')
+              : validation.error === 'workDurationZero'
+                ? t('point.workDurationZero')
+                : t('point.workDurationInvalid');
+      Alert.alert(t('common.error'), msg);
+      return;
+    }
     setSavingAdjust(true);
     try {
-      await repos.timeEntriesRepo.updateTimeEntryAdjustment(adjustEntry.id, {
-        adjustedRecordedAt: buildAdjustedIso(adjustEntry, adjustTime),
+      await repos.timeEntriesRepo.saveDayTimeAdjustment({
+        userId: user.id,
+        userName: user.username,
+        dateKey: adjustDayGroup.dateKey,
         adjustDescription: desc,
+        times: adjustTimes,
+        existingEntries: entries,
       });
       queryClient.invalidateQueries({ queryKey: ['timeEntries'] });
-      setShowAdjustModal(false);
-      setAdjustEntry(null);
-      setAdjustDescription('');
+      closeDayAdjustModal();
       Alert.alert(t('common.success'), t('point.adjustSuccess'));
     } catch (err: any) {
-      Alert.alert(t('common.error'), err?.message || t('common.error'));
+      const msg =
+        err?.message === 'DAY_ALREADY_ADJUSTED'
+          ? t('point.dayAlreadyAdjusted')
+          : err?.message || t('common.error');
+      Alert.alert(t('common.error'), msg);
     } finally {
       setSavingAdjust(false);
     }
-  }, [adjustEntry, adjustTime, adjustDescription, t, queryClient, buildAdjustedIso]);
+  }, [adjustDayGroup, adjustTimes, adjustDescription, user, entries, t, queryClient, closeDayAdjustModal]);
+
+  const renderDayStatusBadge = (status: DayStatus) => {
+    if (status === 'none') return null;
+    if (status === 'automatic') {
+      return (
+        <View style={[styles.statusBadge, { backgroundColor: '#22c55e18' }]}>
+          <Ionicons name="checkmark-circle" size={14} color="#22c55e" />
+          <Text style={[styles.statusBadgeText, { color: '#22c55e' }]}>
+            {t('point.statusAutomatic')}
+          </Text>
+        </View>
+      );
+    }
+    if (status === 'adjusted') {
+      return (
+        <View style={[styles.statusBadge, { backgroundColor: '#6366f118' }]}>
+          <Ionicons name="create-outline" size={14} color="#6366f1" />
+          <Text style={[styles.statusBadgeText, { color: '#6366f1' }]}>
+            {t('point.statusAdjusted')}
+          </Text>
+        </View>
+      );
+    }
+    return (
+      <View style={[styles.statusBadge, { backgroundColor: '#f59e0b18' }]}>
+        <Ionicons name="alert-circle-outline" size={14} color="#f59e0b" />
+        <Text style={[styles.statusBadgeText, { color: '#f59e0b' }]}>
+          {t('point.statusPending')}
+        </Text>
+      </View>
+    );
+  };
 
   /* ─── Agendar notificação local para fim de pausa ─── */
   const schedulePauseNotification = useCallback(async (pauseType: 'coffee' | 'lunch') => {
@@ -683,8 +751,42 @@ export default function PointScreen() {
   );
 
   /* ─── Render helpers ─── */
+  const renderDayTimeSlot = (
+    icon: React.ComponentProps<typeof Ionicons>['name'],
+    iconColor: string,
+    label: string,
+    time: string,
+    highlight?: boolean
+  ) => (
+    <View style={styles.dayTimeSlot}>
+      <Text style={[styles.dayColLabel, { color: colors.textTertiary }]} numberOfLines={1}>
+        {label}
+      </Text>
+      <View style={styles.dayTimeValueRow}>
+        <Ionicons name={icon} size={15} color={iconColor} style={styles.dayTimeIcon} />
+        <Text
+          style={[
+            styles.dayTimeText,
+            {
+              color: highlight ? colors.primary : colors.text,
+              fontVariant: ['tabular-nums'],
+            },
+          ]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.85}
+        >
+          {time}
+        </Text>
+      </View>
+    </View>
+  );
+
   const renderDayCard = (group: DayGroup) => {
-    const { clockIn, clockOut, coffeeStart, coffeeEnd, lunchStart, lunchEnd, dateLabel, weekday, isToday, isAutomatic, dateKey } = group;
+    const {
+      clockIn, clockOut, coffeeStart, coffeeEnd, lunchStart, lunchEnd,
+      dateLabel, weekday, isToday, dateKey, status, hasDayAdjustment: dayAdjusted,
+    } = group;
     const clockInTime = clockIn ? formatTimeUtil(getEffectiveRecordedAt(clockIn)) : '—';
     const clockOutTime = clockOut ? formatTimeUtil(getEffectiveRecordedAt(clockOut)) : '—';
 
@@ -693,7 +795,6 @@ export default function PointScreen() {
     if (coffeeStart) dayPauseMs += COFFEE_DURATION_MS;
     if (lunchStart) dayPauseMs += LUNCH_DURATION_MS;
 
-    // Calcular total (subtraindo pausas)
     let totalLabel = '—';
     if (clockIn && clockOut) {
       const inMs = new Date(getEffectiveRecordedAt(clockIn)).getTime();
@@ -701,11 +802,8 @@ export default function PointScreen() {
       if (outMs > inMs) totalLabel = formatHourMin(outMs - inMs - dayPauseMs);
     }
 
-    const canAdjustIn = canAdjustEntry(clockIn);
-    const canAdjustOut = canAdjustEntry(clockOut);
-    const canAdjustCoffee = canAdjustEntry(coffeeStart);
-    const canAdjustLunch = canAdjustEntry(lunchStart);
-    const hasAnyAdjust = canAdjustIn || canAdjustOut || canAdjustCoffee || canAdjustLunch;
+    const totalDisplay =
+      isToday && liveTimerStartIso && !clockOut ? liveTimerLabel : totalLabel;
 
     return (
       <View
@@ -716,15 +814,16 @@ export default function PointScreen() {
           isToday && { borderLeftWidth: 3, borderLeftColor: colors.primary },
         ]}
       >
-        {/* Cabeçalho do dia */}
         <View style={styles.dayCardHeader}>
-          <View style={styles.dayDateWrap}>
-            <Text style={[styles.dayDateText, { color: colors.text }]}>
+          <View style={styles.dayHeaderMain}>
+            <Text style={[styles.dayDateText, { color: colors.text }]} numberOfLines={1}>
               {dateLabel}
             </Text>
             <Text style={[styles.dayWeekday, { color: colors.textTertiary }]}>
               {weekday}
             </Text>
+          </View>
+          <View style={styles.dayHeaderBadges}>
             {isToday && (
               <View style={[styles.todayBadge, { backgroundColor: colors.primary + '20' }]}>
                 <Text style={[styles.todayBadgeText, { color: colors.primary }]}>
@@ -732,81 +831,31 @@ export default function PointScreen() {
                 </Text>
               </View>
             )}
+            {renderDayStatusBadge(status)}
           </View>
-          {isAutomatic && (
-            <View style={styles.autoBadge}>
-              <Ionicons name="flash-outline" size={12} color="#f59e0b" />
-              <Text style={styles.autoBadgeText}>{t('point.automatic')}</Text>
-            </View>
+        </View>
+
+        <View style={[styles.dayTimesGrid, { borderColor: colors.border }]}>
+          {renderDayTimeSlot('log-in-outline', '#22c55e', t('point.clockIn'), clockInTime)}
+          {renderDayTimeSlot('log-out-outline', '#ef4444', t('point.clockOut'), clockOutTime)}
+          {renderDayTimeSlot(
+            'timer-outline',
+            colors.primary,
+            t('point.totalHours'),
+            totalDisplay,
+            !!(isToday && liveTimerStartIso && !clockOut)
           )}
         </View>
 
-        {/* Linha: Entrada | Saída | Total */}
-        <View style={styles.dayRow}>
-          <View style={styles.dayCol}>
-            <Text style={[styles.dayColLabel, { color: colors.textTertiary }]}>
-              {t('point.clockIn')}
-            </Text>
-            <View style={styles.dayTimeRow}>
-              <Ionicons name="log-in-outline" size={16} color="#22c55e" />
-              <Text style={[styles.dayTimeText, { color: colors.text }]}>
-                {clockInTime}
-              </Text>
-              {clockIn?.isAdjusted && (
-                <Text style={[styles.adjustedTag, { color: colors.textTertiary }]}>
-                  ({t('point.adjusted')})
-                </Text>
-              )}
-            </View>
-          </View>
-
-          <View style={[styles.daySep, { backgroundColor: colors.border }]} />
-
-          <View style={styles.dayCol}>
-            <Text style={[styles.dayColLabel, { color: colors.textTertiary }]}>
-              {t('point.clockOut')}
-            </Text>
-            <View style={styles.dayTimeRow}>
-              <Ionicons name="log-out-outline" size={16} color="#ef4444" />
-              <Text style={[styles.dayTimeText, { color: colors.text }]}>
-                {clockOutTime}
-              </Text>
-              {clockOut?.isAdjusted && (
-                <Text style={[styles.adjustedTag, { color: colors.textTertiary }]}>
-                  ({t('point.adjusted')})
-                </Text>
-              )}
-            </View>
-          </View>
-
-          <View style={[styles.daySep, { backgroundColor: colors.border }]} />
-
-          <View style={styles.dayCol}>
-            <Text style={[styles.dayColLabel, { color: colors.textTertiary }]}>
-              {t('point.totalHours')}
-            </Text>
-            {isToday && liveTimerStartIso && !clockOut ? (
-              <View style={styles.dayTimeRow}>
-                <Ionicons name="timer-outline" size={16} color={colors.primary} />
-                <Text style={[styles.dayTimeText, { color: colors.primary, fontVariant: ['tabular-nums'] }]}>
-                  {liveTimerLabel}
-                </Text>
-              </View>
-            ) : (
-              <Text style={[styles.dayTimeText, { color: colors.text }]}>
-                {totalLabel}
-              </Text>
-            )}
-          </View>
-        </View>
-
-        {/* Info de pausas do dia (fim = início + duração fixa) */}
         {(coffeeStart || lunchStart) && (
-          <View style={styles.pauseInfoRow}>
+          <View style={[styles.pauseInfoRow, { borderTopColor: colors.border }]}>
             {coffeeStart && (
               <View style={styles.pauseInfoItem}>
                 <Ionicons name="cafe-outline" size={13} color="#92400e" />
-                <Text style={[styles.pauseInfoText, { color: colors.textSecondary }]}>
+                <Text
+                  style={[styles.pauseInfoText, { color: colors.textSecondary }]}
+                  numberOfLines={2}
+                >
                   {formatTimeUtil(getEffectiveRecordedAt(coffeeStart))}
                   {(coffeeEnd || isToday) ? ` — ${formatTimeUtil(
                     new Date(new Date(getEffectiveRecordedAt(coffeeStart)).getTime() + COFFEE_DURATION_MS).toISOString()
@@ -817,7 +866,10 @@ export default function PointScreen() {
             {lunchStart && (
               <View style={styles.pauseInfoItem}>
                 <Ionicons name="restaurant-outline" size={13} color="#0369a1" />
-                <Text style={[styles.pauseInfoText, { color: colors.textSecondary }]}>
+                <Text
+                  style={[styles.pauseInfoText, { color: colors.textSecondary }]}
+                  numberOfLines={2}
+                >
                   {formatTimeUtil(getEffectiveRecordedAt(lunchStart))}
                   {(lunchEnd || isToday) ? ` — ${formatTimeUtil(
                     new Date(new Date(getEffectiveRecordedAt(lunchStart)).getTime() + LUNCH_DURATION_MS).toISOString()
@@ -828,54 +880,27 @@ export default function PointScreen() {
           </View>
         )}
 
-        {/* Botões de ajuste */}
-        {hasAnyAdjust && (
-          <View style={styles.adjustRow}>
-            {canAdjustIn && clockIn && (
-              <TouchableOpacity
-                style={[styles.adjustBtn, { borderColor: '#22c55e' }]}
-                onPress={() => openAdjustModal(clockIn, 'clock_in')}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="create-outline" size={14} color="#22c55e" />
-                <Text style={[styles.adjustBtnText, { color: '#22c55e' }]}>
-                  {t('point.adjustClockIn')}
+        {!isWeekend(dateKey) && (
+          <View style={[styles.adjustRow, { borderTopColor: colors.border }]}>
+            {dayAdjusted ? (
+              <View style={[styles.adjustDoneHint, { backgroundColor: colors.backgroundSecondary }]}>
+                <Ionicons name="lock-closed-outline" size={14} color={colors.textTertiary} />
+                <Text
+                  style={[styles.adjustDoneHintText, { color: colors.textTertiary }]}
+                  numberOfLines={2}
+                >
+                  {t('point.dayAlreadyAdjusted')}
                 </Text>
-              </TouchableOpacity>
-            )}
-            {canAdjustCoffee && coffeeStart && (
+              </View>
+            ) : (
               <TouchableOpacity
-                style={[styles.adjustBtn, { borderColor: '#92400e' }]}
-                onPress={() => openAdjustModal(coffeeStart, 'coffee_start')}
+                style={[styles.adjustBtn, { borderColor: colors.primary }]}
+                onPress={() => openDayAdjustModal(group)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="create-outline" size={14} color="#92400e" />
-                <Text style={[styles.adjustBtnText, { color: '#92400e' }]}>
-                  {t('point.adjustCoffeeTime')}
-                </Text>
-              </TouchableOpacity>
-            )}
-            {canAdjustLunch && lunchStart && (
-              <TouchableOpacity
-                style={[styles.adjustBtn, { borderColor: '#0369a1' }]}
-                onPress={() => openAdjustModal(lunchStart, 'lunch_start')}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="create-outline" size={14} color="#0369a1" />
-                <Text style={[styles.adjustBtnText, { color: '#0369a1' }]}>
-                  {t('point.adjustLunchTime')}
-                </Text>
-              </TouchableOpacity>
-            )}
-            {canAdjustOut && clockOut && (
-              <TouchableOpacity
-                style={[styles.adjustBtn, { borderColor: '#ef4444' }]}
-                onPress={() => openAdjustModal(clockOut, 'clock_out')}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="create-outline" size={14} color="#ef4444" />
-                <Text style={[styles.adjustBtnText, { color: '#ef4444' }]}>
-                  {t('point.adjustClockOut')}
+                <Ionicons name="create-outline" size={14} color={colors.primary} />
+                <Text style={[styles.adjustBtnText, { color: colors.primary }]}>
+                  {t('point.adjust')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -1112,7 +1137,12 @@ export default function PointScreen() {
                       {month.monthLabel}
                     </Text>
                   </View>
-                  <Text style={[styles.monthTotal, { color: colors.primary }]}>
+                  <Text
+                    style={[styles.monthTotal, { color: colors.primary }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
+                  >
                     {t('point.totalHours')}: {formatHourMin(month.totalWorkedMs)}
                   </Text>
                 </TouchableOpacity>
@@ -1172,31 +1202,109 @@ export default function PointScreen() {
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* Modal ajuste */}
+      {/* Modal ajuste do dia */}
       <Modal
         visible={showAdjustModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowAdjustModal(false)}
+        onRequestClose={closeDayAdjustModal}
       >
-        <TouchableWithoutFeedback onPress={() => setShowAdjustModal(false)}>
-          <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
-            <TouchableWithoutFeedback>
-              <View style={[styles.modalBox, { backgroundColor: colors.background }]}>
+        <KeyboardAvoidingView
+          style={styles.modalKeyboardRoot}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={insets.top}
+        >
+          <View
+            style={[
+              styles.modalOverlay,
+              {
+                backgroundColor: colors.overlay,
+                paddingTop: insets.top + theme.spacing.sm,
+                paddingBottom: insets.bottom + theme.spacing.sm,
+              },
+            ]}
+            pointerEvents="box-none"
+          >
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={closeDayAdjustModal}
+              accessibilityRole="button"
+            />
+            <View
+              style={[
+                styles.modalBoxAdjust,
+                styles.modalBoxElevated,
+                {
+                  backgroundColor: colors.background,
+                  width: adjustModalWidth,
+                  maxHeight: windowHeight * 0.88,
+                },
+              ]}
+              pointerEvents="auto"
+            >
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.adjustModalScrollContent}
+              >
                 <Text style={[styles.modalTitle, { color: colors.text }]}>
-                  {adjustTarget === 'clock_in'
-                    ? t('point.adjustClockIn')
-                    : adjustTarget === 'clock_out'
-                      ? t('point.adjustClockOut')
-                      : adjustTarget === 'coffee_start'
-                        ? t('point.adjustCoffeeTime')
-                        : t('point.adjustLunchTime')}
+                  {t('point.adjustDayTitle')}
                 </Text>
-                <TimePicker
-                  label={t('point.newTime')}
-                  value={adjustTime}
-                  onSelect={setAdjustTime}
-                />
+                {adjustDayGroup && (
+                  <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+                    {adjustDayGroup.dateLabel}
+                  </Text>
+                )}
+                <View style={[styles.adjustTableHeader, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.adjustTableColNum, styles.adjustTableHeaderText, { color: colors.textTertiary }]}>
+                    #
+                  </Text>
+                  <Text style={[styles.adjustTableColLabel, styles.adjustTableHeaderText, { color: colors.textTertiary }]}>
+                    {t('point.adjustColType')}
+                  </Text>
+                  <Text style={[styles.adjustTableColTime, styles.adjustTableHeaderText, { color: colors.textTertiary }]}>
+                    {t('point.adjustColStart')}
+                  </Text>
+                  <Text style={[styles.adjustTableColTime, styles.adjustTableHeaderText, styles.adjustTableHeaderEnd, { color: colors.textTertiary }]}>
+                    {t('point.adjustColEnd')}
+                  </Text>
+                </View>
+                {([
+                  { key: 'workday' as const, label: t('point.rowWorkday'), startKey: 'clockIn' as const, endKey: 'clockOut' as const },
+                  { key: 'coffee' as const, label: t('point.rowCoffee'), startKey: 'coffeeStart' as const, endKey: 'coffeeEnd' as const },
+                  { key: 'lunch' as const, label: t('point.rowLunch'), startKey: 'lunchStart' as const, endKey: 'lunchEnd' as const },
+                ]).map((row, index) => (
+                  <View key={row.key} style={[styles.adjustTableRow, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.adjustTableColNum, styles.adjustTableRowNum, { color: colors.textTertiary }]}>
+                      {index + 1}
+                    </Text>
+                    <Text style={[styles.adjustTableColLabel, styles.adjustTableRowLabel, { color: colors.text }]} numberOfLines={1}>
+                      {row.label}
+                    </Text>
+                    <View style={styles.adjustTableColTime}>
+                      <DayAdjustTimeInput
+                        fieldKey={`${adjustDayGroup?.dateKey ?? 'day'}-${row.startKey}`}
+                        value={adjustTimes[row.startKey]}
+                        onChange={(v) => setAdjustTimeField(row.startKey, v)}
+                      />
+                    </View>
+                    <View style={styles.adjustTableColTime}>
+                      <DayAdjustTimeInput
+                        fieldKey={`${adjustDayGroup?.dateKey ?? 'day'}-${row.endKey}`}
+                        value={adjustTimes[row.endKey]}
+                        onChange={(v) => setAdjustTimeField(row.endKey, v)}
+                      />
+                    </View>
+                  </View>
+                ))}
+                <View style={[styles.workDurationRow, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+                  <Text style={[styles.workDurationHint, { color: colors.textSecondary }]}>
+                    {t('point.workDurationHint')}
+                  </Text>
+                  <Text style={[styles.workDurationValue, { color: colors.primary }]}>
+                    {adjustNetWorkLabel}
+                  </Text>
+                </View>
                 <Input
                   value={adjustDescription}
                   onChangeText={(text) => setAdjustDescription(text.slice(0, 20))}
@@ -1207,25 +1315,21 @@ export default function PointScreen() {
                   <Button
                     title={t('common.cancel')}
                     variant="outline"
-                    onPress={() => {
-                      setShowAdjustModal(false);
-                      setAdjustEntry(null);
-                      setAdjustDescription('');
-                    }}
+                    onPress={closeDayAdjustModal}
                     style={styles.modalButton}
                   />
                   <Button
                     title={t('point.saveAdjust')}
-                    onPress={handleSaveAdjust}
+                    onPress={handleSaveDayAdjust}
                     loading={savingAdjust}
                     disabled={!adjustDescription.trim()}
                     style={styles.modalButton}
                   />
                 </View>
-              </View>
-            </TouchableWithoutFeedback>
+              </ScrollView>
+            </View>
           </View>
-        </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
     </ScreenWrapper>
   );
@@ -1407,22 +1511,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: theme.spacing.xs,
   },
   monthHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.xs,
+    flexShrink: 1,
+    minWidth: 0,
   },
   monthTitle: {
     fontSize: theme.typography.fontSize.md,
     fontWeight: theme.typography.fontWeight.bold,
     textTransform: 'capitalize',
+    flexShrink: 1,
   },
   monthTotal: {
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.semibold,
+    flexShrink: 0,
+    maxWidth: '100%',
   },
   monthDaysList: {
     gap: theme.spacing.sm,
@@ -1435,14 +1546,23 @@ const styles = StyleSheet.create({
   },
   dayCardHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: theme.spacing.sm,
     marginBottom: theme.spacing.sm,
   },
-  dayDateWrap: {
+  dayHeaderMain: {
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  dayHeaderBadges: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    justifyContent: 'flex-end',
+    gap: theme.spacing.xs,
+    flexShrink: 0,
   },
   dayDateText: {
     fontSize: theme.typography.fontSize.md,
@@ -1450,6 +1570,7 @@ const styles = StyleSheet.create({
   },
   dayWeekday: {
     fontSize: theme.typography.fontSize.sm,
+    marginTop: 2,
   },
   todayBadge: {
     paddingHorizontal: theme.spacing.sm,
@@ -1460,56 +1581,67 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.xs,
     fontWeight: theme.typography.fontWeight.semibold,
   },
-  autoBadge: {
+  statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: 4,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 3,
+    borderRadius: theme.borderRadius.sm,
   },
-  autoBadgeText: {
+  statusBadgeText: {
     fontSize: theme.typography.fontSize.xs,
-    color: '#f59e0b',
-    fontWeight: theme.typography.fontWeight.medium,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
-  dayRow: {
+  dayTimesGrid: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  dayCol: {
-    flex: 1,
-    alignItems: 'center',
+  dayTimeSlot: {
+    flexGrow: 1,
+    flexBasis: '30%',
+    minWidth: 96,
+    maxWidth: '100%',
+    paddingVertical: theme.spacing.xs,
   },
   dayColLabel: {
     fontSize: theme.typography.fontSize.xs,
     marginBottom: 4,
   },
-  dayTimeRow: {
+  dayTimeValueRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    minWidth: 0,
+  },
+  dayTimeIcon: {
+    flexShrink: 0,
   },
   dayTimeText: {
     fontSize: theme.typography.fontSize.md,
     fontWeight: theme.typography.fontWeight.semibold,
-  },
-  adjustedTag: {
-    fontSize: theme.typography.fontSize.xs,
-  },
-  daySep: {
-    width: 1,
-    height: 32,
-    alignSelf: 'center',
+    flexShrink: 1,
+    minWidth: 0,
   },
   pauseInfoRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: theme.spacing.md,
+    gap: theme.spacing.sm,
     marginTop: theme.spacing.sm,
-    paddingTop: theme.spacing.xs,
+    paddingTop: theme.spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   pauseInfoItem: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 4,
+    flexBasis: '48%',
+    flexGrow: 1,
+    minWidth: 140,
   },
   pauseInfoText: {
     fontSize: theme.typography.fontSize.xs,
@@ -1517,11 +1649,9 @@ const styles = StyleSheet.create({
   adjustRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: theme.spacing.sm,
     marginTop: theme.spacing.sm,
     paddingTop: theme.spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#e5e7eb',
   },
   adjustBtn: {
     flexDirection: 'row',
@@ -1536,11 +1666,28 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.xs,
     fontWeight: theme.typography.fontWeight.medium,
   },
+  adjustDoneHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.sm,
+    borderRadius: theme.borderRadius.sm,
+    flex: 1,
+    maxWidth: '100%',
+  },
+  adjustDoneHintText: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  modalKeyboardRoot: {
+    flex: 1,
+  },
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.md,
   },
   modalBox: {
     width: '100%',
@@ -1549,10 +1696,91 @@ const styles = StyleSheet.create({
     padding: theme.spacing.lg,
     ...theme.shadows.lg,
   },
+  modalBoxElevated: {
+    zIndex: 1,
+  },
+  modalBoxAdjust: {
+    borderRadius: theme.borderRadius.lg,
+    overflow: 'hidden',
+    ...theme.shadows.lg,
+  },
+  adjustModalScrollContent: {
+    padding: theme.spacing.lg,
+    paddingBottom: theme.spacing.md,
+  },
   modalTitle: {
     fontSize: theme.typography.fontSize.lg,
     fontWeight: theme.typography.fontWeight.bold,
+    marginBottom: theme.spacing.xs,
+  },
+  modalSubtitle: {
+    fontSize: theme.typography.fontSize.sm,
     marginBottom: theme.spacing.md,
+  },
+  adjustTableHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
+    borderBottomWidth: 1,
+    gap: theme.spacing.xs,
+  },
+  adjustTableHeaderText: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.semibold,
+  },
+  adjustTableHeaderEnd: {
+    textAlign: 'right',
+  },
+  adjustTableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: theme.spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: theme.spacing.xs,
+  },
+  adjustTableColNum: {
+    width: 22,
+    flexShrink: 0,
+  },
+  adjustTableColLabel: {
+    width: 58,
+    flexShrink: 0,
+  },
+  adjustTableColTime: {
+    flex: 1,
+    minWidth: 0,
+  },
+  adjustTableRowNum: {
+    fontSize: theme.typography.fontSize.xs,
+    textAlign: 'center',
+  },
+  adjustTableRowLabel: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  workDurationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: theme.spacing.xs,
+    marginTop: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+  },
+  workDurationHint: {
+    fontSize: theme.typography.fontSize.xs,
+    flex: 1,
+    flexShrink: 1,
+  },
+  workDurationValue: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.bold,
+    fontVariant: ['tabular-nums'],
   },
   modalActions: {
     flexDirection: 'row',

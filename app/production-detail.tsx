@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     Dimensions,
     Image,
@@ -30,31 +31,31 @@ import { repos } from '../src/services/container';
 import { useAuth } from '../src/store/auth-store';
 import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 import { theme } from '../src/theme';
-import { downloadAndOpenAttachment, getSignedUrlFromStorage } from '../src/utils/attachments';
+import {
+  downloadAndOpenAttachment,
+  extractStorageObjectKey,
+  getSignedUrlFromStorage,
+} from '../src/utils/attachments';
+import { downloadAllDxfAttachmentsAsZip } from '../src/utils/dxf-zip-download';
+import { isDxfFile } from '../src/utils/production-attachment-storage';
 import { confirmDelete, confirmDialog } from '../src/utils/confirm-dialog';
 import { pushWithParams } from '../src/utils/navigation';
 import { generateHybridLinks, shareViaWhatsApp } from '../src/utils/share-links';
 import { useRouteParams } from '../src/hooks/use-route-params';
 import { GlassType, InventoryItem, PaintType, Production, ProductionStatus, ProductionStatusHistory, StructureType, User } from '../src/types';
 
-function extractStoragePathFromUrl(pathOrUrl: string): string | null {
-  if (!pathOrUrl) return null;
-  if (!pathOrUrl.startsWith('http://') && !pathOrUrl.startsWith('https://')) {
-    return pathOrUrl;
-  }
-  const fromSignedOrPublic = pathOrUrl.match(/\/object\/(?:sign|public)\/documents\/(.+?)(?:\?|$)/);
-  if (fromSignedOrPublic?.[1]) {
-    return decodeURIComponent(fromSignedOrPublic[1]);
-  }
-  const fromBucketPath = pathOrUrl.match(/\/documents\/(.+?)(?:\?|$)/);
-  if (fromBucketPath?.[1]) {
-    return decodeURIComponent(fromBucketPath[1]);
-  }
-  return null;
-}
-
 /** Resolve signed URL for a thumbnail — uses same robust logic as downloadAndOpenAttachment */
-function AttachmentThumbnail({ storagePath, filename, index }: { storagePath: string; filename: string; index: number }) {
+function AttachmentThumbnail({
+  storagePath,
+  originalStoragePath,
+  filename,
+  index,
+}: {
+  storagePath: string;
+  originalStoragePath?: string;
+  filename: string;
+  index: number;
+}) {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const colors = useThemeColors();
@@ -65,10 +66,10 @@ function AttachmentThumbnail({ storagePath, filename, index }: { storagePath: st
     const resolve = async () => {
       try {
         // Extract a usable storage key from the URL (same approach as downloadAndOpenAttachment)
-        let storageKey = extractStoragePathFromUrl(storagePath) || storagePath;
-        if (!storageKey.includes('/') && !storageKey.includes('.')) {
-          storageKey = filename;
-        }
+        const storageKey =
+          originalStoragePath ||
+          extractStorageObjectKey(storagePath) ||
+          storagePath;
 
         const freshUrl = await getSignedUrlFromStorage(storageKey, filename);
         if (!cancelled && freshUrl && (freshUrl.startsWith('http://') || freshUrl.startsWith('https://'))) {
@@ -83,7 +84,7 @@ function AttachmentThumbnail({ storagePath, filename, index }: { storagePath: st
 
     resolve();
     return () => { cancelled = true; };
-  }, [storagePath, filename]);
+  }, [storagePath, originalStoragePath, filename]);
 
   if (failed || !imageUri) {
     return (
@@ -157,6 +158,15 @@ export default function ProductionDetailScreen() {
   const [glassItems, setGlassItems] = useState<Map<string, InventoryItem>>(new Map());
   const [statusModalVisible, setStatusModalVisible] = useState(false);
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [downloadingDxfZip, setDownloadingDxfZip] = useState(false);
+
+  const dxfAttachments = useMemo(
+    () =>
+      (production?.attachments ?? []).filter((att) =>
+        isDxfFile(att.originalName || att.filename, att.mimeType)
+      ),
+    [production?.attachments]
+  );
   const [isLinkingWorkOrder, setIsLinkingWorkOrder] = useState(false);
   const [statusHistory, setStatusHistory] = useState<ProductionStatusHistory[]>([]);
   const [historyUsers, setHistoryUsers] = useState<Map<string, User>>(new Map());
@@ -579,11 +589,37 @@ export default function ProductionDetailScreen() {
     );
   };
 
-  const handleAttachmentPress = async (attachment: { storagePath: string; mimeType: string; filename: string }) => {
+  const handleDownloadAllDxf = async () => {
+    if (!production || dxfAttachments.length < 2) return;
+
+    setDownloadingDxfZip(true);
     try {
+      const zipBaseName = `PO-${(production.orderNumber || production.id).trim()}`;
+      await downloadAllDxfAttachmentsAsZip(production.attachments, zipBaseName);
+    } catch (error) {
+      console.error('Error downloading DXF ZIP:', error);
+      Alert.alert(t('common.error'), t('production.downloadAllDxfError'));
+    } finally {
+      setDownloadingDxfZip(false);
+    }
+  };
+
+  const handleAttachmentPress = async (attachment: {
+    storagePath: string;
+    originalStoragePath?: string;
+    originalName?: string;
+    mimeType: string;
+    filename: string;
+  }) => {
+    try {
+      const storageKey =
+        attachment.originalStoragePath ||
+        extractStorageObjectKey(attachment.storagePath) ||
+        attachment.storagePath;
+
       await downloadAndOpenAttachment(
-        attachment.storagePath,
-        attachment.filename,
+        storageKey,
+        attachment.originalName || attachment.filename,
         attachment.mimeType
       );
     } catch (error) {
@@ -945,22 +981,46 @@ export default function ProductionDetailScreen() {
         {production.attachments.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>
                 {t('production.attachments')}
               </Text>
-              <TouchableOpacity
-                style={[styles.inlineIconButton, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary }]}
-                onPress={() => {
-                  if (!productionId) return;
-                  pushWithParams(router, '/production-create', {
-                    productionId: String(productionId),
-                    quickAttachmentAction: 'camera',
-                  });
-                }}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="camera-outline" size={16} color={colors.primary} />
-              </TouchableOpacity>
+              <View style={styles.sectionHeaderActions}>
+                {dxfAttachments.length > 1 && (
+                  <TouchableOpacity
+                    style={[
+                      styles.downloadAllDxfButton,
+                      { borderColor: colors.border, backgroundColor: colors.backgroundSecondary },
+                    ]}
+                    onPress={handleDownloadAllDxf}
+                    disabled={downloadingDxfZip}
+                    activeOpacity={0.7}
+                  >
+                    {downloadingDxfZip ? (
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    ) : (
+                      <>
+                        <Ionicons name="archive-outline" size={16} color={colors.primary} />
+                        <Text style={[styles.downloadAllDxfLabel, { color: colors.primary }]}>
+                          {t('production.downloadAllDxf')}
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[styles.inlineIconButton, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary }]}
+                  onPress={() => {
+                    if (!productionId) return;
+                    pushWithParams(router, '/production-create', {
+                      productionId: String(productionId),
+                      quickAttachmentAction: 'camera',
+                    });
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="camera-outline" size={16} color={colors.primary} />
+                </TouchableOpacity>
+              </View>
             </View>
             {/* Image thumbnails grid */}
             {production.attachments.some((a) => a.mimeType.startsWith('image/')) && (
@@ -974,7 +1034,12 @@ export default function ProductionDetailScreen() {
                       onPress={() => handleAttachmentPress(attachment)}
                       activeOpacity={0.7}
                     >
-                      <AttachmentThumbnail storagePath={attachment.storagePath} filename={attachment.filename} index={idx} />
+                      <AttachmentThumbnail
+                        storagePath={attachment.storagePath}
+                        originalStoragePath={attachment.originalStoragePath}
+                        filename={attachment.originalName || attachment.filename}
+                        index={idx}
+                      />
                     </TouchableOpacity>
                   ))}
               </View>
@@ -982,19 +1047,29 @@ export default function ProductionDetailScreen() {
             {/* PDF attachments (unchanged) */}
             {production.attachments
               .filter((a) => !a.mimeType.startsWith('image/'))
-              .map((attachment) => (
-                <TouchableOpacity
-                  key={attachment.id}
-                  style={[styles.attachmentCard, { backgroundColor: colors.cardBackground }]}
-                  onPress={() => handleAttachmentPress(attachment)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="document-text" size={20} color={colors.textSecondary} />
-                  <Text style={[styles.attachmentName, { color: colors.text }]}>
-                    {attachment.filename}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              .map((attachment) => {
+                const isDxf = isDxfFile(
+                  attachment.originalName || attachment.filename,
+                  attachment.mimeType
+                );
+                return (
+                  <TouchableOpacity
+                    key={attachment.id}
+                    style={[styles.attachmentCard, { backgroundColor: colors.cardBackground }]}
+                    onPress={() => handleAttachmentPress(attachment)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name={isDxf ? 'layers-outline' : 'document-text'}
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                    <Text style={[styles.attachmentName, { color: colors.text }]}>
+                      {attachment.originalName || attachment.filename}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
           </View>
         )}
 
@@ -1267,6 +1342,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: theme.spacing.md,
+    gap: theme.spacing.sm,
+  },
+  sectionHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    flexShrink: 1,
+  },
+  downloadAllDxfButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: 8,
+    borderWidth: 1,
+    minHeight: 30,
+  },
+  downloadAllDxfLabel: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
   inlineIconButton: {
     width: 30,
@@ -1275,7 +1372,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: theme.spacing.md,
   },
   itemCard: {
     padding: theme.spacing.md,
