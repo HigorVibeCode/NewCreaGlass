@@ -1,9 +1,25 @@
+import { Platform } from 'react-native';
 import { ProductionRepository } from '../../services/repositories/interfaces';
 import { Production, ProductionItem, ProductionAttachment, ProductionStatus, ProductionStatusHistory } from '../../types';
 import { supabase } from '../../services/supabase';
-import { File } from 'expo-file-system';
+import { extractStorageObjectKey, getSignedUrlFromStorage } from '../../utils/attachments';
+import {
+  buildProductionStorageKey,
+  getOriginalNameFromStorageKey,
+  isDxfFile,
+} from '../../utils/production-attachment-storage';
 
 const BUCKET_NAME = 'documents';
+
+/** Returns true when the value is a local/temporary URI that still needs uploading to Storage */
+function needsUpload(uri: string): boolean {
+  return (
+    uri.startsWith('file://') ||
+    uri.startsWith('content://') ||
+    uri.startsWith('blob:') ||
+    uri.startsWith('data:')
+  );
+}
 
 export class SupabaseProductionRepository implements ProductionRepository {
   async getAllProductions(status?: ProductionStatus): Promise<Production[]> {
@@ -23,12 +39,65 @@ export class SupabaseProductionRepository implements ProductionRepository {
       throw new Error('Failed to fetch productions');
     }
 
-    // Load relations for each production
-    const productions = await Promise.all(
-      (data || []).map(async (prod) => await this.loadProductionWithRelations(prod))
-    );
+    const rows = data || [];
+    if (rows.length === 0) return [];
 
-    return productions;
+    const ids = rows.map((r: any) => r.id);
+
+    const [{ data: allItems }, { data: allAttachments }] = await Promise.all([
+      supabase.from('production_items').select('*').in('production_id', ids),
+      supabase.from('production_attachments').select('*').in('production_id', ids),
+    ]);
+
+    const itemsByProd = new Map<string, ProductionItem[]>();
+    for (const item of allItems || []) {
+      const pid = item.production_id;
+      if (!itemsByProd.has(pid)) itemsByProd.set(pid, []);
+      itemsByProd.get(pid)!.push({
+        id: item.id,
+        glassId: item.glass_id,
+        glassType: item.glass_type,
+        quantity: item.quantity,
+        areaM2: item.area_m2,
+        structureType: item.structure_type,
+        paintType: item.paint_type,
+      });
+    }
+
+    const attsByProd = new Map<string, ProductionAttachment[]>();
+    for (const att of allAttachments || []) {
+      const pid = att.production_id;
+      if (!attsByProd.has(pid)) attsByProd.set(pid, []);
+      const displayName =
+        att.original_name ||
+        getOriginalNameFromStorageKey(att.storage_path) ||
+        att.filename;
+      attsByProd.get(pid)!.push({
+        id: att.id,
+        filename: displayName,
+        originalName: displayName,
+        mimeType: att.mime_type,
+        storagePath: att.storage_path,
+        originalStoragePath: att.storage_path,
+        createdAt: att.created_at,
+      });
+    }
+
+    return rows.map((prod: any) => ({
+      id: prod.id,
+      clientId: prod.client_id || undefined,
+      clientName: prod.client_name,
+      orderNumber: prod.order_number,
+      orderType: prod.order_type,
+      dueDate: prod.due_date,
+      status: prod.status as ProductionStatus,
+      items: itemsByProd.get(prod.id) || [],
+      attachments: attsByProd.get(prod.id) || [],
+      linkedWorkOrderId: prod.linked_work_order_id || undefined,
+      company: prod.company ?? undefined,
+      createdAt: prod.created_at,
+      createdBy: prod.created_by,
+    }));
   }
 
   async getProductionById(productionId: string): Promise<Production | null> {
@@ -36,10 +105,9 @@ export class SupabaseProductionRepository implements ProductionRepository {
       .from('productions')
       .select('*')
       .eq('id', productionId)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
       console.error('Error fetching production:', error);
       throw new Error('Failed to fetch production');
     }
@@ -57,12 +125,14 @@ export class SupabaseProductionRepository implements ProductionRepository {
     const { data: prodData, error: prodError } = await supabase
       .from('productions')
       .insert({
+        client_id: production.clientId ?? null,
         client_name: production.clientName,
         order_number: production.orderNumber,
         order_type: production.orderType,
         due_date: production.dueDate,
         status: production.status,
         created_by: user.id,
+        ...(production.company != null && production.company !== '' && { company: production.company }),
       })
       .select()
       .single();
@@ -98,32 +168,30 @@ export class SupabaseProductionRepository implements ProductionRepository {
       }
     }
 
-    // Upload attachments if any
     if (production.attachments && production.attachments.length > 0) {
+      const uploadFailures: string[] = [];
       for (const attachment of production.attachments) {
-        // If attachment has a local file URI, upload it
-        if (attachment.storagePath.startsWith('file://') || attachment.storagePath.startsWith('content://')) {
+        let storagePath = attachment.storagePath;
+
+        if (needsUpload(storagePath)) {
           try {
-            const filename = await this.uploadAttachment({
-              uri: attachment.storagePath,
-              name: attachment.filename,
+            storagePath = await this.uploadAttachment({
+              uri: storagePath,
+              name: attachment.originalName || attachment.filename,
               type: attachment.mimeType,
+              webFile: attachment.webFile,
             });
-            attachment.storagePath = filename;
           } catch (uploadError) {
             console.error('Error uploading attachment:', uploadError);
-            // Continue with other attachments
+            uploadFailures.push(attachment.originalName || attachment.filename);
+            continue;
           }
         }
 
-        await supabase
-          .from('production_attachments')
-          .insert({
-            production_id: productionId,
-            filename: attachment.filename,
-            mime_type: attachment.mimeType,
-            storage_path: attachment.storagePath,
-          });
+        await this.insertProductionAttachmentRow(productionId, attachment, storagePath);
+      }
+      if (uploadFailures.length > 0) {
+        throw new Error(`Failed to upload attachment(s): ${uploadFailures.join(', ')}`);
       }
     }
 
@@ -148,10 +216,13 @@ export class SupabaseProductionRepository implements ProductionRepository {
     const updateData: any = {};
 
     if (updates.clientName !== undefined) updateData.client_name = updates.clientName;
+    if (updates.clientId !== undefined) updateData.client_id = updates.clientId;
     if (updates.orderNumber !== undefined) updateData.order_number = updates.orderNumber;
     if (updates.orderType !== undefined) updateData.order_type = updates.orderType;
     if (updates.dueDate !== undefined) updateData.due_date = updates.dueDate;
     if (updates.status !== undefined) updateData.status = updates.status;
+    if (updates.company !== undefined) updateData.company = updates.company;
+    if (updates.linkedWorkOrderId !== undefined) updateData.linked_work_order_id = updates.linkedWorkOrderId;
 
     // Get current production to check status change
     const currentProduction = await this.getProductionById(productionId);
@@ -161,16 +232,34 @@ export class SupabaseProductionRepository implements ProductionRepository {
 
     const previousStatus = currentProduction.status;
 
-    const { data, error } = await supabase
-      .from('productions')
-      .update(updateData)
-      .eq('id', productionId)
-      .select()
-      .single();
+    let data: any;
+    if (Object.keys(updateData).length > 0) {
+      const { data: updatedData, error } = await supabase
+        .from('productions')
+        .update(updateData)
+        .eq('id', productionId)
+        .select()
+        .single();
 
-    if (error) {
-      console.error('Error updating production:', error);
-      throw new Error('Failed to update production');
+      if (error) {
+        console.error('Error updating production:', error);
+        throw new Error('Failed to update production');
+      }
+      data = updatedData;
+    } else {
+      // When only related entities (e.g. attachments) are being updated,
+      // skip base table update and reuse current row data.
+      const { data: currentData, error } = await supabase
+        .from('productions')
+        .select('*')
+        .eq('id', productionId)
+        .single();
+
+      if (error || !currentData) {
+        console.error('Error loading production for related update:', error);
+        throw new Error('Failed to update production');
+      }
+      data = currentData;
     }
 
     // Update items if provided
@@ -201,42 +290,50 @@ export class SupabaseProductionRepository implements ProductionRepository {
 
     // Handle attachments updates if provided
     if (updates.attachments !== undefined) {
-      // Note: This is a simple replace strategy
-      // Delete existing attachments
       await supabase
         .from('production_attachments')
         .delete()
         .eq('production_id', productionId);
 
-      // Upload and insert new attachments
+      const uploadFailures: string[] = [];
       for (const attachment of updates.attachments) {
-        let storagePath = attachment.storagePath;
+        let storagePath: string;
 
-        // If attachment has a local file URI, upload it
-        if (storagePath.startsWith('file://') || storagePath.startsWith('content://')) {
+        if (needsUpload(attachment.storagePath)) {
           try {
-            const filename = await this.uploadAttachment({
-              uri: storagePath,
-              name: attachment.filename,
+            storagePath = await this.uploadAttachment({
+              uri: attachment.storagePath,
+              name: attachment.originalName || attachment.filename,
               type: attachment.mimeType,
+              webFile: attachment.webFile,
             });
-            storagePath = filename;
           } catch (uploadError) {
             console.error('Error uploading attachment:', uploadError);
+            uploadFailures.push(attachment.originalName || attachment.filename);
             continue;
+          }
+        } else {
+          // Prefer the raw DB key; fall back to storagePath only for brand-new entries
+          storagePath = attachment.originalStoragePath || attachment.storagePath;
+
+          // Guard: never persist a signed URL or expired https link as the storage key
+          if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
+            storagePath =
+              extractStorageObjectKey(storagePath) ||
+              attachment.originalStoragePath ||
+              attachment.filename;
           }
         }
 
-        await supabase
-          .from('production_attachments')
-          .insert({
-            production_id: productionId,
-            filename: attachment.filename,
-            mime_type: attachment.mimeType,
-            storage_path: storagePath,
-          });
+        await this.insertProductionAttachmentRow(productionId, attachment, storagePath);
+      }
+      if (uploadFailures.length > 0) {
+        throw new Error(`Failed to upload attachment(s): ${uploadFailures.join(', ')}`);
       }
     }
+
+    // Load complete production data (will be used for return and notifications)
+    const updatedProduction = await this.loadProductionWithRelations(data);
 
     // Create status history entry if status changed
     if (updates.status && updates.status !== previousStatus && changedBy) {
@@ -248,9 +345,55 @@ export class SupabaseProductionRepository implements ProductionRepository {
           new_status: updates.status,
           changed_by: changedBy,
         });
+
+      // Create notification when status changes to 'authorized'
+      if (updates.status === 'authorized' && previousStatus !== 'authorized') {
+        try {
+          const { repos } = await import('../../services/container');
+          await repos.notificationsRepo.createNotification({
+            type: 'production.authorized',
+            payloadJson: {
+              clientName: updatedProduction.clientName || '',
+              orderType: updatedProduction.orderType || '',
+              orderNumber: updatedProduction.orderNumber || '',
+              productionId: productionId,
+            },
+            createdBySystem: true,
+          });
+        } catch (notifError) {
+          console.error('Error creating authorized notification:', notifError);
+          // Don't throw - notification is secondary, status update was successful
+        }
+      }
+
+      // Create notification when status changes to 'tempered'
+      if (updates.status === 'tempered' && previousStatus !== 'tempered') {
+        try {
+          const { repos } = await import('../../services/container');
+          
+          const notificationPayload = {
+            clientName: updatedProduction.clientName || '',
+            orderType: updatedProduction.orderType || '',
+            orderNumber: updatedProduction.orderNumber || '',
+            productionId: productionId,
+          };
+          
+          console.log('[SupabaseProductionRepository] Creating tempered notification with payload:', notificationPayload);
+          
+          await repos.notificationsRepo.createNotification({
+            type: 'production.tempered',
+            payloadJson: notificationPayload,
+            createdBySystem: true,
+          });
+          console.log('[SupabaseProductionRepository] Notification created for tempered status');
+        } catch (notifError) {
+          console.error('Error creating tempered notification:', notifError);
+          // Don't throw - notification is secondary, status update was successful
+        }
+      }
     }
 
-    return await this.loadProductionWithRelations(data);
+    return updatedProduction;
   }
 
   async deleteProduction(productionId: string): Promise<void> {
@@ -286,25 +429,69 @@ export class SupabaseProductionRepository implements ProductionRepository {
     return (data || []).map(this.mapToStatusHistory);
   }
 
-  async uploadAttachment(file: { uri: string; name: string; type: string }): Promise<string> {
+  private buildAttachmentInsertRow(
+    productionId: string,
+    attachment: ProductionAttachment,
+    storagePath: string
+  ) {
+    const displayName = attachment.originalName || attachment.filename;
+    return {
+      production_id: productionId,
+      filename: displayName,
+      original_name: displayName,
+      mime_type: attachment.mimeType,
+      storage_path: storagePath,
+    };
+  }
+
+  private async insertProductionAttachmentRow(
+    productionId: string,
+    attachment: ProductionAttachment,
+    storagePath: string
+  ): Promise<void> {
+    const row = this.buildAttachmentInsertRow(productionId, attachment, storagePath);
+    const { error } = await supabase.from('production_attachments').insert(row);
+
+    if (error?.message?.includes('original_name')) {
+      const { original_name: _removed, ...rowWithoutOriginalName } = row;
+      const { error: retryError } = await supabase
+        .from('production_attachments')
+        .insert(rowWithoutOriginalName);
+      if (retryError) {
+        console.error('Error inserting production attachment (retry):', retryError);
+        throw new Error(`Failed to save attachment: ${retryError.message}`);
+      }
+      return;
+    }
+
+    if (error) {
+      console.error('Error inserting production attachment:', error);
+      throw new Error(`Failed to save attachment: ${error.message}`);
+    }
+  }
+
+  async uploadAttachment(file: { uri: string; name: string; type: string; webFile?: File }): Promise<string> {
     const filename = file.name;
     const fileUri = file.uri;
     const mimeType = file.type;
 
-    // Generate unique filename
-    const timestamp = Date.now();
-    const uniqueFilename = `${timestamp}_${filename}`;
-    const storagePath = `${BUCKET_NAME}/${uniqueFilename}`;
+    const uniqueFilename = isDxfFile(filename, mimeType)
+      ? buildProductionStorageKey(filename)
+      : `${Date.now()}_${filename}`;
 
     try {
       let fileData: Blob | Uint8Array | string;
 
-      if (fileUri.startsWith('file://') || fileUri.startsWith('content://')) {
-        // React Native - read file as base64 and convert to Uint8Array
+      if (Platform.OS === 'web' && file.webFile instanceof File) {
+        // Prefer browser File handle on web to avoid stale blob/data URIs.
+        fileData = file.webFile;
+      } else if (Platform.OS === 'web' && typeof fetch !== 'undefined') {
+        const response = await fetch(fileUri);
+        fileData = await response.blob();
+      } else if (fileUri.startsWith('file://') || fileUri.startsWith('content://')) {
+        const { File } = require('expo-file-system');
         const sourceFile = new File(fileUri);
         const base64 = await sourceFile.base64();
-
-        // Convert base64 to Uint8Array for Supabase Storage
         const byteCharacters = atob(base64);
         const byteNumbers = new Array(byteCharacters.length);
         for (let i = 0; i < byteCharacters.length; i++) {
@@ -322,89 +509,58 @@ export class SupabaseProductionRepository implements ProductionRepository {
         throw new Error('Unsupported file type or environment');
       }
 
-      // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from(BUCKET_NAME)
-        .upload(uniqueFilename, fileData, {
-          contentType: mimeType,
-          upsert: false,
-        });
+      const contentTypes = isDxfFile(filename, mimeType)
+        ? [
+            mimeType || 'application/dxf',
+            'application/x-dxf',
+            'application/octet-stream',
+          ]
+        : [mimeType];
 
-      if (uploadError) {
-        console.error('Error uploading file to storage:', uploadError);
-        throw new Error(`Failed to upload file to storage: ${uploadError.message}`);
+      let lastUploadError: { message: string } | null = null;
+      for (const contentType of contentTypes) {
+        const { error: uploadError } = await supabase.storage
+          .from(BUCKET_NAME)
+          .upload(uniqueFilename, fileData, {
+            contentType,
+            upsert: false,
+          });
+
+        if (!uploadError) {
+          return uniqueFilename;
+        }
+
+        lastUploadError = uploadError;
+        const mimeRejected =
+          uploadError.message?.toLowerCase().includes('mime') ||
+          uploadError.message?.toLowerCase().includes('not allowed');
+        if (!mimeRejected) break;
       }
 
-      return uniqueFilename; // Return just the filename, not full path
+      if (lastUploadError) {
+        console.error('Error uploading file to storage:', lastUploadError);
+        throw new Error(`Failed to upload file to storage: ${lastUploadError.message}`);
+      }
+
+      return uniqueFilename;
     } catch (error: any) {
       console.error('Error uploading attachment:', error);
       throw new Error(error?.message || 'Failed to upload attachment');
     }
   }
 
-  async getAttachmentUrl(storagePath: string): Promise<string> {
-    // If already a URL (http/https), return as is
+  async getAttachmentUrl(storagePath: string, fallbackFilename?: string): Promise<string> {
     if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
       return storagePath;
     }
 
-    // Skip if it's a local file URI (file:// or content://)
     if (storagePath.startsWith('file://') || storagePath.startsWith('content://')) {
       return storagePath;
     }
 
-    // Extract filename from storage path
-    // storagePath can be: "documents/filename.jpg", "documents/123_filename.jpg", or just "filename.jpg"
-    let filename = storagePath;
-    
-    // Remove bucket name prefix if present
-    if (storagePath.startsWith(`${BUCKET_NAME}/`)) {
-      filename = storagePath.replace(`${BUCKET_NAME}/`, '');
-    } else if (storagePath.includes('/')) {
-      // If it has slashes but doesn't start with bucket name, get the last part
-      const parts = storagePath.split('/');
-      filename = parts[parts.length - 1];
-    }
-
-    // Remove any leading/trailing slashes and whitespace
-    filename = filename.trim().replace(/^\/+|\/+$/g, '');
-
-    if (!filename) {
-      // Silently return original path for invalid paths
-      return storagePath;
-    }
-
     try {
-      // Get signed URL from Supabase Storage (valid for 1 hour)
-      const { data, error } = await supabase.storage
-        .from(BUCKET_NAME)
-        .createSignedUrl(filename, 3600);
-
-      if (error) {
-        // Silently handle "not found" errors - these are expected for missing files
-        // Only log other types of errors
-        const isNotFoundError = 
-          error.message?.includes('not found') || 
-          error.message?.includes('Object not found') ||
-          error.message?.includes('The resource was not found');
-        
-        if (!isNotFoundError) {
-          console.warn('Error getting attachment URL:', error.message);
-        }
-        return storagePath;
-      }
-
-      return data.signedUrl;
-    } catch (error: any) {
-      // Silently handle "not found" errors
-      const isNotFoundError = 
-        error?.message?.includes('not found') || 
-        error?.message?.includes('Object not found') ||
-        error?.message?.includes('The resource was not found');
-      
-      if (!isNotFoundError) {
-        console.warn('Exception getting attachment URL:', error?.message);
-      }
+      return await getSignedUrlFromStorage(storagePath, fallbackFilename);
+    } catch {
       return storagePath;
     }
   }
@@ -436,24 +592,31 @@ export class SupabaseProductionRepository implements ProductionRepository {
 
     const attachments: ProductionAttachment[] = await Promise.all(
       (attachmentsData || []).map(async (att: any) => {
+        const rawStoragePath: string = att.storage_path ?? '';
+        const displayName =
+          att.original_name ||
+          getOriginalNameFromStorageKey(rawStoragePath) ||
+          att.filename;
         try {
-          // Get signed URL for attachment (only if it's not already a URL)
-          const url = await this.getAttachmentUrl(att.storage_path);
+          const url = await this.getAttachmentUrl(rawStoragePath, displayName);
           return {
             id: att.id,
-            filename: att.filename,
+            filename: displayName,
+            originalName: displayName,
             mimeType: att.mime_type,
             storagePath: url,
+            originalStoragePath: rawStoragePath,
             createdAt: att.created_at,
           };
         } catch (error) {
-          // If getting URL fails, use original storage path
-          console.warn('Failed to get URL for attachment:', att.filename, error);
+          console.warn('Failed to get URL for attachment:', displayName, error);
           return {
             id: att.id,
-            filename: att.filename,
+            filename: displayName,
+            originalName: displayName,
             mimeType: att.mime_type,
-            storagePath: att.storage_path,
+            storagePath: rawStoragePath,
+            originalStoragePath: rawStoragePath,
             createdAt: att.created_at,
           };
         }
@@ -462,6 +625,7 @@ export class SupabaseProductionRepository implements ProductionRepository {
 
     return {
       id: prodData.id,
+      clientId: prodData.client_id || undefined,
       clientName: prodData.client_name,
       orderNumber: prodData.order_number,
       orderType: prodData.order_type,
@@ -469,6 +633,8 @@ export class SupabaseProductionRepository implements ProductionRepository {
       status: prodData.status as ProductionStatus,
       items,
       attachments,
+      linkedWorkOrderId: prodData.linked_work_order_id || undefined,
+      company: prodData.company ?? undefined,
       createdAt: prodData.created_at,
       createdBy: prodData.created_by,
     };

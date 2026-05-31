@@ -1,21 +1,26 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { useGoBack } from '../src/hooks/use-go-back';
 import { useAppTheme } from '../src/hooks/use-app-theme';
 import { Button } from '../src/components/shared/Button';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { repos } from '../src/services/container';
 import { MaintenanceRecord } from '../src/types';
+import { pushWithParams } from '../src/utils/navigation';
 import { theme } from '../src/theme';
+import { formatDate as formatDateUtil } from '../src/utils/date-format';
 
 export default function MaintenanceListScreen() {
   const { t } = useI18n();
   const router = useRouter();
+  const goBack = useGoBack('/(tabs)/documents');
   const colors = useThemeColors();
   const { effectiveTheme } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -50,19 +55,11 @@ export default function MaintenanceListScreen() {
   };
 
   const handleRecordPress = (recordId: string) => {
-    router.push({
-      pathname: '/maintenance-detail',
-      params: { recordId },
-    } as any);
+    pushWithParams(router, '/maintenance-detail', { recordId: String(recordId) });
   };
 
   const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
+    return formatDateUtil(dateString);
   };
 
   return (
@@ -82,7 +79,7 @@ export default function MaintenanceListScreen() {
           <View style={styles.headerContent}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.back()}
+              onPress={goBack}
               activeOpacity={0.7}
             >
               <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -139,13 +136,24 @@ export default function MaintenanceListScreen() {
             </View>
           ) : (
             <View style={styles.recordsContainer}>
-              {records.map((record) => (
+              {records.map((record) => {
+                const coverUri = (record.infos ?? []).find((i) => i.images?.length)?.images?.[0]?.storagePath;
+                const showThumb = !!coverUri && typeof coverUri === 'string' && (coverUri.startsWith('http://') || coverUri.startsWith('https://'));
+                return (
                 <TouchableOpacity
                   key={record.id}
                   style={[styles.recordCard, { backgroundColor: colors.cardBackground }]}
                   onPress={() => handleRecordPress(record.id)}
                   activeOpacity={0.7}
                 >
+                  {showThumb ? (
+                    <Image source={{ uri: coverUri }} style={styles.recordThumb} contentFit="cover" />
+                  ) : (
+                    <View style={[styles.recordThumbPlaceholder, { backgroundColor: colors.backgroundSecondary }]}>
+                      <Ionicons name="construct-outline" size={24} color={colors.textTertiary} />
+                    </View>
+                  )}
+                  <View style={styles.recordBody}>
                   <View style={styles.recordHeader}>
                     <Text style={[styles.recordTitle, { color: colors.text }]} numberOfLines={1}>
                       {record.title}
@@ -170,17 +178,19 @@ export default function MaintenanceListScreen() {
                         {formatDate(record.createdAt)}
                       </Text>
                     </View>
-                    {record.infos.length > 0 && (
+                    {(record.infos?.length ?? 0) > 0 && (
                       <View style={styles.recordDetailRow}>
                         <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
                         <Text style={[styles.recordDetailText, { color: colors.textSecondary }]}>
-                          {record.infos.length} {t('maintenance.infos')}
+                          {record.infos!.length} {t('maintenance.infos')}
                         </Text>
                       </View>
                     )}
                   </View>
+                  </View>
                 </TouchableOpacity>
-              ))}
+                );
+              })}
             </View>
           )}
         </ScrollView>
@@ -269,9 +279,33 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
   },
   recordCard: {
-    borderRadius: theme.borderRadius.md,
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: theme.spacing.md,
+    gap: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    minHeight: 88,
     ...theme.shadows.sm,
+  },
+  recordThumb: {
+    width: 72,
+    height: 72,
+    borderRadius: theme.borderRadius.md,
+    overflow: 'hidden',
+    backgroundColor: '#e5e7eb',
+  },
+  recordThumbPlaceholder: {
+    width: 72,
+    height: 72,
+    borderRadius: theme.borderRadius.md,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recordBody: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
   },
   recordHeader: {
     marginBottom: theme.spacing.sm,

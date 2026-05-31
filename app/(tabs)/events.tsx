@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, ActivityIndicator, Animated, Platform, Easing, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../../src/hooks/use-i18n';
 import { ScreenWrapper } from '../../src/components/shared/ScreenWrapper';
@@ -11,19 +11,136 @@ import { repos } from '../../src/services/container';
 import { Event, EventType, WorkOrder } from '../../src/types';
 import { theme } from '../../src/theme';
 import { useThemeColors } from '../../src/hooks/use-theme-colors';
+import { formatDateTime as formatDateTimeUtil, formatTimestamp as formatTimestampUtil } from '../../src/utils/date-format';
+import { pushWithParams } from '../../src/utils/navigation';
 
 type EventOrWorkOrder = 
   | { type: 'event'; data: Event }
   | { type: 'workOrder'; data: WorkOrder };
 
+// Componente que adiciona glow pulsante em torno do card (mesmo padrão da tela de produção)
+function InProgressPulseCard({ children, active }: { children: React.ReactNode; active: boolean }) {
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (active) {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1200,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: false,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 0,
+            duration: 1200,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: false,
+          }),
+        ]),
+      );
+      loop.start();
+      return () => loop.stop();
+    }
+  }, [active]);
+
+  if (!active) {
+    return <>{children}</>;
+  }
+
+  const color = '#10b981'; // emerald green for in_progress
+
+  const borderColor = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [`${color}00`, `${color}90`],
+  });
+
+  const shadowOpacity = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0.4],
+  });
+
+  return (
+    <Animated.View
+      style={{
+        borderRadius: theme.borderRadius.md,
+        borderWidth: 2,
+        borderColor,
+        shadowColor: color,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity,
+        shadowRadius: 10,
+        elevation: 5,
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
 export default function EventsScreen() {
+  'use no memo';
   const { t } = useI18n();
   const router = useRouter();
   const colors = useThemeColors();
+  const isFocused = useIsFocused();
   const [items, setItems] = useState<EventOrWorkOrder[]>([]);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [selectedType, setSelectedType] = useState<EventType | 'all'>('all');
   const [isLoading, setIsLoading] = useState(false);
+  const [now, setNow] = useState(Date.now());
+  const [showCompleted, setShowCompleted] = useState(false); // false = oculta work orders concluídas
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Timer para atualizar tempo real dos serviços em andamento
+  useEffect(() => {
+    const hasInProgress = items.some(item => item.type === 'workOrder' && item.data.status === 'in_progress');
+    if (hasInProgress) {
+      const interval = setInterval(() => setNow(Date.now()), 1000);
+      return () => clearInterval(interval);
+    }
+  }, [items]);
+
+  const formatDuration = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    if (hours > 0) {
+      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const getWorkOrderTotalTime = (workOrder: WorkOrder): number => {
+    const completedTime = (workOrder.timeStatuses || []).reduce((sum, ts) => sum + ts.totalDuration, 0);
+    // Se há um time status ativo (sem endTime), calcular tempo real
+    const activeTs = (workOrder.timeStatuses || []).find(ts => !ts.endTime);
+    if (activeTs) {
+      const elapsed = Math.floor((now - new Date(activeTs.startTime).getTime()) / 1000);
+      return completedTime + elapsed;
+    }
+    return completedTime;
+  };
+
+  const getServiceStartTime = (workOrder: WorkOrder): string | null => {
+    if (workOrder.checkIn?.timestamp) return workOrder.checkIn.timestamp;
+    const firstTs = (workOrder.timeStatuses || [])[0];
+    return firstTs?.startTime || null;
+  };
+
+  const getServiceEndTime = (workOrder: WorkOrder): string | null => {
+    if (workOrder.status !== 'completed') return null;
+    const timeStatuses = workOrder.timeStatuses || [];
+    for (let i = timeStatuses.length - 1; i >= 0; i--) {
+      if (timeStatuses[i].endTime) return timeStatuses[i].endTime!;
+    }
+    return null;
+  };
+
+  const formatTimestamp = (timestamp: string): string => {
+    return formatTimestampUtil(timestamp);
+  };
 
   const handleCreateEvent = () => {
     router.push('/event-create');
@@ -31,10 +148,6 @@ export default function EventsScreen() {
 
   const handleCreateReport = () => {
     router.push('/event-report-create');
-  };
-
-  const handleHistory = () => {
-    router.push('/work-orders-history');
   };
 
   const handleFilter = () => {
@@ -61,10 +174,8 @@ export default function EventsScreen() {
         data: event,
       }));
 
-      // Filter out completed work orders from main list - they go to history only
-      const activeWorkOrders = allWorkOrders.filter(wo => wo.status !== 'completed');
-      
-      const workOrderItems: EventOrWorkOrder[] = activeWorkOrders.map(workOrder => ({
+      // Incluir todas as work orders (filtro de concluídas é aplicado na renderização)
+      const workOrderItems: EventOrWorkOrder[] = allWorkOrders.map(workOrder => ({
         type: 'workOrder',
         data: workOrder,
       }));
@@ -102,14 +213,10 @@ export default function EventsScreen() {
   }, [selectedType]);
 
   useEffect(() => {
-    loadEventsAndWorkOrders();
-  }, [loadEventsAndWorkOrders]);
-
-  useFocusEffect(
-    useCallback(() => {
+    if (isFocused) {
       loadEventsAndWorkOrders();
-    }, [loadEventsAndWorkOrders])
-  );
+    }
+  }, [isFocused, loadEventsAndWorkOrders]);
 
   const handleFilterSelect = (value: string) => {
     setSelectedType(value as EventType | 'all');
@@ -137,9 +244,7 @@ export default function EventsScreen() {
 
   const formatDateTime = (date: string, time: string): string => {
     if (!date) return '';
-    const dateObj = new Date(date);
-    const dateStr = dateObj.toLocaleDateString();
-    return time ? `${dateStr} ${time}` : dateStr;
+    return formatDateTimeUtil(date, time);
   };
 
   const getServiceTypeLabel = (type: string): string => {
@@ -177,17 +282,34 @@ export default function EventsScreen() {
   const getWorkOrderStatusColor = (status: string): string => {
     switch (status) {
       case 'planned':
-        return colors.info;
+        return '#6366f1'; // Indigo - planejado
       case 'in_progress':
-        return colors.primary;
+        return '#059669'; // Verde esmeralda - em progresso
       case 'paused':
-        return colors.warning;
+        return '#f59e0b'; // Amarelo - pausado
       case 'completed':
-        return colors.success;
+        return '#10b981'; // Verde claro - concluído
       case 'cancelled':
-        return colors.error;
+        return '#ef4444'; // Vermelho - cancelado
       default:
         return colors.textSecondary;
+    }
+  };
+
+  const getWorkOrderStatusIcon = (status: string): string => {
+    switch (status) {
+      case 'planned':
+        return 'calendar-outline';
+      case 'in_progress':
+        return 'play-circle';
+      case 'paused':
+        return 'pause-circle';
+      case 'completed':
+        return 'checkmark-circle';
+      case 'cancelled':
+        return 'close-circle';
+      default:
+        return 'ellipse';
     }
   };
 
@@ -201,11 +323,65 @@ export default function EventsScreen() {
     { label: t('events.types.other'), value: 'other' },
   ];
 
+  const visibleItems = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    const statusFiltered = showCompleted
+      ? items
+      : items.filter((item) => {
+          if (item.type === 'workOrder' && item.data.status === 'completed') return false;
+          if (item.type === 'event' && item.data.status === 'completed') return false;
+          return true;
+        });
+
+    if (!normalizedQuery) return statusFiltered;
+
+    return statusFiltered.filter((item) => {
+      if (item.type === 'event') {
+        const event = item.data;
+        const eventTypeLabel = getTypeLabel(event.type).toLowerCase();
+        return [
+          event.title,
+          event.location || '',
+          event.people || '',
+          eventTypeLabel,
+        ].some((value) => value.toLowerCase().includes(normalizedQuery));
+      }
+
+      const workOrder = item.data;
+      const serviceTypeLabel = getServiceTypeLabel(workOrder.serviceType).toLowerCase();
+      return [
+        workOrder.clientName,
+        workOrder.clientAddress || '',
+        workOrder.clientContact || '',
+        serviceTypeLabel,
+      ].some((value) => value.toLowerCase().includes(normalizedQuery));
+    });
+  }, [items, showCompleted, searchQuery]);
+
   return (
     <ScreenWrapper>
       <ScrollView style={styles.scrollView}>
         <View style={styles.content}>
           <View style={styles.topBar}>
+            <View style={[styles.searchContainer, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+              <Ionicons name="search" size={18} color={colors.textSecondary} />
+              <TextInput
+                style={[styles.searchInput, { color: colors.text }]}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder={t('common.search')}
+                placeholderTextColor={colors.textSecondary}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {!!searchQuery && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
+                  <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
+
             <TouchableOpacity
               style={[styles.filterButton, { backgroundColor: colors.backgroundSecondary }]}
               onPress={handleFilter}
@@ -214,15 +390,20 @@ export default function EventsScreen() {
               <Ionicons name="filter" size={20} color={colors.text} />
             </TouchableOpacity>
 
-            <PermissionGuard permission="events.history">
-              <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: colors.backgroundSecondary }]}
-                onPress={handleHistory}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="time-outline" size={20} color={colors.text} />
-              </TouchableOpacity>
-            </PermissionGuard>
+            <TouchableOpacity
+              style={[
+                styles.filterButton,
+                { backgroundColor: showCompleted ? colors.primary + '30' : colors.backgroundSecondary },
+              ]}
+              onPress={() => setShowCompleted(!showCompleted)}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={showCompleted ? 'eye' : 'eye-off'}
+                size={20}
+                color={showCompleted ? colors.primary : colors.text}
+              />
+            </TouchableOpacity>
 
             <PermissionGuard permission="events.report.create">
               <TouchableOpacity
@@ -236,7 +417,7 @@ export default function EventsScreen() {
 
             <PermissionGuard permission="events.create">
               <TouchableOpacity
-                style={[styles.addButton, { backgroundColor: '#2563eb' }]}
+                style={[styles.addButton, { backgroundColor: '#ea580c' }]}
                 onPress={handleCreateEvent}
                 activeOpacity={0.7}
               >
@@ -299,27 +480,30 @@ export default function EventsScreen() {
             </TouchableWithoutFeedback>
           </Modal>
 
+          {(() => {
+            if (visibleItems.length === 0) {
+              return (
+                <View style={styles.emptyState}>
+                  <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{t('events.noData')}</Text>
+                </View>
+              );
+            }
 
-          {items.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{t('events.noData')}</Text>
-            </View>
-          ) : (
+            return (
             <View style={styles.eventsList}>
-              {items.map((item) => {
+              {visibleItems.map((item) => {
                 if (item.type === 'event') {
                   const event = item.data;
-                  const eventColor = '#2563eb'; // Azul escuro
+                  const eventColor = '#ea580c'; // Laranja
+                  const isEventCompleted = event.status === 'completed';
+
                   return (
                     <TouchableOpacity
                       key={`event-${event.id}`}
                       style={[styles.eventCard, { backgroundColor: colors.cardBackground }]}
                       activeOpacity={0.7}
                       onPress={() => {
-                        router.push({
-                          pathname: '/event-detail',
-                          params: { eventId: event.id },
-                        });
+                        pushWithParams(router, '/event-detail', { eventId: event.id });
                       }}
                     >
                       <View style={[styles.cardIndicator, { backgroundColor: eventColor }]} />
@@ -331,6 +515,16 @@ export default function EventsScreen() {
                               <Text style={[styles.typeLabel, { color: eventColor }]}>{t('events.eventLabel')}</Text>
                             </View>
                           </View>
+                          {isEventCompleted && (
+                            <View style={[styles.statusBadge, { backgroundColor: '#10b981' + '20' }]}>
+                              <View style={styles.statusBadgeContent}>
+                                <Ionicons name="checkmark-circle" size={12} color="#10b981" />
+                                <Text style={[styles.statusText, { color: '#10b981' }]}>
+                                  {t('events.statusCompleted') || 'Concluído'}
+                                </Text>
+                              </View>
+                            </View>
+                          )}
                         </View>
 
                         <View style={styles.cardBody}>
@@ -375,16 +569,24 @@ export default function EventsScreen() {
                 } else {
                   const workOrder = item.data;
                   const workOrderColor = '#059669'; // Verde escuro
+                  const statusColor = getWorkOrderStatusColor(workOrder.status);
+                  const isInProgress = workOrder.status === 'in_progress';
+                  const totalTime = getWorkOrderTotalTime(workOrder);
+                  const serviceStart = getServiceStartTime(workOrder);
+                  const serviceEnd = getServiceEndTime(workOrder);
                   return (
-                    <TouchableOpacity
+                    <InProgressPulseCard
                       key={`workOrder-${workOrder.id}`}
-                      style={[styles.eventCard, { backgroundColor: colors.cardBackground }]}
+                      active={isInProgress}
+                    >
+                    <TouchableOpacity
+                      style={[
+                        styles.eventCard,
+                        { backgroundColor: colors.cardBackground },
+                      ]}
                       activeOpacity={0.7}
                       onPress={() => {
-                        router.push({
-                          pathname: '/work-order-detail',
-                          params: { workOrderId: workOrder.id },
-                        });
+                        pushWithParams(router, '/work-order-detail', { workOrderId: workOrder.id });
                       }}
                     >
                       <View style={[styles.cardIndicator, { backgroundColor: workOrderColor }]} />
@@ -410,17 +612,24 @@ export default function EventsScreen() {
                               <View
                                 style={[
                                   styles.statusBadge,
-                                  { backgroundColor: getWorkOrderStatusColor(workOrder.status) + '20' },
+                                  { backgroundColor: statusColor + '20' },
                                 ]}
                               >
-                                <Text
-                                  style={[
-                                    styles.statusText,
-                                    { color: getWorkOrderStatusColor(workOrder.status) },
-                                  ]}
-                                >
-                                  {getWorkOrderStatusLabel(workOrder.status)}
-                                </Text>
+                                <View style={styles.statusBadgeContent}>
+                                  <Ionicons 
+                                    name={getWorkOrderStatusIcon(workOrder.status) as any} 
+                                    size={12} 
+                                    color={statusColor} 
+                                  />
+                                  <Text
+                                    style={[
+                                      styles.statusText,
+                                      { color: statusColor },
+                                    ]}
+                                  >
+                                    {getWorkOrderStatusLabel(workOrder.status)}
+                                  </Text>
+                                </View>
                               </View>
                             </View>
                           </View>
@@ -449,14 +658,67 @@ export default function EventsScreen() {
                               </Text>
                             </View>
                           )}
+
+                          {/* Tempo de serviço e datas */}
+                          {(totalTime > 0 || serviceStart) && (
+                            <View style={[styles.serviceTimeSection, { borderTopColor: colors.border }]}>
+                              {/* Timer em tempo real ou total */}
+                              {totalTime > 0 && (
+                                <View style={styles.infoRow}>
+                                  <Ionicons 
+                                    name="timer-outline" 
+                                    size={14} 
+                                    color={isInProgress ? statusColor : colors.textSecondary} 
+                                  />
+                                  <Text style={[
+                                    styles.timerText,
+                                    { 
+                                      color: isInProgress ? statusColor : colors.textSecondary,
+                                      fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+                                    },
+                                  ]}>
+                                    {formatDuration(totalTime)}
+                                  </Text>
+                                  {isInProgress && (
+                                    <View style={[styles.liveBadge, { backgroundColor: statusColor + '20' }]}>
+                                      <View style={[styles.liveDot, { backgroundColor: statusColor }]} />
+                                      <Text style={[styles.liveText, { color: statusColor }]}>LIVE</Text>
+                                    </View>
+                                  )}
+                                </View>
+                              )}
+
+                              {/* Data/hora início */}
+                              {serviceStart && (
+                                <View style={styles.infoRow}>
+                                  <Ionicons name="play-outline" size={14} color={colors.textSecondary} />
+                                  <Text style={[styles.infoText, { color: colors.textSecondary }]}>
+                                    {t('workOrders.serviceStartedAt') || 'Início'}: {formatTimestamp(serviceStart)}
+                                  </Text>
+                                </View>
+                              )}
+
+                              {/* Data/hora conclusão */}
+                              {serviceEnd && (
+                                <View style={styles.infoRow}>
+                                  <Ionicons name="checkmark-outline" size={14} color={colors.success} />
+                                  <Text style={[styles.infoText, { color: colors.textSecondary }]}>
+                                    {t('workOrders.serviceCompletedAt') || 'Conclusão'}: {formatTimestamp(serviceEnd)}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                          )}
                         </View>
                       </View>
                     </TouchableOpacity>
+                    </InProgressPulseCard>
                   );
                 }
               })}
             </View>
-          )}
+            );
+          })()}
         </View>
       </ScrollView>
     </ScreenWrapper>
@@ -477,9 +739,23 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     gap: theme.spacing.sm,
     marginBottom: theme.spacing.md,
+  },
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing.sm,
+    gap: theme.spacing.xs,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: theme.typography.fontSize.sm,
+    paddingVertical: theme.spacing.sm,
   },
   filterButton: {
     width: 36,
@@ -695,8 +971,42 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     flexShrink: 0,
   },
+  statusBadgeContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   statusText: {
     fontSize: theme.typography.fontSize.xs,
     fontWeight: theme.typography.fontWeight.semibold,
+  },
+  serviceTimeSection: {
+    marginTop: theme.spacing.xs,
+    paddingTop: theme.spacing.xs,
+    borderTopWidth: 1,
+    gap: theme.spacing.xs,
+  },
+  timerText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: theme.spacing.xs,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  liveText: {
+    fontSize: 9,
+    fontWeight: theme.typography.fontWeight.bold,
+    letterSpacing: 0.5,
   },
 });

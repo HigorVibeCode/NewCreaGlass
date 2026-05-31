@@ -1,20 +1,30 @@
 import {
   AuthRepository,
   BloodPriorityRepository,
+  ClientsRepository,
+  DeviceTokensRepository,
   DocumentsRepository,
+  EquipmentDocumentsRepository,
   EventsRepository,
   InventoryRepository,
   MaintenanceRepository,
+  ManualsRepository,
+  NotificationPreferencesRepository,
   NotificationsRepository,
   PermissionsRepository,
   ProductionRepository,
+  PushDeliveryLogsRepository,
+  TimeEntriesRepository,
+  TrainingRepository,
   UsersRepository,
   WorkOrdersRepository,
+  DirectMessagesRepository,
 } from './repositories/interfaces';
 
 // Import Supabase repositories
 import { SupabaseAuthRepository } from '../repositories/supabase/SupabaseAuthRepository';
 import { SupabaseUsersRepository } from '../repositories/supabase/SupabaseUsersRepository';
+import { SupabaseClientsRepository } from '../repositories/supabase/SupabaseClientsRepository';
 import { SupabasePermissionsRepository } from '../repositories/supabase/SupabasePermissionsRepository';
 import { SupabaseDocumentsRepository } from '../repositories/supabase/SupabaseDocumentsRepository';
 import { SupabaseInventoryRepository } from '../repositories/supabase/SupabaseInventoryRepository';
@@ -24,18 +34,29 @@ import { SupabaseEventsRepository } from '../repositories/supabase/SupabaseEvent
 import { SupabaseProductionRepository } from '../repositories/supabase/SupabaseProductionRepository';
 import { SupabaseWorkOrdersRepository } from '../repositories/supabase/SupabaseWorkOrdersRepository';
 import { SupabaseMaintenanceRepository } from '../repositories/supabase/SupabaseMaintenanceRepository';
+import { SupabaseManualsRepository } from '../repositories/supabase/SupabaseManualsRepository';
+import { SupabaseTimeEntriesRepository } from '../repositories/supabase/SupabaseTimeEntriesRepository';
+import { SupabaseTrainingRepository } from '../repositories/supabase/SupabaseTrainingRepository';
+import { SupabaseDeviceTokensRepository } from '../repositories/supabase/SupabaseDeviceTokensRepository';
+import { SupabaseNotificationPreferencesRepository } from '../repositories/supabase/SupabaseNotificationPreferencesRepository';
+import { SupabasePushDeliveryLogsRepository } from '../repositories/supabase/SupabasePushDeliveryLogsRepository';
+import { SupabaseEquipmentDocumentsRepository } from '../repositories/supabase/SupabaseEquipmentDocumentsRepository';
+import { SupabaseDirectMessagesRepository } from '../repositories/supabase/SupabaseDirectMessagesRepository';
 
 // Import Mock repositories (for fallback or development)
 import { MockAuthRepository } from '../repositories/mock/MockAuthRepository';
 import { MockUsersRepository } from '../repositories/mock/MockUsersRepository';
+import { MockClientsRepository } from '../repositories/mock/MockClientsRepository';
 import { MockPermissionsRepository } from '../repositories/mock/MockPermissionsRepository';
 import { MockDocumentsRepository } from '../repositories/mock/MockDocumentsRepository';
 import { MockInventoryRepository } from '../repositories/mock/MockInventoryRepository';
 import { MockNotificationsRepository } from '../repositories/mock/MockNotificationsRepository';
 import { MockBloodPriorityRepository } from '../repositories/mock/MockBloodPriorityRepository';
+import { MockDirectMessagesRepository } from '../repositories/mock/MockDirectMessagesRepository';
 import { MockEventsRepository } from '../repositories/mock/MockEventsRepository';
 import { MockProductionRepository } from '../repositories/mock/MockProductionRepository';
 import { MockMaintenanceRepository } from '../repositories/mock/MockMaintenanceRepository';
+import { MockTimeEntriesRepository } from '../repositories/mock/MockTimeEntriesRepository';
 
 // Dependency Injection Container
 // Now using Supabase repositories for real-time sync across all devices
@@ -46,13 +67,22 @@ const USE_MOCK_REPOSITORIES = process.env.EXPO_PUBLIC_USE_MOCK_REPOSITORIES === 
 export const repos = {
   authRepo: (USE_MOCK_REPOSITORIES ? new MockAuthRepository() : new SupabaseAuthRepository()) as AuthRepository,
   usersRepo: (USE_MOCK_REPOSITORIES ? new MockUsersRepository() : new SupabaseUsersRepository()) as UsersRepository,
+  clientsRepo: (USE_MOCK_REPOSITORIES ? new MockClientsRepository() : new SupabaseClientsRepository()) as ClientsRepository,
   permissionsRepo: (USE_MOCK_REPOSITORIES ? new MockPermissionsRepository() : new SupabasePermissionsRepository()) as PermissionsRepository,
   documentsRepo: (USE_MOCK_REPOSITORIES ? new MockDocumentsRepository() : new SupabaseDocumentsRepository()) as DocumentsRepository,
   inventoryRepo: (USE_MOCK_REPOSITORIES ? new MockInventoryRepository() : new SupabaseInventoryRepository()) as InventoryRepository,
   notificationsRepo: (USE_MOCK_REPOSITORIES ? new MockNotificationsRepository() : new SupabaseNotificationsRepository()) as NotificationsRepository,
   bloodPriorityRepo: (USE_MOCK_REPOSITORIES ? new MockBloodPriorityRepository() : new SupabaseBloodPriorityRepository()) as BloodPriorityRepository,
+  directMessagesRepo: (USE_MOCK_REPOSITORIES ? new MockDirectMessagesRepository() : new SupabaseDirectMessagesRepository()) as DirectMessagesRepository,
   eventsRepo: (USE_MOCK_REPOSITORIES ? new MockEventsRepository() : new SupabaseEventsRepository()) as EventsRepository,
   productionRepo: (USE_MOCK_REPOSITORIES ? new MockProductionRepository() : new SupabaseProductionRepository()) as ProductionRepository,
   maintenanceRepo: (USE_MOCK_REPOSITORIES ? new MockMaintenanceRepository() : new SupabaseMaintenanceRepository()) as MaintenanceRepository,
+  timeEntriesRepo: (USE_MOCK_REPOSITORIES ? new MockTimeEntriesRepository() : new SupabaseTimeEntriesRepository()) as TimeEntriesRepository,
+  manualsRepo: new SupabaseManualsRepository() as ManualsRepository,
   workOrdersRepo: new SupabaseWorkOrdersRepository() as WorkOrdersRepository, // Always use Supabase for work orders
+  trainingRepo: new SupabaseTrainingRepository() as TrainingRepository, // Always use Supabase for trainings
+  deviceTokensRepo: new SupabaseDeviceTokensRepository() as DeviceTokensRepository,
+  notificationPreferencesRepo: new SupabaseNotificationPreferencesRepository() as NotificationPreferencesRepository,
+  pushDeliveryLogsRepo: new SupabasePushDeliveryLogsRepository() as PushDeliveryLogsRepository,
+  equipmentDocumentsRepo: new SupabaseEquipmentDocumentsRepository() as EquipmentDocumentsRepository,
 };

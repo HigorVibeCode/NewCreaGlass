@@ -1,7 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, Alert, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'expo-image';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useI18n } from '../src/hooks/use-i18n';
@@ -10,11 +13,69 @@ import { usePermissions } from '../src/hooks/use-permissions';
 import { PermissionGuard } from '../src/components/shared/PermissionGuard';
 import { Button } from '../src/components/shared/Button';
 import { Input } from '../src/components/shared/Input';
+import { Dropdown } from '../src/components/shared/Dropdown';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { repos } from '../src/services/container';
+import {
+  hasInventoryImageCards,
+  isGlassInventoryGroup,
+  isProfilesInventoryGroup,
+  isSuppliesInventoryGroup,
+} from '../src/constants/inventory-groups';
 import { InventoryGroup, InventoryItem } from '../src/types';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { safeBack } from '../src/hooks/use-go-back';
+import { confirmDelete } from '../src/utils/confirm-dialog';
+import { prefetchSignedUrls } from '../src/utils/signed-url-cache';
+import { pushWithParams } from '../src/utils/navigation';
+
+function SignedInventoryImage({
+  storagePath,
+  style,
+  imageStyle,
+  placeholderIconSize = 32,
+}: {
+  storagePath: string;
+  style?: object;
+  imageStyle?: object;
+  placeholderIconSize?: number;
+}) {
+  const colors = useThemeColors();
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!storagePath) {
+      setSignedUrl(null);
+      return;
+    }
+    let cancelled = false;
+    repos.inventoryRepo
+      .getItemImageUrlSigned(storagePath)
+      .then((url) => {
+        if (!cancelled && url) setSignedUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setSignedUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [storagePath]);
+
+  if (!signedUrl) {
+    return (
+      <View style={[styles.itemImageWrap, { backgroundColor: colors.backgroundSecondary }, style]}>
+        <Ionicons name="image-outline" size={placeholderIconSize} color={colors.textTertiary} />
+      </View>
+    );
+  }
+  return (
+    <View style={[styles.itemImageWrap, { backgroundColor: colors.backgroundSecondary }, style]}>
+      <Image source={{ uri: signedUrl }} style={[styles.itemImage, imageStyle]} contentFit="cover" cachePolicy="memory-disk" />
+    </View>
+  );
+}
 
 export default function InventoryGroupScreen() {
   const { t } = useI18n();
@@ -23,7 +84,7 @@ export default function InventoryGroupScreen() {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { hasPermission } = usePermissions();
-  const { groupId } = useLocalSearchParams<{ groupId: string }>();
+  const { groupId, editItemId } = useRouteParams<{ groupId: string; editItemId?: string }>('/inventory-group');
   
   const [group, setGroup] = useState<InventoryGroup | null>(null);
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -38,12 +99,27 @@ export default function InventoryGroupScreen() {
   const [minimumStock, setMinimumStock] = useState('');
   const [idealStock, setIdealStock] = useState('');
   const [location, setLocation] = useState('');
+  const [supplier, setSupplier] = useState('');
+  const [referenceNumber, setReferenceNumber] = useState('');
   
   // Other groups fields
   const [itemName, setItemName] = useState('');
-  const [itemUnit, setItemUnit] = useState('');
   const [itemStock, setItemStock] = useState('');
   const [itemThreshold, setItemThreshold] = useState('');
+  // Supplies: Position, Color, Type, OPO Oeschger Code
+  const [position, setPosition] = useState('');
+  const [color, setColor] = useState('');
+  const [suppliesType, setSuppliesType] = useState('');
+  const [opoOeschgerCode, setOpoOeschgerCode] = useState('');
+  // Supplies: up to 3 images, one main (shown on card)
+  const [itemImages, setItemImages] = useState<
+    Array<
+      | { type: 'existing'; id: string; storagePath: string; isMain: boolean }
+      | { type: 'new'; uri: string; isMain: boolean }
+    >
+  >([]);
+  const lastProcessedEditItemId = useRef<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Declare loadItems first using useCallback
   const loadItems = useCallback(async () => {
@@ -51,6 +127,13 @@ export default function InventoryGroupScreen() {
     try {
       const groupItems = await repos.inventoryRepo.getItemsByGroup(groupId);
       setItems(groupItems);
+
+      const allPaths = groupItems.flatMap((item) =>
+        (item.images ?? []).map((img) => img.storagePath).filter(Boolean)
+      );
+      if (allPaths.length > 0) {
+        prefetchSignedUrls(allPaths).catch(() => {});
+      }
     } catch (error) {
       console.error('Error loading items:', error);
     }
@@ -74,6 +157,21 @@ export default function InventoryGroupScreen() {
     }
   }, [groupId, loadGroup, loadItems]);
 
+  useEffect(() => {
+    if (!editItemId) {
+      lastProcessedEditItemId.current = null;
+      return;
+    }
+    if (!groupId || items.length === 0) return;
+    if (lastProcessedEditItemId.current === editItemId) return;
+
+    const item = items.find((i) => i.id === editItemId);
+    if (!item) return;
+
+    lastProcessedEditItemId.current = editItemId;
+    handleEditItem(item);
+  }, [groupId, editItemId, items]);
+
   useFocusEffect(
     useCallback(() => {
       if (groupId) {
@@ -82,10 +180,30 @@ export default function InventoryGroupScreen() {
     }, [groupId, loadItems])
   );
 
-  const isGlassGroup = group?.name === 'Glass';
+  const isGlassGroup = isGlassInventoryGroup(group?.name);
+  const isSuppliesGroup = isProfilesInventoryGroup(group?.name);
+  const isSuppliesItemGroup = isSuppliesInventoryGroup(group?.name);
+  const hasImageCards = hasInventoryImageCards(group?.name);
+
+  const filteredItems = useMemo(() => {
+    if (!searchTerm.trim()) return items;
+    const lower = searchTerm.toLowerCase().trim();
+    return items.filter((item) => {
+      const typeLabel =
+        item.type === 'aluminios' ? t('inventory.typeAluminios') : item.type === 'vedacoes' ? t('inventory.typeVedacoes') : item.type === 'magnets' ? t('inventory.typeMagnets') : item.type || '';
+      const dimensions = item.width && item.height ? `${item.width}mm ${item.height}mm ${item.thickness ?? ''}mm` : '';
+      const searchable = [item.name, item.position, item.type, item.opoOeschgerCode, typeLabel, dimensions, item.location, item.supplier, item.referenceNumber].filter(Boolean).join(' ').toLowerCase();
+      return searchable.includes(lower);
+    });
+  }, [items, searchTerm, t]);
+
+  const displayItems = filteredItems;
 
   const handleCreateGlassItem = async () => {
-    if (!user || !groupId) return;
+    if (!user || !groupId) {
+      Alert.alert(t('common.error'), t('inventory.createItemError'));
+      return;
+    }
 
     if (!glassName.trim() || !height.trim() || !width.trim() || !thickness.trim()) {
       Alert.alert(t('common.error'), t('inventory.fillAllRequiredFields'));
@@ -111,45 +229,79 @@ export default function InventoryGroupScreen() {
         totalM2: calculatedM2,
         idealStock: parseFloat(idealStock) || undefined,
         location: location.trim() || undefined,
+        supplier: supplier || undefined,
+        referenceNumber: referenceNumber.trim() || undefined,
       });
-      
-      // Reset form
       resetForm();
       await loadItems();
+      Alert.alert(t('common.success'), t('inventory.createItemSuccess'));
     } catch (error) {
-      console.error('Error creating item:', error);
-      Alert.alert(t('common.error'), t('inventory.createItemError'));
+      console.error('Error creating glass item:', error);
+      const message = error instanceof Error ? error.message : t('inventory.createItemError');
+      Alert.alert(t('common.error'), message);
     }
   };
 
   const handleCreateItem = async () => {
-    if (!user || !groupId) return;
+    if (!user || !groupId) {
+      Alert.alert(t('common.error'), t('inventory.createItemError'));
+      return;
+    }
 
-    if (!itemName.trim() || !itemUnit.trim()) {
+    if (!itemName.trim()) {
       Alert.alert(t('common.error'), t('inventory.fillAllRequiredFields'));
       return;
     }
 
+    if (hasImageCards && itemImages.length > 0) {
+      const mainCount = itemImages.filter((e) => e.isMain).length;
+      if (mainCount !== 1) {
+        Alert.alert(t('common.error'), t('inventory.selectOneMainImage'));
+        return;
+      }
+    }
+    if (hasImageCards && itemImages.length > 3) {
+      Alert.alert(t('common.error'), t('inventory.maxImagesPerItem'));
+      return;
+    }
+
     try {
-      await repos.inventoryRepo.createItem({
+      const created = await repos.inventoryRepo.createItem({
         groupId,
         name: itemName.trim(),
-        unit: itemUnit.trim(),
-        stock: parseFloat(itemStock) || 0,
+        unit: 'un',
+        stock: hasImageCards ? 0 : parseFloat(itemStock) || 0,
         lowStockThreshold: parseFloat(itemThreshold) || 0,
         createdBy: user.id,
+        position: hasImageCards ? position.trim() || undefined : undefined,
+        color: isSuppliesGroup ? color.trim() || undefined : undefined,
+        type: isSuppliesGroup ? (suppliesType || undefined) : undefined,
+        opoOeschgerCode: isSuppliesGroup ? opoOeschgerCode.trim() || undefined : undefined,
       });
-      
-      // Reset form
+      if (hasImageCards && itemImages.length > 0) {
+        for (let i = 0; i < itemImages.length; i++) {
+          const entry = itemImages[i];
+          if (entry.type === 'new') {
+            const filename = entry.uri.split('/').pop() || `photo_${Date.now()}.jpg`;
+            await repos.inventoryRepo.addItemImage(created.id, { uri: entry.uri, name: filename, type: 'image/jpeg' }, entry.isMain);
+          }
+        }
+      }
       setItemName('');
-      setItemUnit('');
       setItemStock('');
       setItemThreshold('');
+      setPosition('');
+      setColor('');
+      setSuppliesType('');
+      setOpoOeschgerCode('');
+      setItemImages([]);
       setShowCreateItem(false);
       await loadItems();
+      Alert.alert(t('common.success'), t('inventory.createItemSuccess'));
     } catch (error) {
       console.error('Error creating item:', error);
-      Alert.alert(t('common.error'), t('inventory.createItemError'));
+      const message = error instanceof Error ? error.message : t('inventory.createItemError');
+      Alert.alert(t('common.error'), message);
     }
   };
 
@@ -163,11 +315,31 @@ export default function InventoryGroupScreen() {
       setMinimumStock(item.lowStockThreshold?.toString() || '');
       setIdealStock(item.idealStock?.toString() || '');
       setLocation(item.location || '');
+      setSupplier(item.supplier || '');
+      setReferenceNumber(item.referenceNumber || '');
     } else {
       setItemName(item.name);
-      setItemUnit(item.unit);
-      setItemStock(item.stock.toString());
+      if (!hasImageCards) {
+        setItemStock(item.stock.toString());
+      }
       setItemThreshold(item.lowStockThreshold.toString());
+      setItemImages([]);
+      if (hasImageCards) {
+        setPosition(item.position || '');
+        setItemImages(
+          (item.images || []).map((im) => ({
+            type: 'existing' as const,
+            id: im.id,
+            storagePath: im.storagePath,
+            isMain: im.isMain,
+          }))
+        );
+      }
+      if (isSuppliesGroup) {
+        setColor(item.color || '');
+        setSuppliesType(item.type || '');
+        setOpoOeschgerCode(item.opoOeschgerCode || '');
+      }
     }
     setShowCreateItem(true);
   };
@@ -186,7 +358,7 @@ export default function InventoryGroupScreen() {
     const calculatedM2 = (heightNum * widthNum) / 1000000; // Convert mm² to m²
 
     try {
-      await repos.inventoryRepo.updateItem(editingItem.id, {
+      const updateData = {
         name: glassName.trim(),
         height: heightNum,
         width: widthNum,
@@ -195,62 +367,96 @@ export default function InventoryGroupScreen() {
         lowStockThreshold: parseFloat(minimumStock) || 0,
         idealStock: parseFloat(idealStock) || undefined,
         location: location.trim() || undefined,
-      });
+        supplier: supplier && supplier.trim() ? supplier.trim() : undefined,
+        referenceNumber: referenceNumber && referenceNumber.trim() ? referenceNumber.trim() : undefined,
+      };
+      
+      console.log('Updating item with data:', updateData);
+      const updatedItem = await repos.inventoryRepo.updateItem(editingItem.id, updateData);
+      console.log('Item updated successfully:', updatedItem);
       
       // Reset form
       resetForm();
       await loadItems();
     } catch (error) {
       console.error('Error updating item:', error);
-      Alert.alert(t('common.error'), t('inventory.updateItemError'));
+      const message = error instanceof Error ? error.message : t('inventory.updateItemError');
+      Alert.alert(t('common.error'), message);
     }
   };
 
   const handleUpdateItem = async () => {
     if (!user || !groupId || !editingItem) return;
 
-    if (!itemName.trim() || !itemUnit.trim()) {
+    if (!itemName.trim()) {
       Alert.alert(t('common.error'), t('inventory.fillAllRequiredFields'));
+      return;
+    }
+    if (hasImageCards && itemImages.length > 0) {
+      const mainCount = itemImages.filter((e) => e.isMain).length;
+      if (mainCount !== 1) {
+        Alert.alert(t('common.error'), t('inventory.selectOneMainImage'));
+        return;
+      }
+    }
+    if (hasImageCards && itemImages.length > 3) {
+      Alert.alert(t('common.error'), t('inventory.maxImagesPerItem'));
       return;
     }
 
     try {
-      await repos.inventoryRepo.updateItem(editingItem.id, {
+      if (hasImageCards) {
+        const existingIds = new Set((editingItem.images ?? []).map((im) => im.id));
+        const keptEntries = itemImages.filter((e): e is { type: 'existing'; id: string; storagePath: string; isMain: boolean } => e.type === 'existing');
+        const keptIds = new Set(keptEntries.map((e) => e.id));
+        for (const id of existingIds) {
+          if (!keptIds.has(id)) await repos.inventoryRepo.deleteItemImage(id);
+        }
+        for (const entry of itemImages) {
+          if (entry.type === 'new') {
+            const filename = entry.uri.split('/').pop() || `photo_${Date.now()}.jpg`;
+            await repos.inventoryRepo.addItemImage(editingItem.id, { uri: entry.uri, name: filename, type: 'image/jpeg' }, entry.isMain);
+          }
+        }
+        const mainExisting = keptEntries.find((e) => e.isMain);
+        if (mainExisting) {
+          await repos.inventoryRepo.setMainItemImage(mainExisting.id);
+        }
+      }
+      const updatePayload: Parameters<typeof repos.inventoryRepo.updateItem>[1] = {
         name: itemName.trim(),
-        unit: itemUnit.trim(),
-        stock: parseFloat(itemStock) || 0,
         lowStockThreshold: parseFloat(itemThreshold) || 0,
-      });
-      
-      // Reset form
+        position: hasImageCards ? position.trim() || undefined : undefined,
+        color: isSuppliesGroup ? color.trim() || undefined : undefined,
+        type: isSuppliesGroup ? (suppliesType || undefined) : undefined,
+        opoOeschgerCode: isSuppliesGroup ? opoOeschgerCode.trim() || undefined : undefined,
+      };
+      if (!hasImageCards) {
+        updatePayload.stock = parseFloat(itemStock) || 0;
+      }
+      await repos.inventoryRepo.updateItem(editingItem.id, updatePayload);
       resetForm();
       await loadItems();
     } catch (error) {
       console.error('Error updating item:', error);
-      Alert.alert(t('common.error'), t('inventory.updateItemError'));
+      const message = error instanceof Error ? error.message : t('inventory.updateItemError');
+      Alert.alert(t('common.error'), message);
     }
   };
 
   const handleDeleteItem = (item: InventoryItem) => {
-    Alert.alert(
+    confirmDelete(
       t('inventory.deleteItem'),
       `${t('inventory.deleteItemConfirm')} "${item.name}"?`,
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('common.delete'),
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await repos.inventoryRepo.deleteItem(item.id);
-              await loadItems();
-            } catch (error) {
-              console.error('Error deleting item:', error);
-              Alert.alert(t('common.error'), t('inventory.deleteItemError'));
-            }
-          },
-        },
-      ]
+      async () => {
+        await repos.inventoryRepo.deleteItem(item.id);
+        await loadItems();
+      },
+      undefined,
+      t('common.delete'),
+      t('common.cancel'),
+      undefined,
+      t('inventory.deleteItemError')
     );
   };
 
@@ -262,12 +468,72 @@ export default function InventoryGroupScreen() {
     setMinimumStock('');
     setIdealStock('');
     setLocation('');
+    setSupplier('');
+    setReferenceNumber('');
     setItemName('');
-    setItemUnit('');
     setItemStock('');
     setItemThreshold('');
+    setPosition('');
+    setColor('');
+    setSuppliesType('');
+    setOpoOeschgerCode('');
+    setItemImages([]);
     setShowCreateItem(false);
     setEditingItem(null);
+  };
+
+  const handleTakePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(t('common.error'), t('production.cameraPermissionDenied') || 'Permissão da câmera negada');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets[0]) return;
+      const isFirst = itemImages.length === 0;
+      setItemImages((prev) => (prev.length >= 3 ? prev : [...prev, { type: 'new' as const, uri: result.assets[0].uri, isMain: isFirst }]));
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert(t('common.error'), t('inventory.createItemError'));
+    }
+  };
+
+  const handleChooseFromGallery = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(t('common.error'), t('production.mediaPermissionDenied') || 'Permissão da galeria negada');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets[0]) return;
+      const isFirst = itemImages.length === 0;
+      setItemImages((prev) => (prev.length >= 3 ? prev : [...prev, { type: 'new' as const, uri: result.assets[0].uri, isMain: isFirst }]));
+    } catch (error) {
+      console.error('Error choosing from gallery:', error);
+      Alert.alert(t('common.error'), t('inventory.createItemError'));
+    }
+  };
+
+  const setMainImage = (index: number) => {
+    setItemImages((prev) =>
+      prev.map((e, i) => ({ ...e, isMain: i === index }))
+    );
+  };
+
+  const removeImage = (index: number) => {
+    setItemImages((prev) => prev.filter((_, i) => i !== index));
   };
 
   if (!group) {
@@ -291,7 +557,7 @@ export default function InventoryGroupScreen() {
         <View style={styles.headerContent}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={() => safeBack(router, '/(tabs)/inventory')}
             activeOpacity={0.7}
           >
             <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -315,16 +581,59 @@ export default function InventoryGroupScreen() {
 
       <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.content}>
+          {group && (
+            <View style={[styles.searchContainer, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+              <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
+              <TextInput
+                style={[styles.searchInput, { color: colors.text }]}
+                placeholder={t(isGlassGroup ? 'inventory.searchPlaceholderGlass' : isSuppliesItemGroup ? 'inventory.searchPlaceholderSupplies' : 'inventory.searchPlaceholder')}
+                placeholderTextColor={colors.textTertiary}
+                value={searchTerm}
+                onChangeText={setSearchTerm}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {searchTerm.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setSearchTerm('')}
+                  style={styles.searchClearButton}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
           <View style={styles.section}>
 
-          {items.length === 0 ? (
+          {displayItems.length === 0 ? (
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              {t('inventory.noItems')}
+              {searchTerm.trim() ? t('inventory.noItemsFound') : t('inventory.noItems')}
             </Text>
           ) : (
-            <View style={styles.itemsList}>
-              {items.map((item) => (
-                <View key={item.id} style={[styles.itemCard, { backgroundColor: colors.cardBackground }]}>
+                            <View style={styles.itemsList}>
+              {displayItems.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.itemCard, { backgroundColor: colors.cardBackground }]}
+                  onPress={() => pushWithParams(router, '/inventory-item-detail', { itemId: item.id, groupId: String(groupId!) })}
+                  activeOpacity={0.7}
+                >
+                  {hasImageCards && (() => {
+                    const mainImg = item.images?.find((im) => im.isMain) ?? item.images?.[0];
+                    return mainImg ? (
+                      <SignedInventoryImage
+                        storagePath={mainImg.storagePath}
+                        style={styles.itemImageWrapLarge}
+                        imageStyle={styles.itemImageLarge}
+                        placeholderIconSize={40}
+                      />
+                    ) : (
+                      <View style={[styles.itemImageWrapLarge, { backgroundColor: colors.backgroundSecondary }]}>
+                        <Ionicons name="image-outline" size={40} color={colors.textTertiary} />
+                      </View>
+                    );
+                  })()}
                   <View style={styles.itemInfo}>
                     <View style={styles.itemHeader}>
                       <View style={styles.itemHeaderLeft}>
@@ -334,27 +643,14 @@ export default function InventoryGroupScreen() {
                             {item.width}mm × {item.height}mm{item.thickness && ` × ${item.thickness}mm`}
                           </Text>
                         )}
-                      </View>
-                      <View style={styles.itemHeaderRight}>
-                        <PermissionGuard permission="inventory.item.adjustStock">
-                          <TouchableOpacity
-                            style={[styles.calculatorButton, { backgroundColor: colors.success + '20' }]}
-                            onPress={() => router.push({
-                              pathname: '/inventory-stock-count',
-                              params: { itemId: item.id },
-                            })}
-                          >
-                            <Ionicons name="calculator" size={20} color={colors.success} />
-                          </TouchableOpacity>
-                        </PermissionGuard>
-                        <PermissionGuard permission="inventory.item.update">
-                          <TouchableOpacity
-                            style={[styles.editButton, { backgroundColor: colors.textTertiary + '20' }]}
-                            onPress={() => handleEditItem(item)}
-                          >
-                            <Ionicons name="create" size={20} color={colors.textTertiary} />
-                          </TouchableOpacity>
-                        </PermissionGuard>
+                        {hasImageCards && (item.position || item.type) && (
+                          <Text style={[styles.itemDimensions, { color: colors.textSecondary }]}>
+                            {[
+                              item.position,
+                              isSuppliesGroup && item.type ? (item.type === 'aluminios' ? t('inventory.typeAluminios') : item.type === 'vedacoes' ? t('inventory.typeVedacoes') : item.type === 'magnets' ? t('inventory.typeMagnets') : item.type) : null,
+                            ].filter(Boolean).join(' · ')}
+                          </Text>
+                        )}
                       </View>
                     </View>
                     
@@ -395,7 +691,7 @@ export default function InventoryGroupScreen() {
                       </View>
                     )}
                   </View>
-                </View>
+                </TouchableOpacity>
               ))}
             </View>
           )}
@@ -490,8 +786,24 @@ export default function InventoryGroupScreen() {
                         onChangeText={setLocation}
                         placeholder={t('inventory.locationPlaceholder')}
                       />
+                      <Dropdown
+                        label={t('inventory.supplier')}
+                        value={supplier}
+                        options={[
+                          { label: '3S', value: '3S' },
+                          { label: 'Crea Glass', value: 'Crea Glass' },
+                          { label: 'Kromatix', value: 'Kromatix' },
+                        ]}
+                        onSelect={setSupplier}
+                      />
+                      <Input
+                        label={t('inventory.referenceNumber')}
+                        value={referenceNumber}
+                        onChangeText={setReferenceNumber}
+                        placeholder={t('inventory.referenceNumberPlaceholder')}
+                      />
                     </>
-                  ) : (
+                  ) : hasImageCards ? (
                     <>
                       <Input
                         label={t('inventory.itemName')}
@@ -500,10 +812,104 @@ export default function InventoryGroupScreen() {
                         placeholder={t('inventory.itemNamePlaceholder')}
                       />
                       <Input
-                        label={t('inventory.unit')}
-                        value={itemUnit}
-                        onChangeText={setItemUnit}
-                        placeholder={t('inventory.unitPlaceholder')}
+                        label={t('inventory.position')}
+                        value={position}
+                        onChangeText={setPosition}
+                        placeholder={t('inventory.positionPlaceholder')}
+                      />
+                      {isSuppliesGroup && (
+                        <>
+                          <Dropdown
+                            label={t('inventory.type')}
+                            value={suppliesType}
+                            options={[
+                              { label: t('inventory.typeAluminios'), value: 'aluminios' },
+                              { label: t('inventory.typeVedacoes'), value: 'vedacoes' },
+                              { label: t('inventory.typeMagnets'), value: 'magnets' },
+                            ]}
+                            onSelect={setSuppliesType}
+                          />
+                          <Input
+                            label={t('inventory.opoOeschgerCode')}
+                            value={opoOeschgerCode}
+                            onChangeText={setOpoOeschgerCode}
+                            placeholder={t('inventory.opoOeschgerCodePlaceholder')}
+                          />
+                        </>
+                      )}
+                      <Input
+                        label={t('inventory.lowStockThreshold')}
+                        value={itemThreshold}
+                        onChangeText={setItemThreshold}
+                        placeholder={t('inventory.lowStockThresholdPlaceholder')}
+                        keyboardType="numeric"
+                      />
+                      <View style={styles.productImageSection}>
+                        <Text style={[styles.productImageLabel, { color: colors.text }]}>
+                          {t('inventory.productImage')} ({t('inventory.maxImagesPerItem')})
+                        </Text>
+                        <View style={styles.productImageRow}>
+                          {itemImages.map((entry, index) => (
+                            <View key={entry.type === 'existing' ? entry.id : `new-${index}`} style={styles.productImagePreviewWrap}>
+                              {entry.type === 'existing' ? (
+                                <SignedInventoryImage
+                                  storagePath={entry.storagePath}
+                                  style={[styles.productImagePreview, { backgroundColor: colors.backgroundSecondary }]}
+                                  imageStyle={styles.productImagePreview}
+                                  placeholderIconSize={28}
+                                />
+                              ) : (
+                                <Image source={{ uri: entry.uri }} style={styles.productImagePreview} contentFit="cover" />
+                              )}
+                              <TouchableOpacity
+                                style={[styles.removeImageButton, { backgroundColor: colors.error }]}
+                                onPress={() => removeImage(index)}
+                              >
+                                <Ionicons name="close" size={18} color="#fff" />
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[
+                                  styles.mainImageBadge,
+                                  { backgroundColor: entry.isMain ? colors.primary : colors.backgroundSecondary },
+                                ]}
+                                onPress={() => setMainImage(index)}
+                              >
+                                <Text style={[styles.mainImageBadgeText, { color: entry.isMain ? colors.textInverse : colors.textSecondary }]}>
+                                  {t('inventory.mainImage')}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          ))}
+                          {itemImages.length < 3 && (
+                            <View style={styles.productImageButtons}>
+                              <TouchableOpacity
+                                style={[styles.productImageButton, { backgroundColor: colors.primary + '20', borderColor: colors.primary }]}
+                                onPress={handleTakePhoto}
+                                activeOpacity={0.7}
+                              >
+                                <Ionicons name="camera" size={24} color={colors.primary} />
+                                <Text style={[styles.productImageButtonText, { color: colors.primary }]}>{t('inventory.camera')}</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.productImageButton, { backgroundColor: colors.primary + '20', borderColor: colors.primary }]}
+                                onPress={handleChooseFromGallery}
+                                activeOpacity={0.7}
+                              >
+                                <Ionicons name="images" size={24} color={colors.primary} />
+                                <Text style={[styles.productImageButtonText, { color: colors.primary }]}>{t('inventory.gallery')}</Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <Input
+                        label={t('inventory.itemName')}
+                        value={itemName}
+                        onChangeText={setItemName}
+                        placeholder={t('inventory.itemNamePlaceholder')}
                       />
                       <Input
                         label={t('inventory.stock')}
@@ -595,6 +1001,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing.md,
+    borderWidth: 1,
+    marginBottom: theme.spacing.md,
+    minHeight: 44,
+  },
+  searchIcon: {
+    marginRight: theme.spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: theme.typography.fontSize.md,
+    paddingVertical: theme.spacing.sm,
+    minWidth: 0,
+  },
+  searchClearButton: {
+    marginLeft: theme.spacing.xs,
+    padding: theme.spacing.xs,
+  },
   container: {
     flex: 1,
   },
@@ -613,9 +1041,36 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
   },
   itemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: theme.spacing.md,
     borderRadius: theme.borderRadius.md,
     ...theme.shadows.sm,
+    gap: theme.spacing.md,
+  },
+  itemImageWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: theme.borderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  itemImageWrapLarge: {
+    width: 96,
+    height: 96,
+    borderRadius: theme.borderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  itemImage: {
+    width: '100%',
+    height: '100%',
+  },
+  itemImageLarge: {
+    width: 96,
+    height: 96,
   },
   itemInfo: {
     flex: 1,
@@ -628,25 +1083,6 @@ const styles = StyleSheet.create({
   },
   itemHeaderLeft: {
     flex: 1,
-  },
-  itemHeaderRight: {
-    flexDirection: 'row',
-    gap: theme.spacing.xs,
-    marginLeft: theme.spacing.sm,
-  },
-  calculatorButton: {
-    width: 36,
-    height: 36,
-    borderRadius: theme.borderRadius.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  editButton: {
-    width: 36,
-    height: 36,
-    borderRadius: theme.borderRadius.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   itemName: {
     fontSize: theme.typography.fontSize.md,
@@ -697,7 +1133,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.lg,
     width: '100%',
     maxWidth: 500,
-    maxHeight: '80%',
+    maxHeight: '90%',
     ...theme.shadows.lg,
   },
   modalHeader: {
@@ -713,7 +1149,7 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     padding: theme.spacing.lg,
-    maxHeight: 400,
+    flexShrink: 1,
   },
   modalFooter: {
     flexDirection: 'row',
@@ -739,5 +1175,68 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     marginBottom: 0,
+  },
+  productImageSection: {
+    marginBottom: theme.spacing.md,
+  },
+  productImageLabel: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.semibold,
+    marginBottom: theme.spacing.sm,
+  },
+  productImageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+  },
+  productImagePreviewWrap: {
+    position: 'relative',
+  },
+  productImagePreview: {
+    width: 80,
+    height: 80,
+    borderRadius: theme.borderRadius.md,
+  },
+  productImageButtons: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+  },
+  productImageButton: {
+    flex: 1,
+    borderWidth: 2,
+    borderRadius: theme.borderRadius.md,
+    padding: theme.spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.xs,
+  },
+  productImageButtonText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.semibold,
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mainImageBadge: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: theme.spacing.xs,
+    alignItems: 'center',
+    borderBottomLeftRadius: theme.borderRadius.md,
+    borderBottomRightRadius: theme.borderRadius.md,
+  },
+  mainImageBadgeText: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
 });

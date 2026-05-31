@@ -6,6 +6,7 @@ import {
   Text,
   TouchableOpacity,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -13,10 +14,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
+import { formatDate as formatDateUtil, formatDateTime as formatDateTimeUtil, formatTimestamp as formatTimestampUtil } from '../src/utils/date-format';
 import { repos } from '../src/services/container';
 import { WorkOrder } from '../src/types';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { useGoBack } from '../src/hooks/use-go-back';
+import { pushWithParams } from '../src/utils/navigation';
 
 type EventOrWorkOrder = 
   | { type: 'workOrder'; data: WorkOrder };
@@ -26,6 +30,7 @@ export default function WorkOrdersHistoryScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
+  const goBack = useGoBack('/(tabs)/events');
   const [historyItems, setHistoryItems] = useState<EventOrWorkOrder[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
@@ -105,25 +110,72 @@ export default function WorkOrdersHistoryScreen() {
   const getWorkOrderStatusColor = (status: string): string => {
     switch (status) {
       case 'planned':
-        return colors.info;
+        return '#6366f1'; // Indigo
       case 'in_progress':
-        return colors.primary;
+        return '#059669'; // Verde esmeralda
       case 'paused':
-        return colors.warning;
+        return '#f59e0b'; // Amarelo
       case 'completed':
-        return colors.success;
+        return '#10b981'; // Verde claro
       case 'cancelled':
-        return colors.error;
+        return '#ef4444'; // Vermelho
       default:
         return colors.textSecondary;
     }
   };
 
+  const getWorkOrderStatusIcon = (status: string): string => {
+    switch (status) {
+      case 'planned':
+        return 'calendar-outline';
+      case 'in_progress':
+        return 'play-circle';
+      case 'paused':
+        return 'pause-circle';
+      case 'completed':
+        return 'checkmark-circle';
+      case 'cancelled':
+        return 'close-circle';
+      default:
+        return 'ellipse';
+    }
+  };
+
   const formatDateTime = (date: string, time?: string): string => {
     if (!date) return '';
-    const dateObj = new Date(date);
-    const dateStr = dateObj.toLocaleDateString();
-    return time ? `${dateStr} ${time}` : dateStr;
+    return formatDateTimeUtil(date, time);
+  };
+
+  const formatTimestamp = (timestamp: string): string => {
+    return formatTimestampUtil(timestamp);
+  };
+
+  const formatDuration = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    if (hours > 0) {
+      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const getWorkOrderTotalTime = (workOrder: WorkOrder): number => {
+    return (workOrder.timeStatuses || []).reduce((sum, ts) => sum + ts.totalDuration, 0);
+  };
+
+  const getServiceStartTime = (workOrder: WorkOrder): string | null => {
+    if (workOrder.checkIn?.timestamp) return workOrder.checkIn.timestamp;
+    const firstTs = (workOrder.timeStatuses || [])[0];
+    return firstTs?.startTime || null;
+  };
+
+  const getServiceEndTime = (workOrder: WorkOrder): string | null => {
+    const timeStatuses = workOrder.timeStatuses || [];
+    for (let i = timeStatuses.length - 1; i >= 0; i--) {
+      if (timeStatuses[i].endTime) return timeStatuses[i].endTime!;
+    }
+    return null;
   };
 
   return (
@@ -144,8 +196,9 @@ export default function WorkOrdersHistoryScreen() {
         <View style={styles.headerContent}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={goBack}
             activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
@@ -192,13 +245,10 @@ export default function WorkOrdersHistoryScreen() {
                     style={[styles.card, { backgroundColor: colors.cardBackground }]}
                     activeOpacity={0.7}
                     onPress={() => {
-                      router.push({
-                        pathname: '/work-order-detail',
-                        params: { workOrderId: workOrder.id },
-                      });
+                      pushWithParams(router, '/work-order-detail', { workOrderId: workOrder.id });
                     }}
                   >
-                    <View style={[styles.cardIndicator, { backgroundColor: workOrderColor }]} />
+                    <View style={[styles.cardIndicator, { backgroundColor: statusColor }]} />
                     <View style={styles.cardContent}>
                       <View style={styles.cardHeader}>
                         <View style={styles.leftHeader}>
@@ -210,9 +260,16 @@ export default function WorkOrdersHistoryScreen() {
                           </View>
                         </View>
                         <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
-                          <Text style={[styles.statusText, { color: statusColor }]}>
-                            {getWorkOrderStatusLabel(workOrder.status)}
-                          </Text>
+                          <View style={styles.statusBadgeContent}>
+                            <Ionicons 
+                              name={getWorkOrderStatusIcon(workOrder.status) as any} 
+                              size={12} 
+                              color={statusColor} 
+                            />
+                            <Text style={[styles.statusText, { color: statusColor }]}>
+                              {getWorkOrderStatusLabel(workOrder.status)}
+                            </Text>
+                          </View>
                         </View>
                       </View>
 
@@ -240,6 +297,45 @@ export default function WorkOrdersHistoryScreen() {
                             </View>
                           )}
                         </View>
+
+                        {/* Tempo de serviço e datas */}
+                        {(() => {
+                          const totalTime = getWorkOrderTotalTime(workOrder);
+                          const serviceStart = getServiceStartTime(workOrder);
+                          const serviceEnd = getServiceEndTime(workOrder);
+                          if (!totalTime && !serviceStart) return null;
+                          return (
+                            <View style={[styles.serviceTimeSection, { borderTopColor: colors.border }]}>
+                              {totalTime > 0 && (
+                                <View style={styles.metaRow}>
+                                  <Ionicons name="timer-outline" size={16} color={colors.textSecondary} />
+                                  <Text style={[styles.timerText, { 
+                                    color: colors.textSecondary,
+                                    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+                                  }]}>
+                                    {formatDuration(totalTime)}
+                                  </Text>
+                                </View>
+                              )}
+                              {serviceStart && (
+                                <View style={styles.metaRow}>
+                                  <Ionicons name="play-outline" size={16} color={colors.textSecondary} />
+                                  <Text style={[styles.metaText, { color: colors.textSecondary }]}>
+                                    {t('workOrders.serviceStartedAt') || 'Início'}: {formatTimestamp(serviceStart)}
+                                  </Text>
+                                </View>
+                              )}
+                              {serviceEnd && (
+                                <View style={styles.metaRow}>
+                                  <Ionicons name="checkmark-outline" size={16} color={colors.success} />
+                                  <Text style={[styles.metaText, { color: colors.textSecondary }]}>
+                                    {t('workOrders.serviceCompletedAt') || 'Conclusão'}: {formatTimestamp(serviceEnd)}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })()}
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -266,6 +362,11 @@ const styles = StyleSheet.create({
   backButton: {
     padding: theme.spacing.xs,
     marginLeft: -theme.spacing.xs,
+    zIndex: 10,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
     flex: 1,
@@ -337,6 +438,11 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.xs,
     borderRadius: theme.borderRadius.sm,
   },
+  statusBadgeContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   statusText: {
     fontSize: theme.typography.fontSize.xs,
     fontWeight: theme.typography.fontWeight.semibold,
@@ -363,5 +469,15 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: theme.typography.fontSize.sm,
     flex: 1,
+  },
+  serviceTimeSection: {
+    marginTop: theme.spacing.xs,
+    paddingTop: theme.spacing.xs,
+    borderTopWidth: 1,
+    gap: theme.spacing.xs,
+  },
+  timerText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.bold,
   },
 });

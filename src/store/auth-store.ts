@@ -1,104 +1,93 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
 import { Platform } from 'react-native';
-import { Session } from '../types';
+import { Session, User } from '../types';
 import { repos } from '../services/container';
 
-// Platform-specific storage adapter
-const getStorage = () => {
-  if (Platform.OS === 'web') {
-    // Use localStorage for web
-    return {
-      getItem: (key: string) => {
-        if (typeof window !== 'undefined') {
-          const value = window.localStorage.getItem(key);
-          return Promise.resolve(value);
+const USER_PROFILE_CACHE_KEY = '__crea_glass_user_profile__';
+
+function cacheUserProfile(user: User | null): void {
+  try {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (user) {
+        window.localStorage.setItem(USER_PROFILE_CACHE_KEY, JSON.stringify(user));
+      } else {
+        window.localStorage.removeItem(USER_PROFILE_CACHE_KEY);
+      }
+    } else if (Platform.OS !== 'web') {
+      const mod = require('@react-native-async-storage/async-storage');
+      const AsyncStorage = mod?.default ?? mod;
+      if (AsyncStorage && typeof AsyncStorage.setItem === 'function') {
+        if (user) {
+          AsyncStorage.setItem(USER_PROFILE_CACHE_KEY, JSON.stringify(user)).catch(() => {});
+        } else {
+          AsyncStorage.removeItem(USER_PROFILE_CACHE_KEY).catch(() => {});
         }
-        return Promise.resolve(null);
-      },
-      setItem: (key: string, value: string) => {
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem(key, value);
-        }
-        return Promise.resolve();
-      },
-      removeItem: (key: string) => {
-        if (typeof window !== 'undefined') {
-          window.localStorage.removeItem(key);
-        }
-        return Promise.resolve();
-      },
-    };
-  } else {
-    // Use AsyncStorage for native platforms
-    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-    return AsyncStorage;
-  }
-};
+      }
+    }
+  } catch {}
+}
+
+export function getCachedUserProfile(): User | null {
+  try {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const stored = window.localStorage.getItem(USER_PROFILE_CACHE_KEY);
+      if (stored) return JSON.parse(stored);
+    }
+  } catch {}
+  return null;
+}
+
+export async function getCachedUserProfileAsync(): Promise<User | null> {
+  try {
+    if (Platform.OS === 'web') {
+      return getCachedUserProfile();
+    }
+    const mod = require('@react-native-async-storage/async-storage');
+    const AsyncStorage = mod?.default ?? mod;
+    if (!AsyncStorage || typeof AsyncStorage.getItem !== 'function') return null;
+    const stored = await AsyncStorage.getItem(USER_PROFILE_CACHE_KEY);
+    if (stored) return JSON.parse(stored);
+  } catch {}
+  return null;
+}
 
 interface AuthState {
   session: Session | null;
   isLoading: boolean;
-  hasInitialized: boolean;
   setSession: (session: Session | null) => void;
   clearSession: () => void;
   setLoading: (loading: boolean) => void;
-  setInitialized: (initialized: boolean) => void;
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
-      session: null,
-      isLoading: false,
-      hasInitialized: false,
-      setSession: (session) => {
-        set({ session });
-        // Don't persist session - always require login
-        // Session is only kept in memory during app session
-      },
-      clearSession: () => {
-        set({ session: null });
-        // Clear storage (platform-agnostic)
-        getStorage().removeItem('auth-storage').catch((error) => {
-          // On web, this should not fail, but continue anyway
-          if (Platform.OS !== 'web') {
-            console.warn('Error clearing storage:', error);
-          }
-        });
-      },
-      setLoading: (isLoading) => set({ isLoading }),
-      setInitialized: (initialized: boolean) => set({ hasInitialized: initialized }),
-    }),
-    {
-      name: 'auth-storage',
-      storage: createJSONStorage(() => getStorage()),
-      // Only persist hasInitialized, not session
-      partialize: (state) => ({
-        session: null, // Never persist session - always require fresh login
-        hasInitialized: state.hasInitialized,
-      }),
-      // Clear session on hydration
-      onRehydrateStorage: () => (state) => {
-        if (state) {
-          state.session = null; // Always clear session on restore
-        }
-      },
-    }
-  )
-);
+/**
+ * Auth store — session is kept in memory only.
+ * Supabase already persists its own auth session in local storage.
+ * On app restart, AuthGuard restores the session from Supabase.
+ * User profile is also cached in local storage for instant restoration.
+ */
+export const useAuthStore = create<AuthState>()((set) => ({
+  session: null,
+  isLoading: false,
+  setSession: (session) => {
+    cacheUserProfile(session?.user ?? null);
+    set({ session });
+  },
+  clearSession: () => {
+    cacheUserProfile(null);
+    set({ session: null });
+  },
+  setLoading: (isLoading) => set({ isLoading }),
+}));
 
 export const useAuth = () => {
   const store = useAuthStore();
   
   const logout = async () => {
     try {
-      // Call repository logout to clear AsyncStorage
       await repos.authRepo.logout();
     } catch (error) {
       console.error('Error during logout:', error);
     } finally {
-      // Clear session from Zustand store
       store.clearSession();
     }
   };

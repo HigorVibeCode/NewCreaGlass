@@ -1,7 +1,6 @@
 import { Image as ExpoImage } from 'expo-image';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { Button } from '../src/components/shared/Button';
 import { Input } from '../src/components/shared/Input';
 import { useI18n } from '../src/hooks/use-i18n';
@@ -11,32 +10,78 @@ import { useAuth } from '../src/store/auth-store';
 import { theme } from '../src/theme';
 import { clearSavedLogin, getSavedLogin, saveLogin } from '../src/utils/saved-login';
 
+const AUTO_LOGIN_TIMEOUT_MS = 5000;
+
 export default function LoginScreen() {
+  'use no memo';
   const { t } = useI18n();
-  const router = useRouter();
-  const { setSession, setLoading, isLoading } = useAuth();
+  const { session, setSession, setLoading, isLoading } = useAuth();
   const colors = useThemeColors();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [rememberLogin, setRememberLogin] = useState(false);
+  const [keepLoggedIn, setKeepLoggedIn] = useState(false);
+  const [autoLoggingIn, setAutoLoggingIn] = useState(true);
+  const autoLoginAttempted = useRef(false);
 
-  // Load saved credentials on mount
   useEffect(() => {
-    const loadSavedCredentials = async () => {
+    if (session) {
+      setAutoLoggingIn(false);
+    }
+  }, [session]);
+
+  useEffect(() => {
+    if (session || autoLoginAttempted.current) return;
+    autoLoginAttempted.current = true;
+
+    let isMounted = true;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const tryAutoLogin = async () => {
+      timeoutId = setTimeout(() => {
+        if (isMounted) {
+          console.warn('[Login] Auto-login timed out');
+          setLoading(false);
+          setAutoLoggingIn(false);
+        }
+      }, AUTO_LOGIN_TIMEOUT_MS);
+
       try {
         const saved = await getSavedLogin();
+        if (!isMounted) return;
+
         if (saved.username && saved.password) {
           setUsername(saved.username);
           setPassword(saved.password);
-          setRememberLogin(true);
+          setKeepLoggedIn(true);
+
+          try {
+            setLoading(true);
+            const loginSession = await repos.authRepo.login(saved.username, saved.password);
+            if (!isMounted) return;
+            setSession(loginSession);
+            return;
+          } catch (loginErr) {
+            console.warn('Auto-login failed:', loginErr);
+            if (!isMounted) return;
+            await clearSavedLogin();
+            setKeepLoggedIn(false);
+          } finally {
+            if (isMounted) setLoading(false);
+          }
         }
-      } catch (error) {
-        console.warn('Error loading saved credentials:', error);
+      } catch (err) {
+        console.warn('Error during auto-login:', err);
       }
+      if (isMounted) setAutoLoggingIn(false);
     };
-    loadSavedCredentials();
-  }, []);
+
+    tryAutoLogin();
+    return () => {
+      isMounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [session]);
 
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) {
@@ -48,17 +93,17 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      const session = await repos.authRepo.login(username.trim(), password);
+      const loginSession = await repos.authRepo.login(username.trim(), password);
       
-      // Save or clear credentials based on rememberLogin checkbox
-      if (rememberLogin) {
+      // Save or clear credentials based on keepLoggedIn toggle
+      if (keepLoggedIn) {
         await saveLogin(username.trim(), password);
       } else {
         await clearSavedLogin();
       }
       
-      setSession(session);
-      router.replace('/(tabs)/production');
+      setSession(loginSession);
+      // AuthGuard navigation guard will redirect to production
     } catch (error: any) {
       console.error('Login error:', error);
       setError(t('auth.invalidCredentials'));
@@ -67,6 +112,23 @@ export default function LoginScreen() {
       setLoading(false);
     }
   };
+
+  // Show loading screen while attempting auto-login
+  if (autoLoggingIn) {
+    return (
+      <View style={[styles.container, styles.autoLoginContainer, { backgroundColor: colors.background }]}>
+        <ExpoImage
+          source={require('../assets/images/login-logo.png')}
+          style={styles.logo}
+          contentFit="contain"
+          transition={200}
+          cachePolicy="memory-disk"
+          priority="high"
+        />
+        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: theme.spacing.xl }} />
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -103,20 +165,20 @@ export default function LoginScreen() {
             autoCorrect={false}
           />
           
-          {/* Remember Login Checkbox */}
+          {/* Keep Logged In Toggle */}
           <TouchableOpacity
             style={styles.rememberContainer}
-            onPress={() => setRememberLogin(!rememberLogin)}
+            onPress={() => setKeepLoggedIn(!keepLoggedIn)}
             activeOpacity={0.7}
           >
             <Switch
-              value={rememberLogin}
-              onValueChange={setRememberLogin}
+              value={keepLoggedIn}
+              onValueChange={setKeepLoggedIn}
               trackColor={{ false: colors.border, true: colors.primary }}
               thumbColor={Platform.OS === 'android' ? colors.background : undefined}
             />
             <Text style={[styles.rememberText, { color: colors.text }]}>
-              {t('auth.rememberLogin')}
+              {t('auth.keepLoggedIn')}
             </Text>
           </TouchableOpacity>
           
@@ -136,6 +198,10 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  autoLoginContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
     flex: 1,

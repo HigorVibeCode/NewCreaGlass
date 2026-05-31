@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.anonymous.CreaGlass",
+      "sha256_cert_fingerprints": [
+        "1E:A0:3A:2A:7A:48:69:BF:E3:1B:5B:BA:B8:32:06:7E:31:A5:92:1B:B6:83:BE:6A:8D:A5:AB:7F:8F:AF:67:17"
+      ]
+    }
+  }
+]

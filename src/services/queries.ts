@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Permission, User, Notification } from '../types';
+import { Permission, User, Notification, TimeEntry, MailboxRow, UserDirectMessage, UserDirectMessageDetail } from '../types';
 import { repos } from './container';
 
 export const usePermissionsQuery = (userId?: string) => {
@@ -7,9 +7,15 @@ export const usePermissionsQuery = (userId?: string) => {
     queryKey: ['permissions', userId],
     queryFn: async () => {
       if (!userId) return [];
-      return repos.permissionsRepo.getUserPermissions(userId);
+      try {
+        return await repos.permissionsRepo.getUserPermissions(userId);
+      } catch (error) {
+        console.error('[usePermissionsQuery] Error loading permissions:', error);
+        return [];
+      }
     },
     enabled: !!userId,
+    staleTime: 5 * 60 * 1000,
   });
 };
 
@@ -60,5 +66,62 @@ export const useUnreadNotificationsCountQuery = (userId?: string) => {
     },
     enabled: !!userId,
     refetchInterval: 5000, // Refetch every 5 seconds as fallback
+  });
+};
+
+export const useMyTimeEntriesQuery = (
+  userId: string | undefined,
+  options?: { from?: string; to?: string }
+) => {
+  return useQuery<TimeEntry[]>({
+    queryKey: ['timeEntries', 'my', userId, options?.from, options?.to],
+    queryFn: () => repos.timeEntriesRepo.getMyTimeEntries(userId!, options),
+    enabled: !!userId,
+  });
+};
+
+export const useAllTimeEntriesQuery = (options?: {
+  from?: string;
+  to?: string;
+  userId?: string;
+  enabled?: boolean;
+}) => {
+  return useQuery<TimeEntry[]>({
+    queryKey: ['timeEntries', 'all', options?.from, options?.to, options?.userId],
+    queryFn: () => repos.timeEntriesRepo.getAllTimeEntries(options),
+    enabled: options?.enabled ?? true,
+  });
+};
+
+export const useDirectMessageUnreadQuery = (userId?: string) => {
+  return useQuery<number>({
+    queryKey: ['directMessages', 'unread', userId],
+    queryFn: () => repos.directMessagesRepo.getUnreadCount(),
+    enabled: !!userId,
+    refetchInterval: 10000,
+  });
+};
+
+export const useReceivedMailboxQuery = (userId?: string) => {
+  return useQuery<MailboxRow[]>({
+    queryKey: ['directMessages', 'received', userId],
+    queryFn: () => repos.directMessagesRepo.getReceivedMessages(),
+    enabled: !!userId,
+  });
+};
+
+export const useSentMailboxQuery = (userId?: string) => {
+  return useQuery<MailboxRow[]>({
+    queryKey: ['directMessages', 'sent', userId],
+    queryFn: () => repos.directMessagesRepo.getSentMessages(),
+    enabled: !!userId,
+  });
+};
+
+export const useDirectMessageDetailQuery = (userId?: string, messageId?: string) => {
+  return useQuery<UserDirectMessageDetail | null>({
+    queryKey: ['directMessages', 'detail', userId, messageId],
+    queryFn: () => repos.directMessagesRepo.getMessageById(messageId!),
+    enabled: !!userId && !!messageId,
   });
 };

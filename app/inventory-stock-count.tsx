@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Alert } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
@@ -11,6 +12,8 @@ import { repos } from '../src/services/container';
 import { InventoryItem, InventoryHistory } from '../src/types';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
+import { formatDateTime as formatDateTimeUtil } from '../src/utils/date-format';
 
 export default function InventoryStockCountScreen() {
   const { t } = useI18n();
@@ -18,8 +21,9 @@ export default function InventoryStockCountScreen() {
   const { user } = useAuth();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const { itemId } = useLocalSearchParams<{ itemId: string }>();
-  
+  const { itemId } = useRouteParams<{ itemId: string }>('/inventory-stock-count');
+  const goBack = useGoBack('/(tabs)/inventory');
+
   const [item, setItem] = useState<InventoryItem | null>(null);
   const [quantity, setQuantity] = useState('');
   const [history, setHistory] = useState<InventoryHistory[]>([]);
@@ -72,7 +76,7 @@ export default function InventoryStockCountScreen() {
 
     try {
       await repos.inventoryRepo.adjustStock(itemId, delta, user.id);
-      router.back();
+      safeBack(router);
     } catch (error) {
       console.error('Error adjusting stock:', error);
       Alert.alert(t('common.error'), t('inventory.adjustStockError'));
@@ -80,8 +84,7 @@ export default function InventoryStockCountScreen() {
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return formatDateTimeUtil(dateString);
   };
 
   if (!item) {
@@ -122,7 +125,7 @@ export default function InventoryStockCountScreen() {
             />
             <Button
               title={t('common.cancel')}
-              onPress={() => router.back()}
+              onPress={goBack}
               variant="outline"
               style={styles.cancelButton}
             />

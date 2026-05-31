@@ -14,7 +14,8 @@ import {
 import { Image } from 'expo-image';
 import * as Location from 'expo-location';
 import SignatureCanvas from 'react-native-signature-canvas';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
@@ -23,7 +24,58 @@ import { repos } from '../src/services/container';
 import { supabase } from '../src/services/supabase';
 import { WorkOrder, User, TimeStatus, ServiceLog, Evidence, ChecklistItem } from '../src/types';
 import { theme } from '../src/theme';
+import { formatDate as formatDateUtil, formatDateTime as formatDateTimeUtil, formatTimestamp as formatTimestampUtil } from '../src/utils/date-format';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
+import { confirmDelete } from '../src/utils/confirm-dialog';
+import { downloadAndOpenAttachment, getSignedUrlFromStorage } from '../src/utils/attachments';
+import { pushWithParams } from '../src/utils/navigation';
+import { shareViaWhatsApp } from '../src/utils/share-links';
+import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
+
+// Web-specific signature pad (loaded only on web)
+const WebSignaturePad = Platform.OS === 'web'
+  ? require('../src/components/shared/WebSignaturePad').WebSignaturePad
+  : null;
+
+function extractStoragePathFromUrl(pathOrUrl: string): string | null {
+  if (!pathOrUrl) return null;
+  if (!pathOrUrl.startsWith('http://') && !pathOrUrl.startsWith('https://')) {
+    return pathOrUrl;
+  }
+  const fromSignedOrPublic = pathOrUrl.match(/\/object\/(?:sign|public)\/documents\/(.+?)(?:\?|$)/);
+  if (fromSignedOrPublic?.[1]) {
+    return decodeURIComponent(fromSignedOrPublic[1]);
+  }
+  const fromBucketPath = pathOrUrl.match(/\/documents\/(.+?)(?:\?|$)/);
+  if (fromBucketPath?.[1]) {
+    return decodeURIComponent(fromBucketPath[1]);
+  }
+  return null;
+}
+
+function getFilenameFromPath(pathOrUrl?: string): string {
+  if (!pathOrUrl) return 'attachment';
+  return pathOrUrl.split('/').pop()?.split('?')[0] || 'attachment';
+}
+
+function isImagePath(pathOrUrl?: string): boolean {
+  if (!pathOrUrl) return false;
+  return /\.(jpg|jpeg|png|gif|webp|bmp|tiff|svg)(\?|$)/i.test(pathOrUrl);
+}
+
+function inferMimeTypeFromPath(pathOrUrl?: string): string {
+  if (!pathOrUrl) return 'application/octet-stream';
+  const lower = pathOrUrl.toLowerCase();
+  if (/\.(jpg|jpeg)(\?|$)/.test(lower)) return 'image/jpeg';
+  if (/\.(png)(\?|$)/.test(lower)) return 'image/png';
+  if (/\.(gif)(\?|$)/.test(lower)) return 'image/gif';
+  if (/\.(webp)(\?|$)/.test(lower)) return 'image/webp';
+  if (/\.(bmp)(\?|$)/.test(lower)) return 'image/bmp';
+  if (/\.(svg)(\?|$)/.test(lower)) return 'image/svg+xml';
+  if (/\.(pdf)(\?|$)/.test(lower)) return 'application/pdf';
+  return 'application/octet-stream';
+}
 
 export default function WorkOrderDetailScreen() {
   const { t } = useI18n();
@@ -31,10 +83,12 @@ export default function WorkOrderDetailScreen() {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { workOrderId } = useLocalSearchParams<{ workOrderId: string }>();
+  const { workOrderId } = useRouteParams<{ workOrderId: string }>('/work-order-detail');
+  const goBack = useGoBack('/(tabs)/events');
 
   const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [users, setUsers] = useState<Map<string, User>>(new Map());
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentElapsedTime, setCurrentElapsedTime] = useState(0);
@@ -45,12 +99,18 @@ export default function WorkOrderDetailScreen() {
   const [checkInAddress, setCheckInAddress] = useState<string | null>(null);
   const [signatureAddress, setSignatureAddress] = useState<string | null>(null);
 
+  /** Web-safe alert helper */
+  const showMsg = (message: string) => {
+    if (Platform.OS === 'web') {
+      window.alert(message);
+    } else {
+      Alert.alert('', message);
+    }
+  };
+
   const handleEdit = () => {
     if (!workOrderId) return;
-    router.push({
-      pathname: '/event-report-create',
-      params: { workOrderId },
-    });
+    pushWithParams(router, '/event-report-create', { workOrderId: String(workOrderId) });
   };
 
   const handleStartService = async () => {
@@ -58,46 +118,55 @@ export default function WorkOrderDetailScreen() {
 
     setIsProcessing(true);
     try {
-      // Request location permissions
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert(
-          t('common.error') || 'Error',
-          t('workOrders.locationPermissionRequired')
-        );
-        setIsProcessing(false);
-        return;
+      // Get current location (optional on web)
+      let latitude = 0;
+      let longitude = 0;
+
+      if (Platform.OS === 'web') {
+        // Web: use browser Geolocation API directly (more reliable than expo-location on web)
+        try {
+          if ('geolocation' in navigator) {
+            const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+              navigator.geolocation.getCurrentPosition(resolve, reject, {
+                enableHighAccuracy: false,
+                timeout: 5000,
+                maximumAge: 60000,
+              });
+            });
+            latitude = pos.coords.latitude;
+            longitude = pos.coords.longitude;
+          }
+        } catch (geoErr) {
+          console.log('[handleStartService] Web geolocation unavailable, using (0,0)');
+        }
+      } else {
+        // Native: use expo-location
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const loc = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.High,
+            });
+            latitude = loc.coords.latitude;
+            longitude = loc.coords.longitude;
+          } else {
+            Alert.alert(
+              t('common.error') || 'Error',
+              t('workOrders.locationPermissionRequired')
+            );
+            setIsProcessing(false);
+            return;
+          }
+        } catch (locationError) {
+          console.error('Error getting location:', locationError);
+          Alert.alert(
+            t('common.error') || 'Error',
+            t('workOrders.locationError')
+          );
+          // Continue with fallback (0, 0)
+        }
       }
 
-      // Get current location
-      let location;
-      try {
-        location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-        });
-      } catch (locationError) {
-        console.error('Error getting location:', locationError);
-        Alert.alert(
-          t('common.error') || 'Error',
-          t('workOrders.locationError')
-        );
-        // Fallback to default coordinates if location fails
-        location = {
-          coords: {
-            latitude: 0,
-            longitude: 0,
-            accuracy: 0,
-            altitude: null,
-            altitudeAccuracy: null,
-            heading: null,
-            speed: null,
-          },
-          timestamp: Date.now(),
-        };
-      }
-
-      const latitude = location.coords.latitude;
-      const longitude = location.coords.longitude;
       const timestamp = new Date().toISOString();
 
       // 1. Create check-in
@@ -125,16 +194,24 @@ export default function WorkOrderDetailScreen() {
       // Reload work order to show updated data
       await loadWorkOrder();
 
-      Alert.alert(
-        t('common.success') || 'Success',
-        t('workOrders.serviceStarted')
-      );
+      if (Platform.OS === 'web') {
+        window.alert(t('workOrders.serviceStarted') || 'Serviço iniciado com sucesso');
+      } else {
+        Alert.alert(
+          t('common.success') || 'Success',
+          t('workOrders.serviceStarted')
+        );
+      }
     } catch (error) {
       console.error('Error starting service:', error);
-      Alert.alert(
-        t('common.error') || 'Error',
-        t('workOrders.startServiceError')
-      );
+      if (Platform.OS === 'web') {
+        window.alert(t('workOrders.startServiceError') || 'Erro ao iniciar serviço');
+      } else {
+        Alert.alert(
+          t('common.error') || 'Error',
+          t('workOrders.startServiceError')
+        );
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -161,7 +238,7 @@ export default function WorkOrderDetailScreen() {
     if (pendingSignature !== null) {
       setPendingSignature(null);
       setIsProcessing(false);
-      Alert.alert(t('common.error'), t('workOrders.signatureDrawingRequired'));
+      showMsg(t('workOrders.signatureDrawingRequired') || 'Desenhe a assinatura antes de confirmar');
     }
   };
 
@@ -182,20 +259,20 @@ export default function WorkOrderDetailScreen() {
     if (!clientName || !clientName.trim()) {
       setPendingSignature(null);
       setIsProcessing(false);
-      Alert.alert(t('common.error'), t('workOrders.clientNameRequired'));
+      showMsg(t('workOrders.clientNameRequired') || 'Preencha o nome do cliente');
       return;
     }
 
     setIsProcessing(true);
     
     try {
-      // Get current location for signature
-      let location;
+      // Get current location for signature (optional on web)
+      let location: { coords?: { latitude: number; longitude: number } } | undefined;
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') {
           const locationData = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.High,
+            accuracy: Platform.OS === 'web' ? Location.Accuracy.Balanced : Location.Accuracy.High,
           });
           location = locationData;
         }
@@ -259,16 +336,10 @@ export default function WorkOrderDetailScreen() {
       // Reload work order to show updated data
       await loadWorkOrder();
 
-      Alert.alert(
-        t('common.success') || 'Success',
-        t('workOrders.signatureCreated')
-      );
+      showMsg(t('workOrders.signatureCreated') || 'Assinatura criada com sucesso');
     } catch (error) {
       console.error('Error creating signature:', error);
-      Alert.alert(
-        t('common.error') || 'Error',
-        t('workOrders.signatureError')
-      );
+      showMsg(t('workOrders.signatureError') || 'Erro ao criar assinatura');
     } finally {
       setIsProcessing(false);
       setPendingSignature(null);
@@ -279,7 +350,7 @@ export default function WorkOrderDetailScreen() {
     if (!workOrderId || !user || !workOrder) return;
 
     if (!clientName || !clientName.trim()) {
-      Alert.alert(t('common.error'), t('workOrders.clientNameRequired'));
+      showMsg(t('workOrders.clientNameRequired') || 'Preencha o nome do cliente');
       return;
     }
 
@@ -300,7 +371,7 @@ export default function WorkOrderDetailScreen() {
     } else {
       setIsProcessing(false);
       setPendingSignature(null);
-      Alert.alert(t('common.error'), t('workOrders.signatureDrawingRequired'));
+      showMsg(t('workOrders.signatureDrawingRequired') || 'Desenhe a assinatura antes de confirmar');
     }
   };
 
@@ -309,10 +380,7 @@ export default function WorkOrderDetailScreen() {
 
     // Check if signature exists
     if (!workOrder.signature) {
-      Alert.alert(
-        t('common.error') || 'Error',
-        t('workOrders.signatureRequired')
-      );
+      showMsg(t('workOrders.signatureRequired') || 'Assinatura necessária antes de finalizar');
       return;
     }
 
@@ -344,44 +412,38 @@ export default function WorkOrderDetailScreen() {
       // Reload work order to show updated data
       await loadWorkOrder();
 
-      Alert.alert(
-        t('common.success') || 'Success',
-        t('workOrders.serviceCompleted')
-      );
+      showMsg(t('workOrders.serviceCompleted') || 'Serviço finalizado com sucesso');
     } catch (error) {
       console.error('Error finishing service:', error);
-      Alert.alert(
-        t('common.error') || 'Error',
-        t('workOrders.finishServiceError')
-      );
+      showMsg(t('workOrders.finishServiceError') || 'Erro ao finalizar serviço');
     } finally {
       setIsProcessing(false);
     }
   };
 
   const handleDelete = () => {
-    Alert.alert(
-      t('common.delete') || 'Delete',
-      'Are you sure you want to delete this work order?',
-      [
-        { text: t('common.cancel') || 'Cancel', style: 'cancel' },
-        {
-          text: t('common.delete') || 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (!workOrderId) return;
-            try {
-              await repos.workOrdersRepo.deleteWorkOrder(workOrderId);
-              Alert.alert(t('common.success') || 'Success', 'Work order deleted successfully', [
-                { text: t('common.confirm') || 'OK', onPress: () => router.back() },
-              ]);
-            } catch (error) {
-              console.error('Error deleting work order:', error);
-              Alert.alert(t('common.error') || 'Error', 'Failed to delete work order');
-            }
-          },
-        },
-      ]
+    if (!workOrderId) return;
+    
+    confirmDelete(
+      t('common.delete'),
+      t('workOrders.deleteConfirm'),
+      async () => {
+        await repos.workOrdersRepo.deleteWorkOrder(workOrderId);
+        safeBack(router);
+      },
+      undefined,
+      t('common.delete'),
+      t('common.cancel'),
+      t('workOrders.deletedSuccess'),
+      t('workOrders.deleteError')
+    );
+  };
+
+  const handleShare = async () => {
+    if (!workOrderId) return;
+    await shareViaWhatsApp(
+      { entity: 'workOrder', params: { workOrderId } },
+      `Work Order ${workOrder?.clientName || ''}`.trim()
     );
   };
 
@@ -489,6 +551,7 @@ export default function WorkOrderDetailScreen() {
   const loadWorkOrder = async () => {
     if (!workOrderId) return;
     setIsLoading(true);
+    setLoadError(false);
     try {
       const workOrderData = await repos.workOrdersRepo.getWorkOrderById(workOrderId);
       if (workOrderData) {
@@ -505,16 +568,41 @@ export default function WorkOrderDetailScreen() {
           evidences: workOrderData.evidences?.length || 0,
           signature: workOrderData.signature ? 'yes' : 'no',
         });
+
+        // Resolve evidence photoPath to signed URLs (bucket is private)
+        if (workOrderData.evidences && workOrderData.evidences.length > 0) {
+          const resolvedEvidences = await Promise.all(
+            workOrderData.evidences.map(async (ev: Evidence) => {
+              if (!ev.photoPath) return ev;
+              // Local file URI — leave as-is
+              if (ev.photoPath.startsWith('file://') || ev.photoPath.startsWith('content://')) {
+                return ev;
+              }
+              try {
+                const extracted = extractStoragePathFromUrl(ev.photoPath);
+                const storagePath = extracted || ev.photoPath;
+                const filename = getFilenameFromPath(storagePath);
+                const url = await getSignedUrlFromStorage(storagePath, filename);
+                if (url) {
+                  return { ...ev, photoPath: url };
+                }
+              } catch (e) {
+                console.warn('Error creating signed URL for evidence:', e);
+              }
+              return ev;
+            })
+          );
+          workOrderData.evidences = resolvedEvidences;
+        }
+
         setWorkOrder(workOrderData);
         await loadUsers(workOrderData);
       } else {
-        Alert.alert(t('common.error'), 'Work order not found', [
-          { text: t('common.confirm'), onPress: () => router.back() },
-        ]);
+        setLoadError(true);
       }
     } catch (error) {
       console.error('Error loading work order:', error);
-      Alert.alert(t('common.error'), 'Failed to load work order');
+      setLoadError(true);
     } finally {
       setIsLoading(false);
     }
@@ -597,65 +685,40 @@ export default function WorkOrderDetailScreen() {
   };
 
   const getTimeStatusLabel = (status: string): string => {
-    switch (status) {
-      case 'EM_ATENDIMENTO':
-        return 'Em Atendimento';
-      case 'PAUSADO':
-        return 'Pausado';
-      case 'DESLOCAMENTO':
-        return 'Deslocamento';
-      default:
-        return status;
-    }
+    const key = `workOrders.timeStatus.${status}`;
+    const translated = t(key);
+    return translated !== key ? translated : status;
   };
 
   const getServiceLogTypeLabel = (type: string): string => {
-    switch (type) {
-      case 'ajuste':
-        return 'Ajuste';
-      case 'problema':
-        return 'Problema';
-      case 'material':
-        return 'Material';
-      case 'recomendacao':
-        return 'Recomendação';
-      default:
-        return type;
-    }
+    const key = `workOrders.serviceLogType.${type}`;
+    const translated = t(key);
+    return translated !== key ? translated : type;
   };
 
   const getEvidenceTypeLabel = (type: string): string => {
-    switch (type) {
-      case 'antes':
-        return 'Antes';
-      case 'durante':
-        return 'Durante';
-      case 'depois':
-        return 'Depois';
-      default:
-        return type;
-    }
+    const key = `workOrders.evidenceType.${type}`;
+    const translated = t(key);
+    return translated !== key ? translated : type;
   };
 
   const formatDateTime = (date: string, time?: string): string => {
     if (!date) return '';
-    const dateObj = new Date(date);
-    const dateStr = dateObj.toLocaleDateString();
-    return time ? `${dateStr} ${time}` : dateStr;
+    return formatDateTimeUtil(date, time);
   };
 
   const formatTimestamp = (timestamp: string): string => {
-    const date = new Date(timestamp);
-    return date.toLocaleString();
+    return formatTimestampUtil(timestamp);
   };
 
   const formatDuration = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
     if (hours > 0) {
-      return `${hours}h ${minutes}m`;
+      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
-    return `${minutes}m`;
+    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   const getUserName = (userId: string): string => {
@@ -670,8 +733,23 @@ export default function WorkOrderDetailScreen() {
     );
   }
 
-  if (!workOrder) {
-    return null;
+  if (loadError || !workOrder) {
+    return (
+      <ScreenWrapper>
+        <View style={styles.loadingContainer}>
+          <Ionicons name="alert-circle-outline" size={48} color={colors.textSecondary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary, marginTop: 12 }]}>
+            {t('common.error')}
+          </Text>
+          <TouchableOpacity
+            onPress={goBack}
+            style={{ marginTop: 16, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: colors.primary, borderRadius: 8 }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600' }}>{t('common.back') || 'Back'}</Text>
+          </TouchableOpacity>
+        </View>
+      </ScreenWrapper>
+    );
   }
 
   const totalTime = (workOrder.timeStatuses || []).reduce((sum, ts) => sum + ts.totalDuration, 0);
@@ -687,7 +765,7 @@ export default function WorkOrderDetailScreen() {
       <View style={[styles.header, { paddingTop: insets.top + theme.spacing.md, backgroundColor: colors.background }]}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={goBack}
           activeOpacity={0.7}
         >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -800,13 +878,15 @@ export default function WorkOrderDetailScreen() {
 
           {workOrder.plannedMaterials && workOrder.plannedMaterials.length > 0 && (
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Planned Materials</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                {t('workOrders.extraInfo') || 'Extra Info'}
+              </Text>
               <View style={[styles.infoCard, { backgroundColor: colors.cardBackground }]}>
                 {workOrder.plannedMaterials.map((material) => (
                   <View key={material.id} style={styles.materialRow}>
-                    <Ionicons name="cube-outline" size={20} color={colors.textSecondary} />
+                    <Ionicons name="information-circle-outline" size={20} color={colors.textSecondary} />
                     <Text style={[styles.materialText, { color: colors.text }]}>
-                      {material.name} - {material.quantity} {material.unit}
+                      {material.name}
                     </Text>
                   </View>
                 ))}
@@ -911,13 +991,24 @@ export default function WorkOrderDetailScreen() {
                   </View>
                 </View>
                 {workOrder.checkIn.photoPath && (
-                  <View style={styles.photoContainer}>
+                  <TouchableOpacity
+                    style={styles.photoContainer}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      if (Platform.OS === 'web') {
+                        window.open(workOrder!.checkIn!.photoPath!, '_blank');
+                      } else {
+                        const fname = workOrder!.checkIn!.photoPath!.split('/').pop()?.split('?')[0] || 'checkin.jpg';
+                        downloadAndOpenAttachment(workOrder!.checkIn!.photoPath!, fname, 'image/jpeg');
+                      }
+                    }}
+                  >
                     <Image
                       source={{ uri: workOrder.checkIn.photoPath }}
                       style={styles.photo}
                       contentFit="cover"
                     />
-                  </View>
+                  </TouchableOpacity>
                 )}
               </View>
             </View>
@@ -926,19 +1017,31 @@ export default function WorkOrderDetailScreen() {
           {((workOrder.timeStatuses && workOrder.timeStatuses.length > 0) || activeTimeStatus) && (
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>Time Tracking</Text>
+              
+              {/* Timer card grande - estilo treinamento */}
+              {activeTimeStatus && (
+                <View style={[styles.timerCard, { backgroundColor: colors.primary + '10', borderColor: colors.primary }]}>
+                  <View style={styles.timerHeader}>
+                    <Ionicons name="timer" size={24} color={colors.primary} />
+                    <Text style={[styles.timerTitle, { color: colors.primary }]}>
+                      {t('workOrders.status.in_progress')}
+                    </Text>
+                  </View>
+                  <Text style={[styles.timerValue, { color: colors.primary }]}>
+                    {formatDuration(currentElapsedTime)}
+                  </Text>
+                  <Text style={[styles.timerDescription, { color: colors.textSecondary }]}>
+                    {t('workOrders.totalTime') || 'Tempo total'}: {formatDuration(totalTimeWithActive)}
+                  </Text>
+                </View>
+              )}
+
               <View style={[styles.infoCard, { backgroundColor: colors.cardBackground }]}>
                 <View style={styles.totalTimeRow}>
                   <Ionicons name="time" size={20} color={colors.primary} />
                   <Text style={[styles.totalTimeText, { color: colors.text }]}>
-                    Total Time: {formatDuration(totalTimeWithActive)}
+                    Total: {formatDuration(totalTimeWithActive)}
                   </Text>
-                  {activeTimeStatus && (
-                    <View style={[styles.activeTimerBadge, { backgroundColor: colors.success + '20' }]}>
-                      <Text style={[styles.activeTimerText, { color: colors.success }]}>
-                        ⏱️ {formatDuration(currentElapsedTime)}
-                      </Text>
-                    </View>
-                  )}
                 </View>
                 {workOrder.timeStatuses && workOrder.timeStatuses.map((timeStatus) => (
                   <View key={timeStatus.id} style={styles.timeStatusRow}>
@@ -991,13 +1094,24 @@ export default function WorkOrderDetailScreen() {
                       By {getUserName(log.author)}
                     </Text>
                     {log.photoPath && (
-                      <View style={styles.photoContainer}>
+                      <TouchableOpacity
+                        style={styles.photoContainer}
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          if (Platform.OS === 'web') {
+                            window.open(log.photoPath!, '_blank');
+                          } else {
+                            const fname = log.photoPath!.split('/').pop()?.split('?')[0] || 'log.jpg';
+                            downloadAndOpenAttachment(log.photoPath!, fname, 'image/jpeg');
+                          }
+                        }}
+                      >
                         <Image
                           source={{ uri: log.photoPath }}
                           style={styles.photo}
                           contentFit="cover"
                         />
-                      </View>
+                      </TouchableOpacity>
                     )}
                     {log.videoPath && (
                       <View style={styles.videoContainer}>
@@ -1026,13 +1140,34 @@ export default function WorkOrderDetailScreen() {
                       {evidences.map((evidence) => (
                         <View key={evidence.id} style={styles.evidenceRow}>
                           {evidence.photoPath && (
-                            <View style={styles.photoContainer}>
-                              <Image
-                                source={{ uri: evidence.photoPath }}
-                                style={styles.photo}
-                                contentFit="cover"
-                              />
-                            </View>
+                            <TouchableOpacity
+                              style={styles.photoContainer}
+                              activeOpacity={0.8}
+                              onPress={() => {
+                                if (Platform.OS === 'web') {
+                                  window.open(evidence.photoPath, '_blank');
+                                } else {
+                                  const filename = getFilenameFromPath(evidence.photoPath);
+                                  const mimeType = inferMimeTypeFromPath(evidence.photoPath);
+                                  downloadAndOpenAttachment(evidence.photoPath, filename, mimeType);
+                                }
+                              }}
+                            >
+                              {isImagePath(evidence.photoPath) ? (
+                                <Image
+                                  source={{ uri: evidence.photoPath }}
+                                  style={styles.photo}
+                                  contentFit="cover"
+                                />
+                              ) : (
+                                <View style={[styles.filePreview, { backgroundColor: colors.backgroundSecondary }]}>
+                                  <Ionicons name="document-text-outline" size={20} color={colors.textSecondary} />
+                                  <Text style={[styles.filePreviewText, { color: colors.textSecondary }]} numberOfLines={1}>
+                                    {getFilenameFromPath(evidence.photoPath)}
+                                  </Text>
+                                </View>
+                              )}
+                            </TouchableOpacity>
                           )}
                           {evidence.internalNotes && (
                             <View style={styles.notesContainer}>
@@ -1141,19 +1276,17 @@ export default function WorkOrderDetailScreen() {
             </View>
           )}
 
-          {workOrder.internalNotes && (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Internal Notes</Text>
-              <View style={[styles.infoCard, { backgroundColor: colors.cardBackground }]}>
-                <Text style={[styles.descriptionText, { color: colors.text }]}>
-                  {workOrder.internalNotes}
-                </Text>
-              </View>
-            </View>
-          )}
+          {/* Internal Notes removed */}
         </View>
 
         <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={[styles.iconButton, { backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border }]}
+            onPress={handleShare}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="share-social-outline" size={24} color={colors.text} />
+          </TouchableOpacity>
           {workOrder.status === 'planned' && (
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: colors.primary }]}
@@ -1255,41 +1388,56 @@ export default function WorkOrderDetailScreen() {
               {t('workOrders.signatureDrawing')}
             </Text>
             
-            <View style={[styles.signatureCanvasContainer, { backgroundColor: '#ffffff', borderColor: colors.border }]}>
-              <SignatureCanvas
+            {Platform.OS === 'web' && WebSignaturePad ? (
+              <WebSignaturePad
                 ref={signatureRef}
                 onOK={handleSignatureOK}
                 onEmpty={handleSignatureEmpty}
-                descriptionText=""
-                clearText={t('workOrders.clearSignature')}
-                confirmText={t('workOrders.saveSignature')}
                 penColor="#000000"
                 backgroundColor="#ffffff"
-                minWidth={2}
-                maxWidth={3}
-                webStyle={`
-                  .m-signature-pad {
-                    box-shadow: none;
-                    border: 1px solid ${colors.border};
-                  }
-                  .m-signature-pad--body {
-                    border: none;
-                  }
-                  .m-signature-pad--footer {
-                    display: flex;
-                    justify-content: space-between;
-                    padding: 10px;
-                  }
-                  .m-signature-pad--footer button {
-                    background-color: ${colors.primary};
-                    color: ${colors.background};
-                    border: none;
-                    padding: 10px 20px;
-                    border-radius: 5px;
-                  }
-                `}
+                clearText={t('workOrders.clearSignature')}
+                confirmText={t('workOrders.saveSignature')}
+                borderColor={colors.border}
+                primaryColor={colors.primary}
+                textColor={colors.background}
               />
-            </View>
+            ) : (
+              <View style={[styles.signatureCanvasContainer, { backgroundColor: '#ffffff', borderColor: colors.border }]}>
+                <SignatureCanvas
+                  ref={signatureRef}
+                  onOK={handleSignatureOK}
+                  onEmpty={handleSignatureEmpty}
+                  descriptionText=""
+                  clearText={t('workOrders.clearSignature')}
+                  confirmText={t('workOrders.saveSignature')}
+                  penColor="#000000"
+                  backgroundColor="#ffffff"
+                  minWidth={2}
+                  maxWidth={3}
+                  webStyle={`
+                    .m-signature-pad {
+                      box-shadow: none;
+                      border: 1px solid ${colors.border};
+                    }
+                    .m-signature-pad--body {
+                      border: none;
+                    }
+                    .m-signature-pad--footer {
+                      display: flex;
+                      justify-content: space-between;
+                      padding: 10px;
+                    }
+                    .m-signature-pad--footer button {
+                      background-color: ${colors.primary};
+                      color: ${colors.background};
+                      border: none;
+                      padding: 10px 20px;
+                      border-radius: 5px;
+                    }
+                  `}
+                />
+              </View>
+            )}
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -1333,6 +1481,9 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: theme.typography.fontSize.md,
   },
   header: {
     flexDirection: 'row',
@@ -1465,19 +1616,49 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   photo: {
-    width: '100%',
-    height: 200,
+    width: 64,
+    height: 64,
+    borderRadius: 6,
     backgroundColor: '#f3f4f6',
   },
-  activeTimerBadge: {
-    marginLeft: theme.spacing.sm,
+  filePreview: {
+    width: 180,
+    minHeight: 64,
+    borderRadius: 6,
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: theme.spacing.xs,
-    borderRadius: theme.borderRadius.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
   },
-  activeTimerText: {
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.semibold,
+  filePreviewText: {
+    flex: 1,
+    fontSize: theme.typography.fontSize.xs,
+  },
+  timerCard: {
+    padding: theme.spacing.lg,
+    borderRadius: theme.borderRadius.lg,
+    borderWidth: 2,
+    alignItems: 'center' as const,
+    gap: theme.spacing.sm,
+  },
+  timerHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: theme.spacing.sm,
+  },
+  timerTitle: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  timerValue: {
+    fontSize: 36,
+    fontWeight: theme.typography.fontWeight.bold,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  timerDescription: {
+    fontSize: theme.typography.fontSize.xs,
+    textAlign: 'center' as const,
   },
   signatureButton: {
     flexDirection: 'row',

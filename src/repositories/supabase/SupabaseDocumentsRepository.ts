@@ -1,7 +1,8 @@
+import { Platform } from 'react-native';
 import { DocumentsRepository } from '../../services/repositories/interfaces';
 import { Document } from '../../types';
 import { supabase } from '../../services/supabase';
-import { File } from 'expo-file-system';
+import { getCachedSignedUrl } from '../../utils/signed-url-cache';
 
 const BUCKET_NAME = 'documents';
 
@@ -25,10 +26,9 @@ export class SupabaseDocumentsRepository implements DocumentsRepository {
       .from('documents')
       .select('*')
       .eq('id', documentId)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
       console.error('Error fetching document:', error);
       throw new Error('Failed to fetch document');
     }
@@ -53,12 +53,13 @@ export class SupabaseDocumentsRepository implements DocumentsRepository {
       // Read file and prepare for upload
       let fileData: Blob | Uint8Array | string;
       
-      if (fileUri.startsWith('file://') || fileUri.startsWith('content://')) {
-        // React Native - read file as base64 and convert to Uint8Array
+      if (Platform.OS === 'web' && typeof fetch !== 'undefined' && fileUri) {
+        const response = await fetch(fileUri);
+        fileData = await response.blob();
+      } else if (fileUri.startsWith('file://') || fileUri.startsWith('content://')) {
+        const { File } = require('expo-file-system');
         const sourceFile = new File(fileUri);
         const base64 = await sourceFile.base64();
-        
-        // Convert base64 to Uint8Array for Supabase Storage
         const byteCharacters = atob(base64);
         const byteNumbers = new Array(byteCharacters.length);
         for (let i = 0; i < byteCharacters.length; i++) {
@@ -140,18 +141,8 @@ export class SupabaseDocumentsRepository implements DocumentsRepository {
       ? document.storagePath.split('/').pop() 
       : document.storagePath;
 
-    // Get signed URL from Supabase Storage (valid for 1 hour)
-    const { data, error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .createSignedUrl(filename || document.storagePath, 3600);
-
-    if (error) {
-      console.error('Error getting document URL:', error);
-      // Fallback to storage path if signed URL fails
-      return document.storagePath;
-    }
-
-    return data.signedUrl;
+    const url = await getCachedSignedUrl(filename || document.storagePath);
+    return url || document.storagePath;
   }
 
   async deleteDocument(documentId: string): Promise<void> {

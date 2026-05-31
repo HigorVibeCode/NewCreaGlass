@@ -97,9 +97,9 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
       .from('notifications')
       .select('target_user_id')
       .eq('id', notificationId)
-      .single();
+      .maybeSingle();
 
-    if (fetchError) {
+    if (fetchError || !notification) {
       console.error('Error fetching notification:', fetchError);
       throw new Error('Notification not found');
     }
@@ -107,7 +107,7 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
     // Allow marking as read if:
     // 1. Notification has no target_user_id (global notification)
     // 2. Notification's target_user_id matches the user
-    if (notification && notification.target_user_id && notification.target_user_id !== userId) {
+    if (notification.target_user_id && notification.target_user_id !== userId) {
       throw new Error('Notification does not belong to user');
     }
 
@@ -145,6 +145,15 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
   ): Promise<Notification> {
     // RLS policy requires: created_by_system = true
     // Make sure we're creating system notifications
+    
+    // Log payload for debugging
+    if (__DEV__) {
+      console.log('[createNotification] Creating notification:', {
+        type: notification.type,
+        payloadJson: notification.payloadJson,
+      });
+    }
+    
     const { data, error } = await supabase
       .from('notifications')
       .insert({
@@ -164,21 +173,41 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
       throw new Error(`Failed to create notification: ${error.message || 'Unknown error'}`);
     }
 
+    const createdNotification = this.mapToNotification(data);
+    
+    // Log created notification for debugging
+    if (__DEV__) {
+      console.log('[createNotification] Notification created:', {
+        id: createdNotification.id,
+        type: createdNotification.type,
+        payloadJson: createdNotification.payloadJson,
+      });
+    }
+
     // Trigger vibration and sound alert with message (não aguardamos o som terminar)
     let alertMessage: string | undefined;
     if (notification.type === 'inventory.lowStock' && notification.payloadJson) {
       alertMessage = `Estoque baixo: ${notification.payloadJson.itemName || 'Item'} (${notification.payloadJson.stock || 0} unidades)`;
     } else if (notification.type === 'production.authorized' && notification.payloadJson) {
-      const clientName = notification.payloadJson.clientName || '';
+      const clientName = notification.payloadJson.clientName || 'Cliente';
       const orderType = notification.payloadJson.orderType || '';
       const orderNumber = notification.payloadJson.orderNumber || '';
       alertMessage = `${clientName} | ${orderType} | ${orderNumber} - Autorizado`;
+    } else if (notification.type === 'production.tempered' && notification.payloadJson) {
+      const clientName = notification.payloadJson.clientName || 'Cliente';
+      const orderType = notification.payloadJson.orderType || '';
+      const orderNumber = notification.payloadJson.orderNumber || '';
+      alertMessage = `${clientName} | ${orderType} | ${orderNumber} - Entrou na fase de temperamento`;
     }
     triggerNotificationAlert(notification.type, alertMessage).catch(err => {
       console.warn('Failed to trigger notification alert:', err);
     });
 
-    return this.mapToNotification(data);
+    // Push notification é disparada automaticamente pelo Database Webhook
+    // (INSERT na tabela notifications → Edge Function send-push-on-notification).
+    // Não chamar dispatchPushViaEdgeFunction aqui para evitar notificação duplicada.
+
+    return createdNotification;
   }
 
   async clearUserNotifications(userId: string): Promise<void> {
@@ -272,11 +301,207 @@ export class SupabaseNotificationsRepository implements NotificationsRepository 
     }
   }
 
+  /**
+   * Dispatch push notifications via Supabase Edge Function (server-side).
+   * This avoids CORS issues when called from the web browser and uses
+   * service_role to bypass RLS restrictions.
+   */
+  private async dispatchPushViaEdgeFunction(notification: Notification): Promise<void> {
+    try {
+      // Build the same webhook payload the Edge Function expects
+      const webhookPayload = {
+        type: 'INSERT',
+        table: 'notifications',
+        schema: 'public',
+        record: {
+          id: notification.id,
+          type: notification.type,
+          payload_json: notification.payloadJson || null,
+          target_user_id: notification.targetUserId || null,
+          created_at: notification.createdAt,
+        },
+        old_record: null,
+      };
+
+      console.log('[dispatchPushViaEdgeFunction] Invoking Edge Function for notification:', notification.id, notification.type);
+
+      const { data, error } = await supabase.functions.invoke('send-push-on-notification', {
+        body: webhookPayload,
+      });
+
+      if (error) {
+        console.error('[dispatchPushViaEdgeFunction] Edge Function error:', error);
+        // Fallback to client-side dispatch for native platforms only
+        if (typeof navigator !== 'undefined' && !('serviceWorker' in navigator)) {
+          // Native app - try client-side as fallback
+          console.log('[dispatchPushViaEdgeFunction] Falling back to client-side dispatch...');
+          await this.dispatchPushNotifications(notification);
+        }
+        return;
+      }
+
+      console.log('[dispatchPushViaEdgeFunction] Edge Function response:', JSON.stringify(data));
+    } catch (err: any) {
+      console.error('[dispatchPushViaEdgeFunction] Error:', err?.message || err);
+      // Don't throw - push is secondary
+    }
+  }
+
+  /**
+   * @deprecated Use dispatchPushViaEdgeFunction instead.
+   * Kept as fallback for native platforms if Edge Function is unavailable.
+   * Dispatch push notifications directly via Expo Push API (client-side).
+   */
+  private async dispatchPushNotifications(notification: Notification): Promise<void> {
+    try {
+      // Lazy import to avoid require cycle
+      const { pushNotificationService } = await import('../../services/push-notifications');
+      const { repos } = await import('../../services/container');
+
+      // Determine target users
+      let targetUserIds: string[] = [];
+
+      if (notification.targetUserId) {
+        // Specific user target
+        targetUserIds = [notification.targetUserId];
+      } else {
+        // Global notification - get all active users with push enabled
+        // For now, we'll need to fetch users separately
+        // In a production system, this could be optimized with a database function
+        const { data: users } = await supabase
+          .from('users')
+          .select('id')
+          .eq('is_active', true);
+
+        if (users) {
+          targetUserIds = users.map(u => u.id);
+        }
+      }
+
+      if (targetUserIds.length === 0) {
+        console.log('[dispatchPushNotifications] Nenhum usuário alvo para notificação', notification.type);
+        return;
+      }
+
+      console.log('[dispatchPushNotifications] Enviando push para', targetUserIds.length, 'usuário(s), tipo:', notification.type);
+
+      // Generate push notification content
+      const { title, body } = pushNotificationService.generateNotificationContent(notification);
+      const deepLink = pushNotificationService.generateDeepLink(notification);
+
+      const payload = {
+        title,
+        body,
+        data: {
+          notificationId: notification.id,
+          type: notification.type,
+          entityId: notification.payloadJson?.itemId || 
+                   notification.payloadJson?.productionId || 
+                   notification.payloadJson?.workOrderId || 
+                   notification.payloadJson?.trainingId || 
+                   notification.payloadJson?.messageId || 
+                   notification.payloadJson?.eventId,
+          deepLink,
+          ...notification.payloadJson,
+        },
+      };
+
+      // Process each target user
+      for (const userId of targetUserIds) {
+        try {
+          // Check if user should receive push
+          const shouldSend = await pushNotificationService.shouldSendPush(userId, notification.type);
+          if (!shouldSend) {
+            console.log('[dispatchPushNotifications] Usuário', userId, 'tem push desativado para', notification.type);
+            continue;
+          }
+
+          // Get active device tokens for user
+          const deviceTokens = await repos.deviceTokensRepo.getActiveDeviceTokensByUserId(userId);
+          
+          if (deviceTokens.length === 0) {
+            console.warn('[dispatchPushNotifications] Nenhum token de dispositivo ativo para o usuário', userId, '- faça login no app (build nativo, não Expo Go) e aceite notificações.');
+            continue;
+          }
+
+          console.log('[dispatchPushNotifications] Usuário', userId, ':', deviceTokens.length, 'dispositivo(s), enviando push...');
+
+          // Send push to all user's devices
+          const tokens = deviceTokens.map(dt => ({
+            token: dt.token,
+            platform: dt.platform,
+            deviceTokenId: dt.id,
+          }));
+
+          const results = await pushNotificationService.sendToTokens(tokens, payload);
+
+          const sent = results.filter(r => r.success).length;
+          const failed = results.filter(r => !r.success).length;
+          if (failed > 0) {
+            console.warn('[dispatchPushNotifications] Resultado:', sent, 'enviado(s),', failed, 'falha(s). Erros:', results.filter(r => r.error).map(r => r.error));
+          } else {
+            console.log('[dispatchPushNotifications] Push enviado com sucesso para', sent, 'dispositivo(s).');
+          }
+
+          // Log delivery attempts
+          for (let i = 0; i < results.length; i++) {
+            const result = results[i];
+            const deviceToken = deviceTokens[i];
+
+            await repos.pushDeliveryLogsRepo.createLog({
+              notificationId: notification.id,
+              userId,
+              deviceTokenId: deviceToken.id,
+              token: deviceToken.token,
+              status: result.success ? 'sent' : 'failed',
+              errorMessage: result.error,
+              sentAt: result.success ? new Date().toISOString() : undefined,
+            });
+          }
+        } catch (userError: any) {
+          console.error(`[dispatchPushNotifications] Error processing user ${userId}:`, userError);
+          // Continue with next user
+        }
+      }
+    } catch (error: any) {
+      console.error('[dispatchPushNotifications] Error:', error);
+      // Don't throw - push is secondary to notification creation
+    }
+  }
+
   private mapToNotification(data: any): Notification {
+    // Parse payload_json if it's a string, otherwise use as-is
+    let payloadJson: Record<string, any> = {};
+    if (data.payload_json) {
+      if (typeof data.payload_json === 'string') {
+        try {
+          payloadJson = JSON.parse(data.payload_json);
+        } catch (error) {
+          console.warn('[mapToNotification] Error parsing payload_json:', error);
+          payloadJson = {};
+        }
+      } else if (typeof data.payload_json === 'object') {
+        payloadJson = data.payload_json;
+      }
+    }
+
+    // Debug log in development for specific notification types
+    if (__DEV__ && (data.type === 'production.tempered' || data.type === 'workOrder.created' || data.type === 'event.created')) {
+      console.log('[mapToNotification] Parsed notification:', {
+        type: data.type,
+        payloadJson,
+        payload_json_type: typeof data.payload_json,
+        scheduledDate: payloadJson?.scheduledDate,
+        scheduledTime: payloadJson?.scheduledTime,
+        startDate: payloadJson?.startDate,
+        startTime: payloadJson?.startTime,
+      });
+    }
+
     return {
       id: data.id,
       type: data.type,
-      payloadJson: data.payload_json || {},
+      payloadJson,
       createdAt: data.created_at,
       createdBySystem: data.created_by_system ?? false,
       targetUserId: data.target_user_id || undefined,

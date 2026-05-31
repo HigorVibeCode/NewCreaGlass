@@ -23,10 +23,9 @@ export class SupabaseUsersRepository implements UsersRepository {
       .from('users')
       .select('*')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null; // Not found
       console.error('Error fetching user:', error);
       throw new Error('Failed to fetch user');
     }
@@ -39,10 +38,9 @@ export class SupabaseUsersRepository implements UsersRepository {
       .from('users')
       .select('*')
       .eq('username', username)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null; // Not found
       console.error('Error fetching user by username:', error);
       throw new Error('Failed to fetch user');
     }
@@ -154,12 +152,25 @@ export class SupabaseUsersRepository implements UsersRepository {
     throw new Error('Password change must be done through Edge Function or Supabase Auth API');
   }
 
+  async updatePreferredLanguage(userId: string, language: string): Promise<void> {
+    const { error } = await supabase
+      .from('users')
+      .update({ preferred_language: language })
+      .eq('id', userId);
+
+    if (error) {
+      console.error('Error updating preferred language:', error);
+      // Non-critical - don't throw, just log
+    }
+  }
+
   private mapToUser(data: any): User {
     return {
       id: data.id,
       username: data.username,
       userType: data.user_type as UserType,
       isActive: data.is_active,
+      preferredLanguage: data.preferred_language || 'en',
       createdAt: data.created_at,
     };
   }

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "888571913987",
+    "project_id": "pushcrea-e2dfe",
+    "storage_bucket": "pushcrea-e2dfe.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:888571913987:android:940c33b96cb8485b462b36",
+        "android_client_info": {
+          "package_name": "com.anonymous.CreaGlass"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBNM3ET-Oug8ysNKA9UMciIRtNBD-POMC4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

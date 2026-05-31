@@ -1,11 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     KeyboardAvoidingView,
+    Modal,
     Platform,
     ScrollView,
     StyleSheet,
@@ -15,27 +19,42 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../src/components/shared/Button';
+import { ClientAutocomplete } from '../src/components/shared/ClientAutocomplete';
 import { DatePicker } from '../src/components/shared/DatePicker';
 import { Dropdown, DropdownOption } from '../src/components/shared/Dropdown';
 import { Input } from '../src/components/shared/Input';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 import { repos } from '../src/services/container';
+import { supabase } from '../src/services/supabase';
 import { useAuth } from '../src/store/auth-store';
 import { theme } from '../src/theme';
 import {
+    Client,
     GlassType,
     InventoryItem,
     PaintType,
     Production,
     ProductionAttachment,
+    ProductionCompany,
     ProductionItem,
     StructureType,
 } from '../src/types';
+import {
+  formatFileSize,
+  getDxfAttachments,
+  getMediaAttachments,
+  isDxfFile,
+  MAX_PRODUCTION_DXF_ATTACHMENTS,
+  MAX_PRODUCTION_MEDIA_ATTACHMENTS,
+  partitionProductionAttachments,
+} from '../src/utils/production-attachment-storage';
+
+const CREA_GLASS_START_SEQ = 20; // Sequence starts at 0020
 
 const GLASS_GROUP_ID = 'group-glass';
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-const MAX_ATTACHMENTS = 3;
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
 
 interface ProductionItemForm {
   glassId: string;
@@ -46,17 +65,32 @@ interface ProductionItemForm {
   paintType: PaintType;
 }
 
+interface PendingDxfFile {
+  id: string;
+  name: string;
+  size: number;
+  uri: string;
+  mimeType: string;
+  webFile?: File;
+}
+
+type DxfUploadStatus = 'idle' | 'uploading' | 'success' | 'error';
+
 export default function ProductionCreateScreen() {
   const { t } = useI18n();
   const { user } = useAuth();
   const router = useRouter();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const { productionId } = useLocalSearchParams<{ productionId: string }>();
+  const { productionId, quickAttachmentAction } = useRouteParams<{ productionId: string; quickAttachmentAction?: string }>('/production-create');
+  const goBack = useGoBack();
 
   const [orderNumber, setOrderNumber] = useState('');
   const [clientName, setClientName] = useState('');
+  const [clientId, setClientId] = useState<string | undefined>(undefined);
+  const [clients, setClients] = useState<Client[]>([]);
   const [orderType, setOrderType] = useState('');
+  const [company, setCompany] = useState<ProductionCompany>('3S');
   const [dueDate, setDueDate] = useState('');
   const [glassItems, setGlassItems] = useState<InventoryItem[]>([]);
   const [productionItem, setProductionItem] = useState<ProductionItemForm>({
@@ -71,15 +105,94 @@ export default function ProductionCreateScreen() {
   const [isCreating, setIsCreating] = useState(false);
   const [loadingGlassItems, setLoadingGlassItems] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isAutoOrderNumber, setIsAutoOrderNumber] = useState(false);
+  const [loadingOrderNumber, setLoadingOrderNumber] = useState(false);
+  const [quickActionHandled, setQuickActionHandled] = useState(false);
+  const [dxfModalVisible, setDxfModalVisible] = useState(false);
+  const [pendingDxfFiles, setPendingDxfFiles] = useState<PendingDxfFile[]>([]);
+  const [dxfUploading, setDxfUploading] = useState(false);
+  const [dxfFileStatus, setDxfFileStatus] = useState<Record<string, DxfUploadStatus>>({});
 
   const isEditing = !!productionId;
 
+  const mediaAttachments = useMemo(() => getMediaAttachments(attachments), [attachments]);
+  const dxfAttachmentsList = useMemo(() => getDxfAttachments(attachments), [attachments]);
+  const partitionedAttachments = useMemo(
+    () => partitionProductionAttachments(attachments),
+    [attachments]
+  );
+
+  const canAddMedia = mediaAttachments.length < MAX_PRODUCTION_MEDIA_ATTACHMENTS;
+  const canAddDxf = dxfAttachmentsList.length < MAX_PRODUCTION_DXF_ATTACHMENTS;
+
+  /** Fetch the next available order number for Crea Glass (sequence starting at 0020) */
+  const generateNextCreaGlassOrderNumber = useCallback(async (): Promise<string> => {
+    try {
+      const { data, error } = await supabase
+        .from('productions')
+        .select('order_number')
+        .eq('company', 'Crea Glass')
+        .order('order_number', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching Crea Glass order numbers:', error);
+        return String(CREA_GLASS_START_SEQ).padStart(4, '0');
+      }
+
+      let maxNum = CREA_GLASS_START_SEQ - 1; // start below so first = 0020
+      for (const row of data || []) {
+        const num = parseInt(row.order_number, 10);
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
+        }
+      }
+
+      const nextNum = maxNum + 1;
+      return String(nextNum).padStart(4, '0');
+    } catch (err) {
+      console.error('Error generating Crea Glass order number:', err);
+      return String(CREA_GLASS_START_SEQ).padStart(4, '0');
+    }
+  }, []);
+
+  /** Handle company change — auto-set order number for Crea Glass */
+  const handleCompanyChange = useCallback(async (value: string) => {
+    const newCompany = value as ProductionCompany;
+    setCompany(newCompany);
+
+    if (newCompany === 'Crea Glass' && !isEditing) {
+      setIsAutoOrderNumber(true);
+      setLoadingOrderNumber(true);
+      try {
+        const nextNumber = await generateNextCreaGlassOrderNumber();
+        setOrderNumber(nextNumber);
+      } finally {
+        setLoadingOrderNumber(false);
+      }
+    } else {
+      setIsAutoOrderNumber(false);
+      if (!isEditing) {
+        setOrderNumber('');
+      }
+    }
+  }, [isEditing, generateNextCreaGlassOrderNumber]);
+
   useEffect(() => {
     loadGlassItems();
+    loadClients();
     if (productionId) {
       loadProduction();
     }
   }, [productionId]);
+
+  const loadClients = async () => {
+    try {
+      const allClients = await repos.clientsRepo.getAllClients();
+      setClients(allClients);
+    } catch (error) {
+      console.error('Error loading clients:', error);
+    }
+  };
 
   const loadProduction = async () => {
     if (!productionId) return;
@@ -88,8 +201,12 @@ export default function ProductionCreateScreen() {
       const productionData = await repos.productionRepo.getProductionById(productionId);
       if (productionData) {
         setOrderNumber(productionData.orderNumber);
+        setClientId(productionData.clientId);
         setClientName(productionData.clientName);
         setOrderType(productionData.orderType);
+        const loadedCompany = productionData.company || '3S';
+        setCompany(loadedCompany);
+        setIsAutoOrderNumber(loadedCompany === 'Crea Glass');
         setDueDate(productionData.dueDate);
         setAttachments(productionData.attachments);
         if (productionData.items.length > 0) {
@@ -105,7 +222,7 @@ export default function ProductionCreateScreen() {
         }
       } else {
         Alert.alert(t('common.error'), 'Production order not found', [
-          { text: t('common.confirm'), onPress: () => router.back() },
+          { text: t('common.confirm'), onPress: () => safeBack(router) },
         ]);
       }
     } catch (error) {
@@ -131,13 +248,18 @@ export default function ProductionCreateScreen() {
 
   const glassTypeOptions: DropdownOption[] = [
     { label: t('common.select'), value: '' },
+    { label: t('production.glassTypes.client_service'), value: 'client_service' },
+    { label: t('production.glassTypes.polish_only'), value: 'polish_only' },
+    { label: t('production.glassTypes.cutting_only'), value: 'cutting_only' },
     { label: t('production.glassTypes.tempered'), value: 'tempered' },
     { label: t('production.glassTypes.strengthened'), value: 'strengthened' },
+    { label: t('production.glassTypes.schmelzglas_only'), value: 'schmelzglas_only' },
     { label: t('production.glassTypes.textured'), value: 'textured' },
+    { label: t('production.glassTypes.schmelzglas_tvg'), value: 'schmelzglas_tvg' },
+    { label: t('production.glassTypes.float_esg'), value: 'float_esg' },
+    { label: t('production.glassTypes.float_tvg'), value: 'float_tvg' },
     { label: t('production.glassTypes.laminated'), value: 'laminated' },
-    { label: t('production.glassTypes.sandblasted'), value: 'sandblasted' },
-    { label: t('production.glassTypes.cuted'), value: 'cuted' },
-    { label: t('production.glassTypes.insulated'), value: 'insulated' },
+    { label: t('production.glassTypes.lavabo'), value: 'lavabo' },
   ];
 
   const structureTypeOptions: DropdownOption[] = [
@@ -157,13 +279,41 @@ export default function ProductionCreateScreen() {
     { label: t('production.paintTypes.check_project'), value: 'check_project' },
   ];
 
+  const companyOptions: DropdownOption[] = [
+    { label: '3S', value: '3S' },
+    { label: 'Crea Glass', value: 'Crea Glass' },
+  ];
+
   const handleUpdateItem = (field: keyof ProductionItemForm, value: string) => {
     setProductionItem({ ...productionItem, [field]: value });
   };
 
   const handleTakePhoto = async () => {
-    if (attachments.length >= MAX_ATTACHMENTS) {
-      Alert.alert(t('common.error'), t('production.maxAttachments'));
+    const isQuickCameraFlow = isEditing && quickAttachmentAction === 'camera' && !!productionId;
+    let baseAttachments = attachments;
+
+    if (isQuickCameraFlow) {
+      try {
+        const latestProduction = await repos.productionRepo.getProductionById(productionId);
+        if (!latestProduction) {
+          Alert.alert(t('common.error'), t('production.updateStatusError') || 'Order not found');
+          safeBack(router);
+          return;
+        }
+        baseAttachments = latestProduction.attachments || [];
+      } catch (loadError) {
+        console.error('Error loading latest attachments for quick camera flow:', loadError);
+        Alert.alert(t('common.error'), t('production.addAttachmentError'));
+        safeBack(router);
+        return;
+      }
+    }
+
+    if (getMediaAttachments(baseAttachments).length >= MAX_PRODUCTION_MEDIA_ATTACHMENTS) {
+      Alert.alert(t('common.error'), t('production.maxMediaAttachments'));
+      if (isQuickCameraFlow) {
+        safeBack(router);
+      }
       return;
     }
     try {
@@ -190,8 +340,33 @@ export default function ProductionCreateScreen() {
         filename,
         mimeType,
         storagePath: asset.uri,
+        webFile: (asset as any).file,
         createdAt: new Date().toISOString(),
       };
+      const nextAttachments = [...baseAttachments, newAttachment];
+
+      if (isQuickCameraFlow) {
+        try {
+          setIsCreating(true);
+          await repos.productionRepo.updateProduction(
+            productionId,
+            { attachments: nextAttachments },
+            user?.id
+          );
+          if (Platform.OS === 'web') {
+            window.alert(t('common.success') || 'Saved');
+          } else {
+            Alert.alert(t('common.success'), t('production.orderUpdated') || 'Order updated');
+          }
+          safeBack(router);
+          return;
+        } catch (saveError) {
+          console.error('Error saving quick camera attachment:', saveError);
+          Alert.alert(t('common.error'), t('production.addAttachmentError'));
+        } finally {
+          setIsCreating(false);
+        }
+      }
 
       setAttachments([...attachments, newAttachment]);
     } catch (error) {
@@ -201,8 +376,8 @@ export default function ProductionCreateScreen() {
   };
 
   const handleChooseFromLibrary = async () => {
-    if (attachments.length >= MAX_ATTACHMENTS) {
-      Alert.alert(t('common.error'), t('production.maxAttachments'));
+    if (!canAddMedia) {
+      Alert.alert(t('common.error'), t('production.maxMediaAttachments'));
       return;
     }
 
@@ -230,6 +405,7 @@ export default function ProductionCreateScreen() {
         filename,
         mimeType,
         storagePath: asset.uri,
+        webFile: (asset as any).file,
         createdAt: new Date().toISOString(),
       };
 
@@ -241,8 +417,8 @@ export default function ProductionCreateScreen() {
   };
 
   const handleChooseDocument = async () => {
-    if (attachments.length >= MAX_ATTACHMENTS) {
-      Alert.alert(t('common.error'), t('production.maxAttachments'));
+    if (!canAddMedia) {
+      Alert.alert(t('common.error'), t('production.maxMediaAttachments'));
       return;
     }
 
@@ -254,6 +430,10 @@ export default function ProductionCreateScreen() {
           'image/jpeg',
           'image/png',
           'image/webp',
+          'video/mp4',
+          'video/quicktime',
+          'video/x-msvideo',
+          'video/webm',
         ],
         copyToCacheDirectory: true,
         multiple: false,
@@ -267,15 +447,15 @@ export default function ProductionCreateScreen() {
       const fileMimeType = file.mimeType || 'application/octet-stream';
       const fileExtension = file.name?.split('.').pop()?.toLowerCase() || '';
       
-      // Verificar extensão e MIME type
       const isImage = ['jpg', 'jpeg', 'png', 'webp'].includes(fileExtension) || 
                       fileMimeType.startsWith('image/');
       const isPDF = fileExtension === 'pdf' || fileMimeType === 'application/pdf';
+      const isVideo = fileExtension === 'mp4' || fileExtension === 'mov' || fileExtension === 'avi' || fileExtension === 'webm' || fileMimeType.startsWith('video/');
       
-      if (!isImage && !isPDF) {
+      if (!isImage && !isPDF && !isVideo) {
         Alert.alert(
           t('common.error'), 
-          t('documents.allowedTypes') || 'Apenas imagens (JPG, PNG, WEBP) e PDF são permitidos'
+          t('documents.allowedTypes') || 'Apenas imagens (JPG, PNG, WEBP), PDF e vídeos são permitidos'
         );
         return;
       }
@@ -285,6 +465,7 @@ export default function ProductionCreateScreen() {
         filename: file.name,
         mimeType: fileMimeType,
         storagePath: file.uri,
+        webFile: (file as any).file,
         createdAt: new Date().toISOString(),
       };
 
@@ -299,29 +480,168 @@ export default function ProductionCreateScreen() {
     setAttachments(attachments.filter((att) => att.id !== id));
   };
 
+  const handleChooseDxf = async () => {
+    const slotsLeft = MAX_PRODUCTION_DXF_ATTACHMENTS - dxfAttachmentsList.length;
+    if (slotsLeft <= 0) {
+      Alert.alert(t('common.error'), t('production.maxDxfAttachments'));
+      return;
+    }
+
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/dxf', 'application/x-dxf', 'image/vnd.dxf'],
+        copyToCacheDirectory: true,
+        multiple: true,
+      });
+
+      if (result.canceled || !result.assets?.length) return;
+
+      const picked: PendingDxfFile[] = [];
+      for (const asset of result.assets) {
+        const name = asset.name || 'arquivo.dxf';
+        if (!isDxfFile(name, asset.mimeType)) continue;
+        picked.push({
+          id: `dxf-pending-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          name,
+          size: asset.size ?? 0,
+          uri: asset.uri,
+          mimeType: asset.mimeType || 'application/dxf',
+          webFile: (asset as { file?: File }).file,
+        });
+      }
+
+      if (picked.length === 0) {
+        Alert.alert(t('common.error'), t('production.dxfInvalidFile'));
+        return;
+      }
+
+      const limited = picked.slice(0, slotsLeft);
+      if (picked.length > slotsLeft) {
+        Alert.alert(t('common.error'), t('production.dxfSlotsLimited', { count: String(slotsLeft) }));
+      }
+
+      setPendingDxfFiles(limited);
+      setDxfFileStatus({});
+      setDxfModalVisible(true);
+    } catch (error) {
+      console.error('Error picking DXF files:', error);
+      Alert.alert(t('common.error'), t('production.addAttachmentError'));
+    }
+  };
+
+  const handleConfirmDxfUpload = async () => {
+    if (pendingDxfFiles.length === 0 || dxfUploading) return;
+
+    setDxfUploading(true);
+    let nextAttachments = [...attachments];
+    let successCount = 0;
+    let failedCount = 0;
+
+    for (const file of pendingDxfFiles) {
+      if (getDxfAttachments(nextAttachments).length >= MAX_PRODUCTION_DXF_ATTACHMENTS) break;
+
+      setDxfFileStatus((prev) => ({ ...prev, [file.id]: 'uploading' }));
+
+      try {
+        if (!isDxfFile(file.name, file.mimeType)) {
+          throw new Error('invalid dxf');
+        }
+
+        const newAttachment: ProductionAttachment = {
+          id: `attach-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          filename: file.name,
+          originalName: file.name,
+          mimeType: file.mimeType,
+          storagePath: file.uri,
+          webFile: file.webFile,
+          createdAt: new Date().toISOString(),
+        };
+
+        nextAttachments = [...nextAttachments, newAttachment];
+        setDxfFileStatus((prev) => ({ ...prev, [file.id]: 'success' }));
+        successCount += 1;
+      } catch (error) {
+        console.error('Error adding DXF attachment:', file.name, error);
+        setDxfFileStatus((prev) => ({ ...prev, [file.id]: 'error' }));
+        failedCount += 1;
+      }
+    }
+
+    setAttachments(nextAttachments);
+    setDxfUploading(false);
+
+    if (successCount > 0 || failedCount > 0) {
+      Alert.alert(
+        successCount > 0 ? t('common.success') : t('common.error'),
+        t('production.dxfUploadSummary', {
+          success: String(successCount),
+          failed: String(failedCount),
+        })
+      );
+    }
+
+    setDxfModalVisible(false);
+    setPendingDxfFiles([]);
+    setDxfFileStatus({});
+  };
+
+  const handleCloseDxfModal = () => {
+    if (dxfUploading) return;
+    setDxfModalVisible(false);
+    setPendingDxfFiles([]);
+    setDxfFileStatus({});
+  };
+
+  useEffect(() => {
+    if (!isEditing || quickActionHandled) return;
+    if (quickAttachmentAction !== 'camera') return;
+    if (isLoading) return;
+    setQuickActionHandled(true);
+    handleTakePhoto();
+  }, [isEditing, quickAttachmentAction, isLoading, quickActionHandled]);
+
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === 'web') {
+      window.alert(message);
+    } else {
+      Alert.alert(title, message);
+    }
+  };
+
   const validateForm = (): boolean => {
-    if (!orderNumber.trim()) {
-      Alert.alert(t('common.error'), t('production.fillRequiredFields'));
+    if (!company || (company !== '3S' && company !== 'Crea Glass')) {
+      showAlert(t('common.error'), 'Selecione a Company (3S ou Crea Glass).');
       return false;
     }
 
-    if (!clientName.trim()) {
-      Alert.alert(t('common.error'), t('production.fillRequiredFields'));
+    // Order number: required for 3S (manual), auto-generated for Crea Glass
+    if (company === '3S' && !orderNumber.trim()) {
+      showAlert(t('common.error'), t('production.fillRequiredFields'));
+      return false;
+    }
+
+    if (company === 'Crea Glass' && !orderNumber.trim()) {
+      showAlert(t('common.error'), 'Erro ao gerar número do pedido. Tente novamente.');
+      return false;
+    }
+
+    if (!clientId && !isEditing) {
+      showAlert(t('common.error'), t('production.fillRequiredFields'));
       return false;
     }
 
     if (!orderType.trim()) {
-      Alert.alert(t('common.error'), t('production.fillRequiredFields'));
+      showAlert(t('common.error'), t('production.fillRequiredFields'));
       return false;
     }
 
     if (!dueDate.trim()) {
-      Alert.alert(t('common.error'), t('production.fillRequiredFields'));
+      showAlert(t('common.error'), t('production.fillRequiredFields'));
       return false;
     }
 
     if (!productionItem.glassId || !productionItem.glassType || !productionItem.quantity.trim() || !productionItem.areaM2.trim()) {
-      Alert.alert(t('common.error'), t('production.fillRequiredFields'));
+      showAlert(t('common.error'), t('production.fillRequiredFields'));
       return false;
     }
 
@@ -349,21 +669,30 @@ export default function ProductionCreateScreen() {
         // Update existing production
         await repos.productionRepo.updateProduction(productionId, {
           orderNumber: orderNumber.trim(),
+          clientId,
           clientName: clientName.trim(),
           orderType: orderType.trim(),
+          company,
           dueDate,
           items: [item],
           attachments,
         });
-        Alert.alert(t('common.success'), 'Order updated successfully', [
-          { text: t('common.confirm'), onPress: () => router.back() },
-        ]);
+        if (Platform.OS === 'web') {
+          window.alert('Order updated successfully');
+          safeBack(router);
+        } else {
+          Alert.alert(t('common.success'), 'Order updated successfully', [
+            { text: t('common.confirm'), onPress: () => safeBack(router) },
+          ]);
+        }
       } else {
         // Create new production
         const newProduction: Omit<Production, 'id' | 'createdAt'> = {
           orderNumber: orderNumber.trim(),
+          clientId,
           clientName: clientName.trim(),
           orderType: orderType.trim(),
+          company,
           dueDate,
           status: 'not_authorized',
           items: [item],
@@ -372,13 +701,18 @@ export default function ProductionCreateScreen() {
         };
 
         await repos.productionRepo.createProduction(newProduction);
-        Alert.alert(t('common.success'), t('production.orderCreated'), [
-          { text: t('common.confirm'), onPress: () => router.back() },
-        ]);
+        if (Platform.OS === 'web') {
+          window.alert(t('production.orderCreated') || 'Production order created');
+          safeBack(router);
+        } else {
+          Alert.alert(t('common.success'), t('production.orderCreated'), [
+            { text: t('common.confirm'), onPress: () => safeBack(router) },
+          ]);
+        }
       }
     } catch (error) {
       console.error(`Error ${isEditing ? 'updating' : 'creating'} production order:`, error);
-      Alert.alert(t('common.error'), isEditing ? 'Failed to update order' : t('production.createOrderError'));
+      showAlert(t('common.error'), isEditing ? 'Failed to update order' : t('production.createOrderError'));
     } finally {
       setIsCreating(false);
     }
@@ -394,6 +728,41 @@ export default function ProductionCreateScreen() {
       ]
     : [{ label: t('common.select'), value: '' }];
 
+  const lowStockGlassIds = useMemo(
+    () =>
+      new Set(
+        glassItems
+          .filter((item) => item.lowStockThreshold > 0 && item.stock <= item.lowStockThreshold)
+          .map((item) => item.id)
+      ),
+    [glassItems]
+  );
+
+  const selectedGlassItem = useMemo(
+    () => glassItems.find((item) => item.id === productionItem.glassId) || null,
+    [glassItems, productionItem.glassId]
+  );
+
+  const isSelectedGlassLowStock = !!selectedGlassItem && selectedGlassItem.lowStockThreshold > 0 && selectedGlassItem.stock <= selectedGlassItem.lowStockThreshold;
+
+  const handleSelectGlass = useCallback(
+    (glassId: string) => {
+      handleUpdateItem('glassId', glassId);
+      const selected = glassItems.find((item) => item.id === glassId);
+      if (selected && selected.lowStockThreshold > 0 && selected.stock <= selected.lowStockThreshold) {
+        showAlert(
+          t('inventory.lowStock'),
+          t('production.lowStockSelectedWarning', {
+            itemName: selected.name,
+            stock: selected.stock,
+            threshold: selected.lowStockThreshold,
+          })
+        );
+      }
+    },
+    [glassItems, t]
+  );
+
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
@@ -403,7 +772,7 @@ export default function ProductionCreateScreen() {
       <View style={[styles.header, { paddingTop: insets.top + theme.spacing.md, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
         <TouchableOpacity
           style={[styles.backButton, { backgroundColor: colors.backgroundSecondary }]}
-          onPress={() => router.back()}
+          onPress={goBack}
           activeOpacity={0.7}
         >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -423,12 +792,55 @@ export default function ProductionCreateScreen() {
           }
         ]}
       >
-        <Input
-          label="Client Name"
-          value={clientName}
-          onChangeText={setClientName}
+        {/* 1. Client & Company */}
+        <ClientAutocomplete
+          label="Cliente *"
+          clients={clients}
+          selectedClientId={clientId}
           placeholder={t('production.clientNamePlaceholder')}
+          onSelectClient={(client) => {
+            setClientId(client.id);
+            setClientName(client.name);
+          }}
+          onManageClientsPress={() => router.push('/clients')}
         />
+
+        <Dropdown
+          label="Company *"
+          value={company}
+          options={companyOptions}
+          onSelect={handleCompanyChange}
+        />
+
+        {/* 2. Order Number (manual for 3S, auto for Crea Glass) */}
+        {isAutoOrderNumber ? (
+          <View style={styles.autoOrderRow}>
+            <View style={styles.autoOrderField}>
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                {t('production.orderNumber')}
+              </Text>
+              <View style={[styles.autoOrderValueBox, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+                {loadingOrderNumber ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Text style={[styles.autoOrderValue, { color: colors.text }]}>
+                    {orderNumber || '—'}
+                  </Text>
+                )}
+                <View style={[styles.autoOrderBadge, { backgroundColor: colors.primary + '20' }]}>
+                  <Text style={[styles.autoOrderBadgeText, { color: colors.primary }]}>Auto</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        ) : (
+          <Input
+            label={t('production.orderNumber')}
+            value={orderNumber}
+            onChangeText={setOrderNumber}
+            placeholder={t('production.orderNumberPlaceholder')}
+          />
+        )}
 
         <Input
           label="Order Type"
@@ -437,13 +849,7 @@ export default function ProductionCreateScreen() {
           placeholder={t('production.orderTypePlaceholder')}
         />
 
-        <Input
-          label={t('production.orderNumber')}
-          value={orderNumber}
-          onChangeText={setOrderNumber}
-          placeholder={t('production.orderNumberPlaceholder')}
-        />
-
+        {/* 3. Schedule */}
         <DatePicker
           label={t('production.dueDate')}
           value={dueDate}
@@ -461,8 +867,21 @@ export default function ProductionCreateScreen() {
               label={t('production.glass')}
               value={productionItem.glassId}
               options={glassOptions}
-              onSelect={(value) => handleUpdateItem('glassId', value)}
+              onSelect={handleSelectGlass}
+              getOptionTextColor={(option) => (lowStockGlassIds.has(option.value) ? colors.error : undefined)}
             />
+            {isSelectedGlassLowStock && selectedGlassItem && (
+              <View style={[styles.lowStockAlert, { backgroundColor: colors.error + '12', borderColor: colors.error + '55' }]}>
+                <Ionicons name="warning-outline" size={16} color={colors.error} />
+                <Text style={[styles.lowStockAlertText, { color: colors.error }]}>
+                  {t('production.lowStockSelectedWarning', {
+                    itemName: selectedGlassItem.name,
+                    stock: selectedGlassItem.stock,
+                    threshold: selectedGlassItem.lowStockThreshold,
+                  })}
+                </Text>
+              </View>
+            )}
 
             <Dropdown
               label={t('production.glassType')}
@@ -505,63 +924,156 @@ export default function ProductionCreateScreen() {
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            {t('production.attachments')} ({attachments.length}/{MAX_ATTACHMENTS})
+            {t('production.attachments')}
           </Text>
-          {attachments.length < MAX_ATTACHMENTS && (
+          <Text style={[styles.attachmentLimitsHint, { color: colors.textSecondary }]}>
+            {t('production.attachmentsLimitsSummary', {
+              mediaCount: String(mediaAttachments.length),
+              mediaMax: String(MAX_PRODUCTION_MEDIA_ATTACHMENTS),
+              dxfCount: String(dxfAttachmentsList.length),
+              dxfMax: String(MAX_PRODUCTION_DXF_ATTACHMENTS),
+            })}
+          </Text>
+
+          {(canAddMedia || canAddDxf) && (
             <View style={styles.attachmentOptions}>
-              <TouchableOpacity
-                style={[styles.attachmentOption, { backgroundColor: colors.backgroundSecondary }]}
-                onPress={handleTakePhoto}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="camera" size={28} color={colors.primary} />
-                <Text style={[styles.attachmentOptionLabel, { color: colors.text }]}>
-                  {t('production.takePhoto') || 'Tirar Foto'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.attachmentOption, { backgroundColor: colors.backgroundSecondary }]}
-                onPress={handleChooseFromLibrary}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="image" size={28} color={colors.primary} />
-                <Text style={[styles.attachmentOptionLabel, { color: colors.text }]}>
-                  {t('production.chooseFromLibrary') || 'Galeria'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.attachmentOption, { backgroundColor: colors.backgroundSecondary }]}
-                onPress={handleChooseDocument}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="document-text" size={28} color={colors.primary} />
-                <Text style={[styles.attachmentOptionLabel, { color: colors.text }]}>
-                  {t('production.chooseDocument') || 'PDF'}
-                </Text>
-              </TouchableOpacity>
+              {canAddMedia && (
+                <>
+                  <TouchableOpacity
+                    style={[styles.attachmentOption, { backgroundColor: colors.backgroundSecondary }]}
+                    onPress={handleTakePhoto}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="camera" size={28} color={colors.primary} />
+                    <Text style={[styles.attachmentOptionLabel, { color: colors.text }]}>
+                      {t('production.takePhoto') || 'Tirar Foto'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.attachmentOption, { backgroundColor: colors.backgroundSecondary }]}
+                    onPress={handleChooseFromLibrary}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="image" size={28} color={colors.primary} />
+                    <Text style={[styles.attachmentOptionLabel, { color: colors.text }]}>
+                      {t('production.chooseFromLibrary') || 'Galeria'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.attachmentOption, { backgroundColor: colors.backgroundSecondary }]}
+                    onPress={handleChooseDocument}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="document-text" size={28} color={colors.primary} />
+                    <Text style={[styles.attachmentOptionLabel, { color: colors.text }]}>
+                      {t('production.chooseDocument') || 'PDF'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+              {canAddDxf && (
+                <TouchableOpacity
+                  style={[styles.attachmentOption, { backgroundColor: colors.backgroundSecondary }]}
+                  onPress={handleChooseDxf}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="layers-outline" size={28} color={colors.primary} />
+                  <Text style={[styles.attachmentOptionLabel, { color: colors.text }]}>
+                    {t('production.chooseDxf')}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
-          {attachments.map((attachment) => (
-            <View
-              key={attachment.id}
-              style={[styles.attachmentCard, { backgroundColor: colors.cardBackground }]}
-            >
-              <Text style={[styles.attachmentName, { color: colors.text }]}>{attachment.filename}</Text>
-              <TouchableOpacity
-                onPress={() => handleRemoveAttachment(attachment.id)}
-                style={[styles.removeButton, { backgroundColor: colors.error + '20' }]}
-              >
-                <Ionicons name="close" size={20} color={colors.error} />
-              </TouchableOpacity>
+          {partitionedAttachments.images.length > 0 && (
+            <View style={styles.attachmentFolder}>
+              <Text style={[styles.attachmentFolderTitle, { color: colors.text }]}>
+                {t('production.attachmentsImages')} ({partitionedAttachments.images.length})
+              </Text>
+              <View style={styles.attachmentGrid}>
+                {partitionedAttachments.images.map((attachment) => (
+                  <View
+                    key={attachment.id}
+                    style={[styles.attachmentThumbCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+                  >
+                    <Image
+                      source={{ uri: attachment.storagePath }}
+                      style={styles.attachmentThumbImage}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                    />
+                    <TouchableOpacity
+                      onPress={() => handleRemoveAttachment(attachment.id)}
+                      style={[styles.removeFloatingButton, { backgroundColor: colors.error }]}
+                    >
+                      <Ionicons name="close" size={16} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
             </View>
-          ))}
+          )}
+
+          {partitionedAttachments.documents.length > 0 && (
+            <View style={styles.attachmentFolder}>
+              <Text style={[styles.attachmentFolderTitle, { color: colors.text }]}>
+                {t('production.attachmentsPdf')} ({partitionedAttachments.documents.length})
+              </Text>
+              {partitionedAttachments.documents.map((attachment) => {
+                const isPdf = attachment.mimeType === 'application/pdf';
+                const displayName = attachment.originalName || attachment.filename;
+                return (
+                  <View
+                    key={attachment.id}
+                    style={[styles.attachmentListRow, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+                  >
+                    <Ionicons
+                      name={isPdf ? 'document-text-outline' : 'videocam-outline'}
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                    <Text style={[styles.attachmentListName, { color: colors.text }]} numberOfLines={2}>
+                      {displayName}
+                    </Text>
+                    <TouchableOpacity onPress={() => handleRemoveAttachment(attachment.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="close-circle" size={22} color={colors.error} />
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {partitionedAttachments.dxf.length > 0 && (
+            <View style={styles.attachmentFolder}>
+              <Text style={[styles.attachmentFolderTitle, { color: colors.text }]}>
+                {t('production.attachmentsDxf')} ({partitionedAttachments.dxf.length}/{MAX_PRODUCTION_DXF_ATTACHMENTS})
+              </Text>
+              <ScrollView style={styles.dxfListScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                {partitionedAttachments.dxf.map((attachment) => (
+                  <View
+                    key={attachment.id}
+                    style={[styles.attachmentListRow, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+                  >
+                    <Ionicons name="layers-outline" size={20} color={colors.primary} />
+                    <Text style={[styles.attachmentListName, { color: colors.text }]} numberOfLines={2}>
+                      {attachment.originalName || attachment.filename}
+                    </Text>
+                    <TouchableOpacity onPress={() => handleRemoveAttachment(attachment.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="close-circle" size={22} color={colors.error} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
 
         <View style={styles.buttonContainer}>
           <Button
             title={t('common.cancel')}
-            onPress={() => router.back()}
+            onPress={goBack}
             variant="outline"
             style={styles.button}
           />
@@ -573,6 +1085,73 @@ export default function ProductionCreateScreen() {
           />
         </View>
       </ScrollView>
+
+      <Modal
+        visible={dxfModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={handleCloseDxfModal}
+      >
+        <View style={styles.dxfModalOverlay}>
+          <View style={[styles.dxfModalContent, { backgroundColor: colors.cardBackground }]}>
+            <Text style={[styles.dxfModalTitle, { color: colors.text }]}>
+              {t('production.dxfPreviewTitle')}
+            </Text>
+            <ScrollView style={styles.dxfModalList} keyboardShouldPersistTaps="handled">
+              {pendingDxfFiles.map((file) => {
+                const status = dxfFileStatus[file.id] || 'idle';
+                return (
+                  <View
+                    key={file.id}
+                    style={[styles.dxfPreviewRow, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary }]}
+                  >
+                    <Ionicons name="layers-outline" size={22} color={colors.primary} />
+                    <View style={styles.dxfPreviewInfo}>
+                      <Text numberOfLines={2} style={[styles.dxfPreviewName, { color: colors.text }]}>
+                        {file.name}
+                      </Text>
+                      <Text style={[styles.dxfPreviewSize, { color: colors.textSecondary }]}>
+                        {formatFileSize(file.size)}
+                      </Text>
+                    </View>
+                    {status === 'uploading' && <ActivityIndicator size="small" color={colors.primary} />}
+                    {status === 'success' && (
+                      <Ionicons name="checkmark-circle" size={22} color="#22c55e" />
+                    )}
+                    {status === 'error' && (
+                      <Ionicons name="close-circle" size={22} color={colors.error} />
+                    )}
+                    {status === 'idle' && !dxfUploading && (
+                      <TouchableOpacity
+                        onPress={() => setPendingDxfFiles((prev) => prev.filter((f) => f.id !== file.id))}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name="trash-outline" size={20} color={colors.textSecondary} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })}
+            </ScrollView>
+            <View style={styles.dxfModalActions}>
+              <Button
+                title={t('common.cancel')}
+                onPress={handleCloseDxfModal}
+                variant="outline"
+                style={styles.dxfModalButton}
+                disabled={dxfUploading}
+              />
+              <Button
+                title={dxfUploading ? t('production.dxfUploading') : t('production.dxfConfirmUpload')}
+                onPress={handleConfirmDxfUpload}
+                loading={dxfUploading}
+                style={styles.dxfModalButton}
+                disabled={pendingDxfFiles.length === 0 || dxfUploading}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -629,11 +1208,13 @@ const styles = StyleSheet.create({
   },
   attachmentOptions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: theme.spacing.md,
     marginBottom: theme.spacing.md,
   },
   attachmentOption: {
-    flex: 1,
+    width: '47%',
+    flexGrow: 0,
     alignItems: 'center',
     justifyContent: 'center',
     padding: theme.spacing.md,
@@ -652,6 +1233,22 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.md,
     marginBottom: theme.spacing.md,
     ...theme.shadows.sm,
+  },
+  lowStockAlert: {
+    marginTop: -theme.spacing.md,
+    marginBottom: theme.spacing.md,
+    borderRadius: theme.borderRadius.sm,
+    borderWidth: 1,
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  lowStockAlertText: {
+    flex: 1,
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
   removeButton: {
     width: 32,
@@ -673,6 +1270,156 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: theme.typography.fontSize.md,
     marginRight: theme.spacing.sm,
+  },
+  attachmentLimitsHint: {
+    fontSize: theme.typography.fontSize.sm,
+    marginBottom: theme.spacing.md,
+  },
+  attachmentFolder: {
+    marginTop: theme.spacing.lg,
+  },
+  attachmentFolderTitle: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.semibold,
+    marginBottom: theme.spacing.sm,
+  },
+  attachmentListRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    marginBottom: theme.spacing.sm,
+  },
+  attachmentListName: {
+    flex: 1,
+    fontSize: theme.typography.fontSize.md,
+  },
+  dxfListScroll: {
+    maxHeight: 280,
+  },
+  attachmentGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+  },
+  attachmentThumbCard: {
+    width: 110,
+    height: 110,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    overflow: 'hidden',
+    position: 'relative',
+    ...theme.shadows.sm,
+  },
+  attachmentThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  attachmentThumbFallback: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.xs,
+    gap: theme.spacing.xs,
+  },
+  attachmentThumbName: {
+    fontSize: theme.typography.fontSize.xs,
+    textAlign: 'center',
+  },
+  dxfModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  dxfModalContent: {
+    borderTopLeftRadius: theme.borderRadius.lg,
+    borderTopRightRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    maxHeight: '70%',
+  },
+  dxfModalTitle: {
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.bold,
+    marginBottom: theme.spacing.md,
+  },
+  dxfModalList: {
+    maxHeight: 280,
+    marginBottom: theme.spacing.md,
+  },
+  dxfPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    marginBottom: theme.spacing.sm,
+  },
+  dxfPreviewInfo: {
+    flex: 1,
+  },
+  dxfPreviewName: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  dxfPreviewSize: {
+    fontSize: theme.typography.fontSize.sm,
+    marginTop: 2,
+  },
+  dxfModalActions: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+  },
+  dxfModalButton: {
+    flex: 1,
+  },
+  removeFloatingButton: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  autoOrderRow: {
+    marginBottom: theme.spacing.md,
+  },
+  autoOrderField: {
+    gap: theme.spacing.xs,
+  },
+  fieldLabel: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+    marginBottom: 4,
+  },
+  autoOrderValueBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm + 2,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    minHeight: 48,
+  },
+  autoOrderValue: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.semibold,
+    letterSpacing: 1,
+  },
+  autoOrderBadge: {
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 2,
+    borderRadius: theme.borderRadius.sm,
+  },
+  autoOrderBadgeText: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.bold,
   },
   buttonContainer: {
     flexDirection: 'row',
