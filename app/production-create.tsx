@@ -41,13 +41,20 @@ import {
     ProductionItem,
     StructureType,
 } from '../src/types';
-import { formatFileSize, isDxfFile } from '../src/utils/production-attachment-storage';
+import {
+  formatFileSize,
+  getDxfAttachments,
+  getMediaAttachments,
+  isDxfFile,
+  MAX_PRODUCTION_DXF_ATTACHMENTS,
+  MAX_PRODUCTION_MEDIA_ATTACHMENTS,
+  partitionProductionAttachments,
+} from '../src/utils/production-attachment-storage';
 
 const CREA_GLASS_START_SEQ = 20; // Sequence starts at 0020
 
 const GLASS_GROUP_ID = 'group-glass';
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
-const MAX_ATTACHMENTS = 10;
 
 interface ProductionItemForm {
   glassId: string;
@@ -107,6 +114,16 @@ export default function ProductionCreateScreen() {
   const [dxfFileStatus, setDxfFileStatus] = useState<Record<string, DxfUploadStatus>>({});
 
   const isEditing = !!productionId;
+
+  const mediaAttachments = useMemo(() => getMediaAttachments(attachments), [attachments]);
+  const dxfAttachmentsList = useMemo(() => getDxfAttachments(attachments), [attachments]);
+  const partitionedAttachments = useMemo(
+    () => partitionProductionAttachments(attachments),
+    [attachments]
+  );
+
+  const canAddMedia = mediaAttachments.length < MAX_PRODUCTION_MEDIA_ATTACHMENTS;
+  const canAddDxf = dxfAttachmentsList.length < MAX_PRODUCTION_DXF_ATTACHMENTS;
 
   /** Fetch the next available order number for Crea Glass (sequence starting at 0020) */
   const generateNextCreaGlassOrderNumber = useCallback(async (): Promise<string> => {
@@ -292,8 +309,8 @@ export default function ProductionCreateScreen() {
       }
     }
 
-    if (baseAttachments.length >= MAX_ATTACHMENTS) {
-      Alert.alert(t('common.error'), t('production.maxAttachments'));
+    if (getMediaAttachments(baseAttachments).length >= MAX_PRODUCTION_MEDIA_ATTACHMENTS) {
+      Alert.alert(t('common.error'), t('production.maxMediaAttachments'));
       if (isQuickCameraFlow) {
         safeBack(router);
       }
@@ -359,8 +376,8 @@ export default function ProductionCreateScreen() {
   };
 
   const handleChooseFromLibrary = async () => {
-    if (attachments.length >= MAX_ATTACHMENTS) {
-      Alert.alert(t('common.error'), t('production.maxAttachments'));
+    if (!canAddMedia) {
+      Alert.alert(t('common.error'), t('production.maxMediaAttachments'));
       return;
     }
 
@@ -400,8 +417,8 @@ export default function ProductionCreateScreen() {
   };
 
   const handleChooseDocument = async () => {
-    if (attachments.length >= MAX_ATTACHMENTS) {
-      Alert.alert(t('common.error'), t('production.maxAttachments'));
+    if (!canAddMedia) {
+      Alert.alert(t('common.error'), t('production.maxMediaAttachments'));
       return;
     }
 
@@ -464,9 +481,9 @@ export default function ProductionCreateScreen() {
   };
 
   const handleChooseDxf = async () => {
-    const slotsLeft = MAX_ATTACHMENTS - attachments.length;
+    const slotsLeft = MAX_PRODUCTION_DXF_ATTACHMENTS - dxfAttachmentsList.length;
     if (slotsLeft <= 0) {
-      Alert.alert(t('common.error'), t('production.maxAttachments'));
+      Alert.alert(t('common.error'), t('production.maxDxfAttachments'));
       return;
     }
 
@@ -521,7 +538,7 @@ export default function ProductionCreateScreen() {
     let failedCount = 0;
 
     for (const file of pendingDxfFiles) {
-      if (nextAttachments.length >= MAX_ATTACHMENTS) break;
+      if (getDxfAttachments(nextAttachments).length >= MAX_PRODUCTION_DXF_ATTACHMENTS) break;
 
       setDxfFileStatus((prev) => ({ ...prev, [file.id]: 'uploading' }));
 
@@ -907,93 +924,85 @@ export default function ProductionCreateScreen() {
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            {t('production.attachments')} ({attachments.length}/{MAX_ATTACHMENTS})
+            {t('production.attachments')}
           </Text>
-          {attachments.length < MAX_ATTACHMENTS && (
+          <Text style={[styles.attachmentLimitsHint, { color: colors.textSecondary }]}>
+            {t('production.attachmentsLimitsSummary', {
+              mediaCount: String(mediaAttachments.length),
+              mediaMax: String(MAX_PRODUCTION_MEDIA_ATTACHMENTS),
+              dxfCount: String(dxfAttachmentsList.length),
+              dxfMax: String(MAX_PRODUCTION_DXF_ATTACHMENTS),
+            })}
+          </Text>
+
+          {(canAddMedia || canAddDxf) && (
             <View style={styles.attachmentOptions}>
-              <TouchableOpacity
-                style={[styles.attachmentOption, { backgroundColor: colors.backgroundSecondary }]}
-                onPress={handleTakePhoto}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="camera" size={28} color={colors.primary} />
-                <Text style={[styles.attachmentOptionLabel, { color: colors.text }]}>
-                  {t('production.takePhoto') || 'Tirar Foto'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.attachmentOption, { backgroundColor: colors.backgroundSecondary }]}
-                onPress={handleChooseFromLibrary}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="image" size={28} color={colors.primary} />
-                <Text style={[styles.attachmentOptionLabel, { color: colors.text }]}>
-                  {t('production.chooseFromLibrary') || 'Galeria'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.attachmentOption, { backgroundColor: colors.backgroundSecondary }]}
-                onPress={handleChooseDocument}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="document-text" size={28} color={colors.primary} />
-                <Text style={[styles.attachmentOptionLabel, { color: colors.text }]}>
-                  {t('production.chooseDocument') || 'PDF'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.attachmentOption, { backgroundColor: colors.backgroundSecondary }]}
-                onPress={handleChooseDxf}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="layers-outline" size={28} color={colors.primary} />
-                <Text style={[styles.attachmentOptionLabel, { color: colors.text }]}>
-                  {t('production.chooseDxf')}
-                </Text>
-              </TouchableOpacity>
+              {canAddMedia && (
+                <>
+                  <TouchableOpacity
+                    style={[styles.attachmentOption, { backgroundColor: colors.backgroundSecondary }]}
+                    onPress={handleTakePhoto}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="camera" size={28} color={colors.primary} />
+                    <Text style={[styles.attachmentOptionLabel, { color: colors.text }]}>
+                      {t('production.takePhoto') || 'Tirar Foto'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.attachmentOption, { backgroundColor: colors.backgroundSecondary }]}
+                    onPress={handleChooseFromLibrary}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="image" size={28} color={colors.primary} />
+                    <Text style={[styles.attachmentOptionLabel, { color: colors.text }]}>
+                      {t('production.chooseFromLibrary') || 'Galeria'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.attachmentOption, { backgroundColor: colors.backgroundSecondary }]}
+                    onPress={handleChooseDocument}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="document-text" size={28} color={colors.primary} />
+                    <Text style={[styles.attachmentOptionLabel, { color: colors.text }]}>
+                      {t('production.chooseDocument') || 'PDF'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+              {canAddDxf && (
+                <TouchableOpacity
+                  style={[styles.attachmentOption, { backgroundColor: colors.backgroundSecondary }]}
+                  onPress={handleChooseDxf}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="layers-outline" size={28} color={colors.primary} />
+                  <Text style={[styles.attachmentOptionLabel, { color: colors.text }]}>
+                    {t('production.chooseDxf')}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
-          {attachments.length > 0 && (
-            <View style={styles.attachmentGrid}>
-              {attachments.map((attachment) => {
-                const isImage = attachment.mimeType?.startsWith('image/');
-                const isPdf = attachment.mimeType === 'application/pdf';
-                const isDxf = isDxfFile(attachment.originalName || attachment.filename, attachment.mimeType);
-                const displayName = attachment.originalName || attachment.filename;
-                return (
+          {partitionedAttachments.images.length > 0 && (
+            <View style={styles.attachmentFolder}>
+              <Text style={[styles.attachmentFolderTitle, { color: colors.text }]}>
+                {t('production.attachmentsImages')} ({partitionedAttachments.images.length})
+              </Text>
+              <View style={styles.attachmentGrid}>
+                {partitionedAttachments.images.map((attachment) => (
                   <View
                     key={attachment.id}
                     style={[styles.attachmentThumbCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
                   >
-                    {isImage ? (
-                      <Image
-                        source={{ uri: attachment.storagePath }}
-                        style={styles.attachmentThumbImage}
-                        contentFit="cover"
-                        cachePolicy="memory-disk"
-                      />
-                    ) : (
-                      <View style={[styles.attachmentThumbFallback, { backgroundColor: colors.backgroundSecondary }]}>
-                        <Ionicons
-                          name={
-                            isDxf
-                              ? 'layers-outline'
-                              : isPdf
-                                ? 'document-text-outline'
-                                : 'videocam-outline'
-                          }
-                          size={24}
-                          color={colors.textSecondary}
-                        />
-                        <Text
-                          numberOfLines={2}
-                          style={[styles.attachmentThumbName, { color: colors.textSecondary }]}
-                        >
-                          {displayName}
-                        </Text>
-                      </View>
-                    )}
+                    <Image
+                      source={{ uri: attachment.storagePath }}
+                      style={styles.attachmentThumbImage}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                    />
                     <TouchableOpacity
                       onPress={() => handleRemoveAttachment(attachment.id)}
                       style={[styles.removeFloatingButton, { backgroundColor: colors.error }]}
@@ -1001,8 +1010,62 @@ export default function ProductionCreateScreen() {
                       <Ionicons name="close" size={16} color="#fff" />
                     </TouchableOpacity>
                   </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {partitionedAttachments.documents.length > 0 && (
+            <View style={styles.attachmentFolder}>
+              <Text style={[styles.attachmentFolderTitle, { color: colors.text }]}>
+                {t('production.attachmentsPdf')} ({partitionedAttachments.documents.length})
+              </Text>
+              {partitionedAttachments.documents.map((attachment) => {
+                const isPdf = attachment.mimeType === 'application/pdf';
+                const displayName = attachment.originalName || attachment.filename;
+                return (
+                  <View
+                    key={attachment.id}
+                    style={[styles.attachmentListRow, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+                  >
+                    <Ionicons
+                      name={isPdf ? 'document-text-outline' : 'videocam-outline'}
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                    <Text style={[styles.attachmentListName, { color: colors.text }]} numberOfLines={2}>
+                      {displayName}
+                    </Text>
+                    <TouchableOpacity onPress={() => handleRemoveAttachment(attachment.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="close-circle" size={22} color={colors.error} />
+                    </TouchableOpacity>
+                  </View>
                 );
               })}
+            </View>
+          )}
+
+          {partitionedAttachments.dxf.length > 0 && (
+            <View style={styles.attachmentFolder}>
+              <Text style={[styles.attachmentFolderTitle, { color: colors.text }]}>
+                {t('production.attachmentsDxf')} ({partitionedAttachments.dxf.length}/{MAX_PRODUCTION_DXF_ATTACHMENTS})
+              </Text>
+              <ScrollView style={styles.dxfListScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                {partitionedAttachments.dxf.map((attachment) => (
+                  <View
+                    key={attachment.id}
+                    style={[styles.attachmentListRow, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+                  >
+                    <Ionicons name="layers-outline" size={20} color={colors.primary} />
+                    <Text style={[styles.attachmentListName, { color: colors.text }]} numberOfLines={2}>
+                      {attachment.originalName || attachment.filename}
+                    </Text>
+                    <TouchableOpacity onPress={() => handleRemoveAttachment(attachment.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="close-circle" size={22} color={colors.error} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
             </View>
           )}
         </View>
@@ -1207,6 +1270,34 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: theme.typography.fontSize.md,
     marginRight: theme.spacing.sm,
+  },
+  attachmentLimitsHint: {
+    fontSize: theme.typography.fontSize.sm,
+    marginBottom: theme.spacing.md,
+  },
+  attachmentFolder: {
+    marginTop: theme.spacing.lg,
+  },
+  attachmentFolderTitle: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.semibold,
+    marginBottom: theme.spacing.sm,
+  },
+  attachmentListRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    marginBottom: theme.spacing.sm,
+  },
+  attachmentListName: {
+    flex: 1,
+    fontSize: theme.typography.fontSize.md,
+  },
+  dxfListScroll: {
+    maxHeight: 280,
   },
   attachmentGrid: {
     flexDirection: 'row',

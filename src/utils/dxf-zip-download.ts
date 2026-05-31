@@ -4,7 +4,9 @@ import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
 import { ProductionAttachment } from '../types';
 import { extractStorageObjectKey, getSignedUrlFromStorage } from './attachments';
-import { isDxfFile } from './production-attachment-storage';
+import { getDxfAttachments } from './production-attachment-storage';
+
+export { getDxfAttachments } from './production-attachment-storage';
 
 function sanitizeZipFilename(filename: string): string {
   return filename.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').trim() || 'arquivos-dxf';
@@ -29,12 +31,6 @@ function uniqueZipEntryName(displayName: string, used: Set<string>): string {
   const unique = `${base} (${index}).dxf`;
   used.add(unique);
   return unique;
-}
-
-export function getDxfAttachments(attachments: ProductionAttachment[]): ProductionAttachment[] {
-  return attachments.filter((att) =>
-    isDxfFile(att.originalName || att.filename, att.mimeType)
-  );
 }
 
 /**

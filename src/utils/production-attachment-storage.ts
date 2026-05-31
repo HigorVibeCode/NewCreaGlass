@@ -1,4 +1,12 @@
+import { ProductionAttachment } from '../types';
+
 const STORAGE_KEY_SEPARATOR = '__';
+
+/** Imagens, PDF e vídeos por ordem de produção */
+export const MAX_PRODUCTION_MEDIA_ATTACHMENTS = 10;
+
+/** Arquivos DXF por ordem de produção */
+export const MAX_PRODUCTION_DXF_ATTACHMENTS = 100;
 
 export function randomUuidV4(): string {
   if (typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.randomUUID === 'function') {
@@ -38,4 +46,44 @@ export function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function getDxfAttachments(attachments: ProductionAttachment[]): ProductionAttachment[] {
+  return attachments.filter((att) =>
+    isDxfFile(att.originalName || att.filename, att.mimeType)
+  );
+}
+
+export function getMediaAttachments(attachments: ProductionAttachment[]): ProductionAttachment[] {
+  return attachments.filter(
+    (att) => !isDxfFile(att.originalName || att.filename, att.mimeType)
+  );
+}
+
+export function isProductionImageAttachment(att: ProductionAttachment): boolean {
+  return att.mimeType?.startsWith('image/') ?? false;
+}
+
+export function isProductionPdfOrDocumentAttachment(att: ProductionAttachment): boolean {
+  if (isDxfFile(att.originalName || att.filename, att.mimeType)) return false;
+  if (isProductionImageAttachment(att)) return false;
+  return true;
+}
+
+export function partitionProductionAttachments(attachments: ProductionAttachment[]) {
+  const images: ProductionAttachment[] = [];
+  const documents: ProductionAttachment[] = [];
+  const dxf: ProductionAttachment[] = [];
+
+  for (const att of attachments) {
+    if (isDxfFile(att.originalName || att.filename, att.mimeType)) {
+      dxf.push(att);
+    } else if (isProductionImageAttachment(att)) {
+      images.push(att);
+    } else {
+      documents.push(att);
+    }
+  }
+
+  return { images, documents, dxf };
 }

@@ -37,7 +37,10 @@ import {
   getSignedUrlFromStorage,
 } from '../src/utils/attachments';
 import { downloadAllDxfAttachmentsAsZip } from '../src/utils/dxf-zip-download';
-import { isDxfFile } from '../src/utils/production-attachment-storage';
+import {
+  getDxfAttachments,
+  partitionProductionAttachments,
+} from '../src/utils/production-attachment-storage';
 import { confirmDelete, confirmDialog } from '../src/utils/confirm-dialog';
 import { pushWithParams } from '../src/utils/navigation';
 import { generateHybridLinks, shareViaWhatsApp } from '../src/utils/share-links';
@@ -160,13 +163,20 @@ export default function ProductionDetailScreen() {
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
   const [downloadingDxfZip, setDownloadingDxfZip] = useState(false);
 
-  const dxfAttachments = useMemo(
-    () =>
-      (production?.attachments ?? []).filter((att) =>
-        isDxfFile(att.originalName || att.filename, att.mimeType)
-      ),
+  const attachmentFolders = useMemo(
+    () => partitionProductionAttachments(production?.attachments ?? []),
     [production?.attachments]
   );
+
+  const dxfAttachments = useMemo(
+    () => getDxfAttachments(production?.attachments ?? []),
+    [production?.attachments]
+  );
+
+  const hasAnyAttachments =
+    attachmentFolders.images.length > 0 ||
+    attachmentFolders.documents.length > 0 ||
+    attachmentFolders.dxf.length > 0;
   const [isLinkingWorkOrder, setIsLinkingWorkOrder] = useState(false);
   const [statusHistory, setStatusHistory] = useState<ProductionStatusHistory[]>([]);
   const [historyUsers, setHistoryUsers] = useState<Map<string, User>>(new Map());
@@ -978,56 +988,34 @@ export default function ProductionDetailScreen() {
           ))}
         </View>
 
-        {production.attachments.length > 0 && (
+        {hasAnyAttachments && (
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
               <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>
                 {t('production.attachments')}
               </Text>
-              <View style={styles.sectionHeaderActions}>
-                {dxfAttachments.length > 1 && (
-                  <TouchableOpacity
-                    style={[
-                      styles.downloadAllDxfButton,
-                      { borderColor: colors.border, backgroundColor: colors.backgroundSecondary },
-                    ]}
-                    onPress={handleDownloadAllDxf}
-                    disabled={downloadingDxfZip}
-                    activeOpacity={0.7}
-                  >
-                    {downloadingDxfZip ? (
-                      <ActivityIndicator size="small" color={colors.primary} />
-                    ) : (
-                      <>
-                        <Ionicons name="archive-outline" size={16} color={colors.primary} />
-                        <Text style={[styles.downloadAllDxfLabel, { color: colors.primary }]}>
-                          {t('production.downloadAllDxf')}
-                        </Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  style={[styles.inlineIconButton, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary }]}
-                  onPress={() => {
-                    if (!productionId) return;
-                    pushWithParams(router, '/production-create', {
-                      productionId: String(productionId),
-                      quickAttachmentAction: 'camera',
-                    });
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="camera-outline" size={16} color={colors.primary} />
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={[styles.inlineIconButton, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary }]}
+                onPress={() => {
+                  if (!productionId) return;
+                  pushWithParams(router, '/production-create', {
+                    productionId: String(productionId),
+                    quickAttachmentAction: 'camera',
+                  });
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="camera-outline" size={16} color={colors.primary} />
+              </TouchableOpacity>
             </View>
-            {/* Image thumbnails grid */}
-            {production.attachments.some((a) => a.mimeType.startsWith('image/')) && (
-              <View style={styles.thumbnailGrid}>
-                {production.attachments
-                  .filter((a) => a.mimeType.startsWith('image/'))
-                  .map((attachment, idx) => (
+
+            {attachmentFolders.images.length > 0 && (
+              <View style={styles.attachmentFolder}>
+                <Text style={[styles.attachmentFolderTitle, { color: colors.text }]}>
+                  {t('production.attachmentsImages')} ({attachmentFolders.images.length})
+                </Text>
+                <View style={styles.thumbnailGrid}>
+                  {attachmentFolders.images.map((attachment, idx) => (
                     <TouchableOpacity
                       key={attachment.id}
                       style={[styles.thumbnailCard, { backgroundColor: colors.cardBackground }]}
@@ -1042,34 +1030,84 @@ export default function ProductionDetailScreen() {
                       />
                     </TouchableOpacity>
                   ))}
+                </View>
               </View>
             )}
-            {/* PDF attachments (unchanged) */}
-            {production.attachments
-              .filter((a) => !a.mimeType.startsWith('image/'))
-              .map((attachment) => {
-                const isDxf = isDxfFile(
-                  attachment.originalName || attachment.filename,
-                  attachment.mimeType
-                );
-                return (
-                  <TouchableOpacity
-                    key={attachment.id}
-                    style={[styles.attachmentCard, { backgroundColor: colors.cardBackground }]}
-                    onPress={() => handleAttachmentPress(attachment)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name={isDxf ? 'layers-outline' : 'document-text'}
-                      size={20}
-                      color={colors.textSecondary}
-                    />
-                    <Text style={[styles.attachmentName, { color: colors.text }]}>
-                      {attachment.originalName || attachment.filename}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+
+            {attachmentFolders.documents.length > 0 && (
+              <View style={styles.attachmentFolder}>
+                <Text style={[styles.attachmentFolderTitle, { color: colors.text }]}>
+                  {t('production.attachmentsPdf')} ({attachmentFolders.documents.length})
+                </Text>
+                {attachmentFolders.documents.map((attachment) => {
+                  const isPdf = attachment.mimeType === 'application/pdf';
+                  return (
+                    <TouchableOpacity
+                      key={attachment.id}
+                      style={[styles.attachmentCard, { backgroundColor: colors.cardBackground }]}
+                      onPress={() => handleAttachmentPress(attachment)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={isPdf ? 'document-text' : 'videocam-outline'}
+                        size={20}
+                        color={colors.textSecondary}
+                      />
+                      <Text style={[styles.attachmentName, { color: colors.text }]}>
+                        {attachment.originalName || attachment.filename}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+
+            {attachmentFolders.dxf.length > 0 && (
+              <View style={styles.attachmentFolder}>
+                <View style={styles.attachmentFolderHeader}>
+                  <Text style={[styles.attachmentFolderTitle, { color: colors.text, marginBottom: 0 }]}>
+                    {t('production.attachmentsDxf')} ({attachmentFolders.dxf.length})
+                  </Text>
+                  {dxfAttachments.length > 1 && (
+                    <TouchableOpacity
+                      style={[
+                        styles.downloadAllDxfButton,
+                        { borderColor: colors.border, backgroundColor: colors.backgroundSecondary },
+                      ]}
+                      onPress={handleDownloadAllDxf}
+                      disabled={downloadingDxfZip}
+                      activeOpacity={0.7}
+                    >
+                      {downloadingDxfZip ? (
+                        <ActivityIndicator size="small" color={colors.primary} />
+                      ) : (
+                        <>
+                          <Ionicons name="archive-outline" size={16} color={colors.primary} />
+                          <Text style={[styles.downloadAllDxfLabel, { color: colors.primary }]}>
+                            {t('production.downloadAllDxf')}
+                          </Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+                <ScrollView style={styles.dxfListScroll} nestedScrollEnabled>
+                  {attachmentFolders.dxf.map((attachment) => (
+                    <TouchableOpacity
+                      key={attachment.id}
+                      style={[styles.attachmentCard, { backgroundColor: colors.cardBackground }]}
+                      onPress={() => handleAttachmentPress(attachment)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="layers-outline" size={20} color={colors.primary} />
+                      <Text style={[styles.attachmentName, { color: colors.text }]}>
+                        {attachment.originalName || attachment.filename}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
           </View>
         )}
 
@@ -1414,6 +1452,25 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.md,
     overflow: 'hidden',
     ...theme.shadows.sm,
+  },
+  attachmentFolder: {
+    marginTop: theme.spacing.lg,
+  },
+  attachmentFolderHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
+  },
+  attachmentFolderTitle: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.semibold,
+    marginBottom: theme.spacing.sm,
+    flex: 1,
+  },
+  dxfListScroll: {
+    maxHeight: 320,
   },
   attachmentCard: {
     flexDirection: 'row',
