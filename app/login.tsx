@@ -107,7 +107,9 @@ export default function LoginScreen() {
     } catch (error: any) {
       console.error('Login error:', error);
       setError(t('auth.invalidCredentials'));
-      Alert.alert(t('common.error'), error.message || t('auth.loginError'));
+      if (Platform.OS !== 'web') {
+        Alert.alert(t('common.error'), error.message || t('auth.loginError'));
+      }
     } finally {
       setLoading(false);
     }
@@ -182,7 +184,11 @@ export default function LoginScreen() {
             </Text>
           </TouchableOpacity>
           
-          {error ? <View style={styles.errorContainer} /> : null}
+          {error ? (
+            <Text accessibilityRole="alert" style={[styles.errorText, { color: colors.error }]}>
+              {error}
+            </Text>
+          ) : null}
           <Button
             title={t('auth.loginButton')}
             onPress={handleLogin}
@@ -234,7 +240,9 @@ const styles = StyleSheet.create({
     marginLeft: theme.spacing.sm,
     fontSize: 14,
   },
-  errorContainer: {
+  errorText: {
     marginBottom: theme.spacing.sm,
+    fontSize: theme.typography.fontSize.sm,
+    textAlign: 'center',
   },
 });
