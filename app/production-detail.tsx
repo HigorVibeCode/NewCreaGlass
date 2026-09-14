@@ -531,7 +531,7 @@ export default function ProductionDetailScreen() {
       // Import production attachments as work order evidences
       for (const attachment of production.attachments || []) {
         const candidatePath = attachment.originalStoragePath || attachment.storagePath;
-        const filePath = extractStoragePathFromUrl(candidatePath) || candidatePath;
+        const filePath = extractStorageObjectKey(candidatePath) || candidatePath;
         if (!filePath) continue;
         await repos.workOrdersRepo.createEvidence(createdWorkOrder.id, {
           type: 'antes',

@@ -24,6 +24,7 @@ import {
     MaintenanceRecord,
     Notification,
     NotificationPreferences,
+    NewTimeEntry,
     Permission,
     Production,
     ProductionStatus,
@@ -59,7 +60,7 @@ export interface AuthRepository {
 export interface UsersRepository {
   getAllUsers(): Promise<User[]>;
   getUserById(userId: string): Promise<User | null>;
-  createUser(user: Omit<User, 'id' | 'createdAt'>): Promise<User>;
+  createUser(user: Omit<User, 'id' | 'createdAt'>, password?: string): Promise<User>;
   updateUser(userId: string, updates: Partial<User>): Promise<User>;
   activateUser(userId: string): Promise<void>;
   deactivateUser(userId: string): Promise<void>;
@@ -150,12 +151,13 @@ export interface DirectMessagesRepository {
   markMessageRead(messageId: string): Promise<void>;
 }
 
-// Events Repository (placeholder)
+// Events Repository
 export interface EventsRepository {
   getAllEvents(): Promise<Event[]>;
   getEventById(eventId: string): Promise<Event | null>;
   createEvent(event: Omit<Event, 'id' | 'createdAt'>): Promise<Event>;
   updateEvent(eventId: string, updates: Partial<Event>): Promise<Event>;
+  deleteEvent(eventId: string): Promise<void>;
 }
 
 // Work Orders Repository
@@ -203,7 +205,10 @@ export interface MaintenanceRepository {
   deleteMaintenanceRecord(recordId: string): Promise<void>;
   /** Upload a cover image to storage; returns the storage path (filename) to store in cover_image_path */
   uploadCoverImage(file: { uri: string; name: string; type: string }): Promise<string>;
-  addMaintenanceInfo(recordId: string, info: Omit<MaintenanceInfo, 'id' | 'createdAt' | 'updatedAt' | 'images'>): Promise<MaintenanceInfo>;
+  addMaintenanceInfo(
+    recordId: string,
+    info: Omit<MaintenanceInfo, 'id' | 'createdAt' | 'updatedAt' | 'images' | 'maintenanceRecordId' | 'orderIndex'>
+  ): Promise<MaintenanceInfo>;
   updateMaintenanceInfo(infoId: string, updates: Partial<MaintenanceInfo>, changedBy?: string): Promise<MaintenanceInfo>;
   deleteMaintenanceInfo(infoId: string, changedBy?: string): Promise<void>;
   addMaintenanceInfoImage(infoId: string, image: Omit<MaintenanceInfoImage, 'id' | 'createdAt'>): Promise<MaintenanceInfoImage>;
@@ -306,7 +311,7 @@ export interface PushDeliveryLogsRepository {
 
 // Time Entries Repository (Controle de Ponto)
 export interface TimeEntriesRepository {
-  createTimeEntry(entry: Omit<TimeEntry, 'id' | 'createdAt'>): Promise<TimeEntry>;
+  createTimeEntry(entry: NewTimeEntry): Promise<TimeEntry>;
   getMyTimeEntries(userId: string, options?: { from?: string; to?: string }): Promise<TimeEntry[]>;
   getAllTimeEntries(options?: { from?: string; to?: string; userId?: string }): Promise<TimeEntry[]>;
   getServerTime(): Promise<string>;

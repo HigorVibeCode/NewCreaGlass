@@ -85,7 +85,7 @@ export default function UserMessagesScreen() {
   const chooseRecipientCompose = useCallback(
     (peerId: string, peerUsername: string) => {
       setPickOpen(false);
-      pushWithParams(router, '/user-messages-compose', { recipientId: peerId, recipientUsername });
+      pushWithParams(router, '/user-messages-compose', { recipientId: peerId, recipientUsername: peerUsername });
     },
     [router]
   );
@@ -186,7 +186,11 @@ export default function UserMessagesScreen() {
                   contentContainerStyle={styles.listContent}
                   refreshing={loading}
                   onRefresh={() => {
-                    void tab === 'received' ? refetchIn() : refetchOut();
+                    if (tab === 'received') {
+                      void refetchIn();
+                    } else {
+                      void refetchOut();
+                    }
                     void refetchUnread();
                   }}
                 />

@@ -1,5 +1,5 @@
 import { TimeEntriesRepository } from '../../services/repositories/interfaces';
-import { TimeEntry, EntryType } from '../../types';
+import { TimeEntry, EntryType, NewTimeEntry } from '../../types';
 import { supabase } from '../../services/supabase';
 import {
   buildIsoFromDateAndTime,
@@ -45,7 +45,7 @@ function mapRow(row: any): TimeEntry {
 }
 
 export class SupabaseTimeEntriesRepository implements TimeEntriesRepository {
-  async createTimeEntry(entry: Omit<TimeEntry, 'id' | 'createdAt'>): Promise<TimeEntry> {
+  async createTimeEntry(entry: NewTimeEntry): Promise<TimeEntry> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
     if (entry.userId !== user.id) throw new Error('Cannot create time entry for another user');

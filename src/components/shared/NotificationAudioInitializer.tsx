@@ -31,10 +31,7 @@ const AudioPlayerInitializer: React.FC<{ source: any }> = ({ source }) => {
   console.log('🎵 AudioPlayerInitializer - Component mounted with source:', !!source);
   
   // Hook sempre chamado com source válido (garantido pelo wrapper)
-  const player = useAudioPlayer(source, {
-    volume: 1.0,
-    shouldLoop: false,
-  });
+  const player = useAudioPlayer(source);
 
   console.log('🎵 AudioPlayerInitializer - Player created:', {
     hasPlayer: !!player,
@@ -42,14 +39,16 @@ const AudioPlayerInitializer: React.FC<{ source: any }> = ({ source }) => {
   });
 
   useEffect(() => {
+    player.volume = 1;
+    player.loop = false;
+
     // Configurar modo de áudio para permitir tocar em modo silencioso
     const configureAudio = async () => {
       try {
         await setAudioModeAsync({
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: false,
-          interruptionModeIOS: 'mixWithOthers',
-          interruptionModeAndroid: 'duckOthers',
+          playsInSilentMode: true,
+          shouldPlayInBackground: false,
+          interruptionMode: 'duckOthers',
         });
         console.log('✅ AudioPlayerInitializer - Audio mode configured');
       } catch (error) {
@@ -58,7 +57,7 @@ const AudioPlayerInitializer: React.FC<{ source: any }> = ({ source }) => {
     };
     
     configureAudio();
-  }, []);
+  }, [player]);
 
   useEffect(() => {
     console.log('🎵 AudioPlayerInitializer - useEffect triggered, player:', !!player);

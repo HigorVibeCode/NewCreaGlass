@@ -80,7 +80,7 @@ export default function TrainingCreateScreen() {
   const [content, setContent] = useState('');
   const [titleI18n, setTitleI18n] = useState<Record<string, string>>({});
   const [descriptionI18n, setDescriptionI18n] = useState<Record<string, string>>({});
-  const [attachments, setAttachments] = useState<Array<{ id: string; filename: string; mimeType: string; uri: string; isNew?: boolean; attachmentId?: string; webFile?: File }>>([]);
+  const [attachments, setAttachments] = useState<{ id: string; filename: string; mimeType: string; uri: string; isNew?: boolean; attachmentId?: string; webFile?: File }[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [uploadingAttachments, setUploadingAttachments] = useState<Set<string>>(new Set());

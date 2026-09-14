@@ -85,7 +85,7 @@ export default function AnalyticsCompanyComparisonScreen() {
           <Text style={[styles.chartTitle, { color: colors.text }]}>{t('analytics.charts.ordersByCompany')}</Text>
           {chartLoading ? (
             <ChartPlaceholder />
-          ) : !chartKit ? (
+          ) : !BarChart ? (
             <ChartError />
           ) : (
             <BarChart

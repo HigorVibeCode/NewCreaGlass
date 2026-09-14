@@ -52,7 +52,7 @@ export default function AnalyticsDeliveryPerformanceScreen() {
           <View style={styles.gaugeCenter}>
             {chartLoading ? (
               <ChartPlaceholder />
-            ) : !chartKit ? (
+            ) : !ProgressChart ? (
               <ChartError />
             ) : (
               <ProgressChart

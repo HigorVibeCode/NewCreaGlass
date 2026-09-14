@@ -22,11 +22,10 @@ export interface DayRow {
 /** Horário efetivo para relatório: ajustado quando existir, senão original. */
 export function getEffectiveRecordedAt(entry: TimeEntry): string {
   if (!entry?.recordedAt) return '';
-  const useAdjusted =
-    entry.isAdjusted === true &&
-    entry.adjustedRecordedAt &&
-    typeof entry.adjustedRecordedAt === 'string';
-  return useAdjusted ? entry.adjustedRecordedAt : entry.recordedAt;
+  if (entry.isAdjusted && typeof entry.adjustedRecordedAt === 'string') {
+    return entry.adjustedRecordedAt;
+  }
+  return entry.recordedAt;
 }
 
 const INCOMPLETE = 'INCOMPLETE';

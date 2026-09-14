@@ -19,7 +19,6 @@ const playNotificationSound = async () => {
         const playerMethods = {
           hasSeekTo: typeof player.seekTo === 'function',
           hasPlay: typeof player.play === 'function',
-          hasReplay: typeof player.replay === 'function',
           hasCurrentTime: 'currentTime' in player,
           playerKeys: Object.keys(player || {}),
         };
@@ -29,13 +28,7 @@ const playNotificationSound = async () => {
         // IMPORTANTE: Sempre resetar para o início antes de tocar
         let played = false;
         
-        if (typeof player.replay === 'function') {
-          // API mais recente do expo-audio - replay() reinicia e toca
-          console.log('🔊 playNotificationSound - Attempting replay()');
-          player.replay();
-          played = true;
-          console.log('✅ playNotificationSound - replay() called successfully');
-        } else if (typeof player.seekTo === 'function' && typeof player.play === 'function') {
+        if (typeof player.seekTo === 'function' && typeof player.play === 'function') {
           // API com seekTo - sempre resetar para o início
           console.log('🔊 playNotificationSound - Attempting seekTo(0) + play()');
           await player.seekTo(0);

@@ -113,7 +113,7 @@ export interface Notification {
   payloadJson: Record<string, any>;
   createdAt: string;
   createdBySystem: boolean;
-  targetUserId?: string;
+  targetUserId?: string | null;
   readAt?: string;
 }
 
@@ -207,13 +207,36 @@ export interface UserDirectMessageDetail extends UserDirectMessage {
   recipientName: string;
 }
 
-// Event types (placeholder)
+// Event types
 export type EventStatus = 'active' | 'completed';
+export type EventType =
+  | 'meeting'
+  | 'training'
+  | 'maintenance'
+  | 'installation'
+  | 'inspection'
+  | 'other';
+
+export interface EventAttachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  storagePath: string;
+  createdAt: string;
+}
 
 export interface Event {
   id: string;
   title: string;
-  description: string;
+  type: EventType;
+  startDate: string;
+  endDate: string;
+  startTime: string;
+  endTime: string;
+  location: string;
+  people: string;
+  description?: string;
+  attachments: EventAttachment[];
   status?: EventStatus;
   createdAt: string;
   createdBy: string;
@@ -482,7 +505,7 @@ export interface MaintenanceRecord {
   equipment: string;
   type: string;
   /** Storage path or signed URL for the Basic Information card cover image */
-  coverImagePath?: string;
+  coverImagePath?: string | null;
   infos: MaintenanceInfo[];
   history: MaintenanceHistory[];
   createdAt: string;
@@ -616,3 +639,14 @@ export interface TimeEntry {
   adjustedAt: string | null;
   adjustedByUserId: string | null;
 }
+
+export type NewTimeEntry = Omit<
+  TimeEntry,
+  | 'id'
+  | 'createdAt'
+  | 'isAdjusted'
+  | 'adjustedRecordedAt'
+  | 'adjustDescription'
+  | 'adjustedAt'
+  | 'adjustedByUserId'
+>;

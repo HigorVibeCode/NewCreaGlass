@@ -54,7 +54,7 @@ export default function AnalyticsEventsByTypeScreen() {
             <View style={[styles.chartCard, { backgroundColor: colors.cardBackground }]}>
               {chartLoading ? (
                 <ChartPlaceholder />
-              ) : !chartKit ? (
+              ) : !PieChart ? (
                 <ChartError />
               ) : (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>

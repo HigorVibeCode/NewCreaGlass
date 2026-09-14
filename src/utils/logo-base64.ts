@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
 
 /** Retorna a logo da empresa em data URL (base64) para uso em HTML/PDF. */
 export async function getLogoBase64(): Promise<string> {
@@ -26,8 +26,8 @@ export async function getLogoBase64(): Promise<string> {
     }
     const uri = typeof logoModule === 'object' ? logoModule?.uri ?? logoModule?.default : logoModule;
     if (!uri) return '';
-    const base64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
+    const base64 = await FileSystemLegacy.readAsStringAsync(uri, {
+      encoding: FileSystemLegacy.EncodingType.Base64,
     });
     return `data:image/png;base64,${base64}`;
   } catch {

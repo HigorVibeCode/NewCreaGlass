@@ -6,21 +6,26 @@ import { useRealtime } from '../../hooks/use-realtime';
 import { useThemeColors } from '../../hooks/use-theme-colors';
 import { repos } from '../../services/container';
 import { supabase } from '../../services/supabase';
-import { useAuth } from '../../store/auth-store';
-import { getCachedUserProfile, getCachedUserProfileAsync } from '../../store/auth-store';
+import { useAuth , getCachedUserProfile, getCachedUserProfileAsync } from '../../store/auth-store';
 
 const SESSION_RESTORE_TIMEOUT_MS = 10000;
 
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T | null> {
-  return Promise.race([
-    promise,
-    new Promise<null>((resolve) =>
-      setTimeout(() => {
-        console.warn(`[AuthGuard] ${label} timed out after ${ms}ms`);
-        resolve(null);
-      }, ms),
-    ),
-  ]);
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T | null> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<null>((resolve) => {
+        timeoutId = setTimeout(() => {
+          console.warn(`[AuthGuard] ${label} timed out after ${ms}ms`);
+          resolve(null);
+        }, ms);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 }
 
 export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -74,7 +79,18 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
       if (!url) return;
       const parsed = Linking.parse(url);
       if (parsed.path && parsed.path !== '') {
-        const qs = parsed.queryString ? `?${parsed.queryString}` : '';
+        const entries = Object.entries(parsed.queryParams || {}).filter(
+          ([, value]) => value !== undefined && value !== null,
+        );
+        const qs = entries.length
+          ? `?${entries
+              .flatMap(([key, value]) =>
+                (Array.isArray(value) ? value : [value]).map(
+                  (item) => `${encodeURIComponent(key)}=${encodeURIComponent(String(item))}`,
+                ),
+              )
+              .join('&')}`
+          : '';
         const route = `/${parsed.path}${qs}`;
         console.log('[AuthGuard] Incoming deep link:', route);
         if (sessionRef.current) {
@@ -188,8 +204,6 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
   useEffect(() => {
     if (!isReady) return;
     if (isNavigatingRef.current) return;
-    if (!segments || segments.length === 0) return;
-
     const currentRoute = segments[0] || '';
     const inAuthGroup = currentRoute === 'login';
 

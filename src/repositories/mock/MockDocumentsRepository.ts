@@ -31,18 +31,18 @@ export class MockDocumentsRepository implements DocumentsRepository {
     userId: string
   ): Promise<Document> {
     const documents = await this.getDocuments();
-    const filename = 'name' in file ? file.name : file.uri.split('/').pop() || 'unknown';
-    const mimeType = 'type' in file ? file.type : 'application/octet-stream';
+    const filename = file.name || file.uri.split('/').pop() || 'unknown';
+    const mimeType = file.type || 'application/octet-stream';
     
     // Garantir que o diretório de documentos existe
     const documentsDir = new Directory(Paths.document, DOCUMENTS_DIR_NAME);
     const dirInfo = await documentsDir.info();
     if (!dirInfo.exists) {
-      await documentsDir.make();
+      documentsDir.create({ idempotent: true });
     }
     
     // Copiar o arquivo para o diretório permanente
-    const fileUri = 'uri' in file ? file.uri : '';
+    const fileUri = file.uri;
     const timestamp = Date.now();
     const savedFilename = `${timestamp}_${filename}`;
     const destinationFile = new File(documentsDir, savedFilename);

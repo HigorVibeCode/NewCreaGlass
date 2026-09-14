@@ -69,7 +69,7 @@ export default function AnalyticsGlassTypesScreen() {
               </Text>
               {chartLoading ? (
                 <ChartPlaceholder />
-              ) : !chartKit ? (
+              ) : !PieChart ? (
                 <ChartError />
               ) : (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>

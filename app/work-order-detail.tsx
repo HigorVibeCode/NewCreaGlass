@@ -455,7 +455,7 @@ export default function WorkOrderDetailScreen() {
 
   // Timer em tempo real para time status ativo
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
+    let interval: ReturnType<typeof setInterval> | null = null;
 
     if (workOrder && workOrder.status === 'in_progress') {
       // Verificar se há um time status ativo (sem endTime)
@@ -1720,7 +1720,7 @@ const styles = StyleSheet.create({
   logTypeBadge: {
     paddingHorizontal: theme.spacing.xs,
     paddingVertical: 2,
-    borderRadius: theme.borderRadius.xs || 4,
+    borderRadius: theme.borderRadius.sm,
   },
   logTypeText: {
     fontSize: theme.typography.fontSize.xs,

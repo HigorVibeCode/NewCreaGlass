@@ -70,12 +70,9 @@ npm run web      # Web
 
 ## Authentication
 
-### Master User (Default)
-
-- **Username**: `Pia`
-- **Password**: `Happiness`
-
-⚠️ **Important**: These credentials are for development/testing only. In production, credentials should be managed securely through Supabase Auth.
+Authentication is managed through Supabase Auth. Never commit production or test
+credentials to this repository; provision development users through the access
+control screen or a controlled Supabase environment.
 
 ## Development Status
 

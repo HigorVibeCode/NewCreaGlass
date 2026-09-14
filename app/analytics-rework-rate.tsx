@@ -60,7 +60,7 @@ export default function AnalyticsReworkRateScreen() {
           <View style={styles.gaugeCenter}>
             {chartLoading ? (
               <ChartPlaceholder />
-            ) : !chartKit ? (
+            ) : !ProgressChart ? (
               <ChartError />
             ) : (
               <>
@@ -112,7 +112,7 @@ export default function AnalyticsReworkRateScreen() {
             </Text>
             {chartLoading ? (
               <ChartPlaceholder />
-            ) : !chartKit ? (
+            ) : !LineChart ? (
               <ChartError />
             ) : (
               <LineChart

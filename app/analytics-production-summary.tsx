@@ -110,7 +110,7 @@ export default function AnalyticsProductionSummaryScreen() {
           {weekly.data.length > 0 ? (
             chartLoading ? (
               <ChartPlaceholder />
-            ) : !chartKit ? (
+            ) : !BarChart ? (
               <ChartError />
             ) : (
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>

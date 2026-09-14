@@ -210,6 +210,8 @@ export const WebSignaturePad = forwardRef<WebSignaturePadRef, WebSignaturePadPro
   }
 );
 
+WebSignaturePad.displayName = 'WebSignaturePad';
+
 const styles = StyleSheet.create({
   container: {
     width: '100%',

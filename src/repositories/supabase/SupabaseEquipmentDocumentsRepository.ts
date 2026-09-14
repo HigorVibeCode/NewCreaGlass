@@ -244,8 +244,8 @@ export class SupabaseEquipmentDocumentsRepository implements EquipmentDocumentsR
     documentId: string,
     file: File | { uri: string; name: string; type: string }
   ): Promise<EquipmentDocumentAttachment> {
-    const originalName = 'name' in file ? file.name : file.uri.split('/').pop() || 'unknown';
-    const mimeType = 'type' in file ? file.type : 'application/octet-stream';
+    const originalName = file.name || ('uri' in file ? file.uri.split('/').pop() : '') || 'unknown';
+    const mimeType = file.type || 'application/octet-stream';
     const fileUri = 'uri' in file ? file.uri : '';
 
     // Generate a friendly display name with date/time

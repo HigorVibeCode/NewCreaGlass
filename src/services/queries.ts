@@ -52,7 +52,7 @@ export const useNotificationsQuery = (userId?: string) => {
     // Removed refetchInterval - rely on realtime subscriptions instead
     // This prevents the "notification coming back" issue
     staleTime: 0, // Always consider data stale to allow realtime updates
-    cacheTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
+    gcTime: 5 * 60 * 1000, // Keep inactive data in cache for 5 minutes
     notifyOnChangeProps: ['data', 'error'], // Notify on data changes to ensure UI updates
   });
 };

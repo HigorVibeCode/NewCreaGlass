@@ -31,7 +31,7 @@ import { theme } from '../src/theme';
 interface InfoBox {
   id: string;
   description: string;
-  images: Array<{ uri: string; filename: string; mimeType: string }>;
+  images: { uri: string; filename: string; mimeType: string }[];
   isCreated: boolean; // Se já foi criado no backend
   infoId?: string; // ID do backend se já criado
 }
@@ -354,8 +354,6 @@ export default function MaintenanceCreateScreen() {
           equipment: equipment.trim(),
           type: type.trim(),
           coverImagePath: coverPath || undefined,
-          infos: [],
-          history: [],
           createdBy: user.id,
         });
         recordIdToUse = newRecord.id;

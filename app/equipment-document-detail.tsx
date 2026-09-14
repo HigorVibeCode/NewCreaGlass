@@ -103,7 +103,11 @@ export default function EquipmentDocumentDetailScreen() {
   }, [document]);
 
   const handleEdit = () => {
-    pushWithParams(router, '/equipment-document-create', { equipmentId, equipmentName, documentId });
+    pushWithParams(router, '/equipment-document-create', {
+      equipmentId,
+      equipmentName: equipmentName || '',
+      documentId,
+    });
   };
 
   const handleDelete = () => {

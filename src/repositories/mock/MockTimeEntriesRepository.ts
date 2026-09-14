@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TimeEntriesRepository } from '../../services/repositories/interfaces';
-import { TimeEntry, EntryType } from '../../types';
+import { TimeEntry, EntryType, NewTimeEntry } from '../../types';
 import {
   buildIsoFromDateAndTime,
   DAY_ADJUST_ENTRY_TYPES,
@@ -38,7 +38,7 @@ export class MockTimeEntriesRepository implements TimeEntriesRepository {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
   }
 
-  async createTimeEntry(entry: Omit<TimeEntry, 'id' | 'createdAt'>): Promise<TimeEntry> {
+  async createTimeEntry(entry: NewTimeEntry): Promise<TimeEntry> {
     const entries = await this.getEntries();
     const newEntry: TimeEntry = {
       ...entry,

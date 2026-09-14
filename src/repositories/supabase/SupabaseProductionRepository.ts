@@ -132,7 +132,7 @@ export class SupabaseProductionRepository implements ProductionRepository {
         due_date: production.dueDate,
         status: production.status,
         created_by: user.id,
-        ...(production.company != null && production.company !== '' && { company: production.company }),
+        ...(production.company != null && { company: production.company }),
       })
       .select()
       .single();

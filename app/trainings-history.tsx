@@ -605,7 +605,9 @@ export default function TrainingsHistoryScreen() {
                                   style={[styles.signatureImageContainer, { borderColor: colors.border }]}
                                   onPress={async () => {
                                     try {
-                                      const filename = training.signature.signaturePath.replace('signatures/', '');
+                                      const signaturePath = training.signature?.signaturePath;
+                                      if (!signaturePath) return;
+                                      const filename = signaturePath.replace('signatures/', '');
                                       const url = await getCachedSignedUrl(filename, 3600, 'signatures');
                                       if (url) {
                                         setSignatureImageUrl(url);

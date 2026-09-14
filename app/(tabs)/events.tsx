@@ -925,10 +925,6 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.xs,
     flexWrap: 'wrap',
   },
-  eventType: {
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.medium,
-  },
   separator: {
     fontSize: theme.typography.fontSize.sm,
     marginHorizontal: theme.spacing.xs,

@@ -51,7 +51,7 @@ import { tryBiometricAuth } from '../src/utils/point-auth';
 import { getCurrentLocationForEntry } from '../src/utils/point-location';
 import { useGoBack } from '../src/hooks/use-go-back';
 import { theme } from '../src/theme';
-import { TimeEntry, EntryType } from '../src/types';
+import { TimeEntry, EntryType, GpsSource } from '../src/types';
 
 // Lazy import expo-notifications
 let Notifications: typeof import('expo-notifications') | null = null;
@@ -635,7 +635,7 @@ export default function PointScreen() {
       const serverTime = await repos.timeEntriesRepo.getServerTime();
       let locationAddress: string | null = null;
       let gpsAccuracy: number | null = null;
-      let gpsSource: string | null = null;
+      let gpsSource: GpsSource | null = null;
 
       if (!isPauseEntry) {
         if (Platform.OS === 'web') {

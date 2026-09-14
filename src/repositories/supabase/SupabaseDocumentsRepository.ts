@@ -40,8 +40,8 @@ export class SupabaseDocumentsRepository implements DocumentsRepository {
     file: File | { uri: string; name: string; type: string },
     userId: string
   ): Promise<Document> {
-    const filename = 'name' in file ? file.name : file.uri.split('/').pop() || 'unknown';
-    const mimeType = 'type' in file ? file.type : 'application/octet-stream';
+    const filename = file.name || ('uri' in file ? file.uri.split('/').pop() : '') || 'unknown';
+    const mimeType = file.type || 'application/octet-stream';
     const fileUri = 'uri' in file ? file.uri : '';
     
     // Generate unique filename

@@ -113,10 +113,8 @@ export default function InventoryGroupScreen() {
   const [opoOeschgerCode, setOpoOeschgerCode] = useState('');
   // Supplies: up to 3 images, one main (shown on card)
   const [itemImages, setItemImages] = useState<
-    Array<
-      | { type: 'existing'; id: string; storagePath: string; isMain: boolean }
-      | { type: 'new'; uri: string; isMain: boolean }
-    >
+    (| { type: 'existing'; id: string; storagePath: string; isMain: boolean }
+      | { type: 'new'; uri: string; isMain: boolean })[]
   >([]);
   const lastProcessedEditItemId = useRef<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');

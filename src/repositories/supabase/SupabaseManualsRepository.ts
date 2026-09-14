@@ -123,8 +123,8 @@ export class SupabaseManualsRepository implements ManualsRepository {
     manualId: string,
     file: File | { uri: string; name: string; type: string }
   ): Promise<ManualAttachment> {
-    const filename = 'name' in file ? file.name : file.uri.split('/').pop() || 'unknown';
-    const mimeType = 'type' in file ? file.type : 'application/pdf';
+    const filename = file.name || ('uri' in file ? file.uri.split('/').pop() : '') || 'unknown';
+    const mimeType = file.type || 'application/pdf';
     const fileUri = 'uri' in file ? file.uri : '';
     const uniqueFilename = `manuals_${manualId}_${Date.now()}_${filename}`;
 

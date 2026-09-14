@@ -48,7 +48,7 @@ export default function AnalyticsEventsFrequencyScreen() {
             <Text style={[styles.chartTitle, { color: colors.text }]}>{t('analytics.charts.eventsPerMonth')}</Text>
             {chartLoading ? (
               <ChartPlaceholder />
-            ) : !chartKit ? (
+            ) : !LineChart ? (
               <ChartError />
             ) : (
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>

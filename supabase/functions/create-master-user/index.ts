@@ -6,6 +6,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const jsonResponse = (body: Record<string, unknown>, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+
+const allowedUserTypes = new Set(['Master', 'Manager', 'Viewer', 'Onboarding']);
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -13,6 +21,50 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const authorization = req.headers.get('Authorization');
+    const accessToken = authorization?.replace(/^Bearer\s+/i, '').trim();
+
+    if (!accessToken) {
+      return jsonResponse({ success: false, error: 'Authentication required' }, 401);
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error('Missing Supabase function environment variables');
+      return jsonResponse({ success: false, error: 'Server configuration error' }, 500);
+    }
+
+    // The service-role client is only used after independently validating the
+    // caller and confirming their active Master profile.
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
+
+    const { data: callerAuth, error: callerAuthError } = await supabaseAdmin.auth.getUser(accessToken);
+    if (callerAuthError || !callerAuth.user) {
+      return jsonResponse({ success: false, error: 'Invalid or expired session' }, 401);
+    }
+
+    const { data: callerProfile, error: callerProfileError } = await supabaseAdmin
+      .from('users')
+      .select('user_type, is_active')
+      .eq('id', callerAuth.user.id)
+      .maybeSingle();
+
+    if (callerProfileError) {
+      console.error('Failed to verify caller profile', callerProfileError);
+      return jsonResponse({ success: false, error: 'Unable to verify permissions' }, 500);
+    }
+
+    if (!callerProfile?.is_active || callerProfile.user_type !== 'Master') {
+      return jsonResponse({ success: false, error: 'Master access required' }, 403);
+    }
+
     // Parse request body
     const { username, email, password, userType } = await req.json();
 
@@ -30,17 +82,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Initialize Supabase Admin Client
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    );
+    if (userType && !allowedUserTypes.has(userType)) {
+      return jsonResponse({ success: false, error: 'Invalid user type' }, 400);
+    }
 
     // Check if user already exists
     const { data: existingUsers } = await supabaseAdmin

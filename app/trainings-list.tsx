@@ -61,25 +61,6 @@ export default function TrainingsListScreen() {
     }, [loadTrainings])
   );
 
-  // Recarregar após voltar de outras telas (ex: após excluir)
-  useEffect(() => {
-    const unsubscribe = router.subscribe?.((state: any) => {
-      // Recarregar quando voltar para esta tela
-      if (state?.routes) {
-        const currentRoute = state.routes[state.index];
-        if (currentRoute?.name === 'trainings-list') {
-          loadTrainings();
-        }
-      }
-    });
-
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    };
-  }, [router, loadTrainings]);
-
   const handleAddTraining = () => {
     pushWithParams(router, '/training-create', { category: String(trainingCategory) });
   };

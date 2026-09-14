@@ -52,7 +52,7 @@ export default function AnalyticsWoServiceTimeScreen() {
           <View style={styles.gaugeCenter}>
             {chartLoading ? (
               <ChartPlaceholder />
-            ) : !chartKit ? (
+            ) : !ProgressChart ? (
               <ChartError />
             ) : (
               <ProgressChart

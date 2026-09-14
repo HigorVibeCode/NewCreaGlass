@@ -517,7 +517,7 @@ export default function ProductionCreateScreen() {
 
       const limited = picked.slice(0, slotsLeft);
       if (picked.length > slotsLeft) {
-        Alert.alert(t('common.error'), t('production.dxfSlotsLimited', { count: String(slotsLeft) }));
+        Alert.alert(t('common.error'), t('production.dxfSlotsLimited', { count: slotsLeft }));
       }
 
       setPendingDxfFiles(limited);

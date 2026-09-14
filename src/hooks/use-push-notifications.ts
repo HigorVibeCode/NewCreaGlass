@@ -48,6 +48,8 @@ const loadNotifications = async () => {
       Notifications.setNotificationHandler({
         handleNotification: async () => ({
           shouldShowAlert: true,
+          shouldShowBanner: true,
+          shouldShowList: true,
           shouldPlaySound: true,
           shouldSetBadge: true,
         }),
@@ -84,8 +86,8 @@ export const usePushNotifications = () => {
   const router = useRouter();
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<boolean>(false);
-  const notificationListener = useRef<any>();
-  const responseListener = useRef<any>();
+  const notificationListener = useRef<{ remove: () => void } | null>(null);
+  const responseListener = useRef<{ remove: () => void } | null>(null);
   const tokenRef = useRef<string | null>(null);
   tokenRef.current = expoPushToken;
 
@@ -104,8 +106,21 @@ export const usePushNotifications = () => {
 
     // Handle web push notifications separately
     if (Platform.OS === 'web') {
-      initializeWebPushNotifications();
-      return;
+      let disposed = false;
+      let cleanupWebPush: (() => void) | undefined;
+
+      initializeWebPushNotifications().then((cleanup) => {
+        if (disposed) {
+          cleanup?.();
+        } else {
+          cleanupWebPush = cleanup;
+        }
+      });
+
+      return () => {
+        disposed = true;
+        cleanupWebPush?.();
+      };
     }
 
     let mounted = true;
@@ -177,18 +192,18 @@ export const usePushNotifications = () => {
         console.warn('[usePushNotifications] cleanup subscription error:', e);
       }
       try {
-        if (notificationListener.current && Notifications && typeof Notifications.removeNotificationSubscription === 'function') {
-          Notifications.removeNotificationSubscription(notificationListener.current);
+        if (notificationListener.current) {
+          notificationListener.current.remove();
         }
-        notificationListener.current = undefined;
+        notificationListener.current = null;
       } catch (e) {
         console.warn('[usePushNotifications] cleanup notificationListener error:', e);
       }
       try {
-        if (responseListener.current && Notifications && typeof Notifications.removeNotificationSubscription === 'function') {
-          Notifications.removeNotificationSubscription(responseListener.current);
+        if (responseListener.current) {
+          responseListener.current.remove();
         }
-        responseListener.current = undefined;
+        responseListener.current = null;
       } catch (e) {
         console.warn('[usePushNotifications] cleanup responseListener error:', e);
       }
@@ -362,9 +377,6 @@ export const usePushNotifications = () => {
           console.log('[usePushNotifications] Supabase Realtime subscription status:', status);
         });
 
-      // Armazenar canal para cleanup
-      (window as any).__webPushChannel = channel;
-
       // 3. Tentar também Web Push com VAPID (opcional, funciona se configurado)
       try {
         if (webPushService.isSupported()) {
@@ -385,15 +397,25 @@ export const usePushNotifications = () => {
       }
 
       // 4. Listener para notificações recebidas (via Service Worker message)
+      let serviceWorkerMessageHandler: ((event: MessageEvent) => void) | undefined;
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.addEventListener('message', (event) => {
+        serviceWorkerMessageHandler = (event: MessageEvent) => {
           if (event.data && event.data.type === 'NOTIFICATION_CLICK') {
             handleWebNotificationClick(event.data);
           }
-        });
+        };
+        navigator.serviceWorker.addEventListener('message', serviceWorkerMessageHandler);
       }
+
+      return () => {
+        supabase.removeChannel(channel);
+        if (serviceWorkerMessageHandler) {
+          navigator.serviceWorker.removeEventListener('message', serviceWorkerMessageHandler);
+        }
+      };
     } catch (error) {
       console.error('[usePushNotifications] Erro ao inicializar Web Push:', error);
+      return undefined;
     }
   };
 

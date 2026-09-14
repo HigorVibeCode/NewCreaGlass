@@ -17,6 +17,12 @@ import {
   getInventoryGroupIcon,
   INVENTORY_GROUP_NAMES,
 } from '../../src/constants/inventory-groups';
+import { repos } from '../../src/services/container';
+import { InventoryGroup, InventoryItem } from '../../src/types';
+import { theme } from '../../src/theme';
+import { useThemeColors } from '../../src/hooks/use-theme-colors';
+import { formatDate as formatDateUtil, formatTime as formatTimeUtil } from '../../src/utils/date-format';
+import { pushWithParams } from '../../src/utils/navigation';
 
 const INVENTORY_GROUP_DISPLAY_ORDER: string[] = [
   INVENTORY_GROUP_NAMES.GLASS,
@@ -24,12 +30,6 @@ const INVENTORY_GROUP_DISPLAY_ORDER: string[] = [
   INVENTORY_GROUP_NAMES.SUPPLIES,
   INVENTORY_GROUP_NAMES.MONTAGE_ACCESSORIES,
 ];
-import { repos } from '../../src/services/container';
-import { InventoryGroup, InventoryItem } from '../../src/types';
-import { theme } from '../../src/theme';
-import { useThemeColors } from '../../src/hooks/use-theme-colors';
-import { formatDate as formatDateUtil, formatTime as formatTimeUtil } from '../../src/utils/date-format';
-import { pushWithParams } from '../../src/utils/navigation';
 
 export default function InventoryScreen() {
   'use no memo';
@@ -359,8 +359,8 @@ export default function InventoryScreen() {
         console.log('Loading logo from URI:', uri);
         
         // Read the file as base64
-        const base64 = await FileSystem.readAsStringAsync(uri, {
-          encoding: FileSystem.EncodingType.Base64,
+        const base64 = await FileSystemLegacy.readAsStringAsync(uri, {
+          encoding: FileSystemLegacy.EncodingType.Base64,
         });
         
         console.log('Logo loaded successfully, base64 length:', base64.length);

@@ -61,7 +61,7 @@ export default function TrainingDetailScreen() {
   const [timeSpent, setTimeSpent] = useState(0);
   const signatureRef = useRef<any>(null);
   const startTimeRef = useRef<number | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [canComplete, setCanComplete] = useState(false);
   const [pendingSignature, setPendingSignature] = useState<string | null>(null);
   const isReadingSignatureRef = useRef(false);
@@ -917,21 +917,21 @@ export default function TrainingDetailScreen() {
                     {pendingSignature === 'waiting' ? (
                       <View style={[styles.statusIndicator, { backgroundColor: colors.primary + '20' }]}>
                         <ActivityIndicator size="small" color={colors.primary} />
-                        <Text style={[styles.statusText, { color: colors.primary }]}>
+                        <Text style={[styles.statusIndicatorText, { color: colors.primary }]}>
                           {t('training.processingSignature')}
                         </Text>
                       </View>
                     ) : signatureBase64 && fullName.trim() ? (
                       <View style={[styles.statusIndicator, { backgroundColor: colors.success + '20' }]}>
                         <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                        <Text style={[styles.statusText, { color: colors.success }]}>
+                        <Text style={[styles.statusIndicatorText, { color: colors.success }]}>
                           {t('training.signatureAndNameFilled')}
                         </Text>
                       </View>
                     ) : (
                       <View style={[styles.statusIndicator, { backgroundColor: colors.warning + '20' }]}>
                         <Ionicons name="alert-circle" size={20} color={colors.warning} />
-                        <Text style={[styles.statusText, { color: colors.warning }]}>
+                        <Text style={[styles.statusIndicatorText, { color: colors.warning }]}>
                           {!fullName.trim() 
                             ? t('training.fullNameRequired') 
                             : t('training.drawSignature')}
@@ -1379,7 +1379,7 @@ const styles = StyleSheet.create({
     padding: theme.spacing.sm,
     borderRadius: theme.borderRadius.md,
   },
-  statusText: {
+  statusIndicatorText: {
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,
     flex: 1,

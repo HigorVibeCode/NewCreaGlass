@@ -150,9 +150,9 @@ export class PushNotificationService {
    * Expo supports batch sending for better performance
    */
   async sendToTokens(
-    tokens: Array<{ token: string; platform: DeviceToken['platform']; deviceTokenId?: string }>,
+    tokens: { token: string; platform: DeviceToken['platform']; deviceTokenId?: string }[],
     payload: PushNotificationPayload
-  ): Promise<Array<{ token: string; deviceTokenId?: string; success: boolean; error?: string }>> {
+  ): Promise<{ token: string; deviceTokenId?: string; success: boolean; error?: string }[]> {
     if (tokens.length === 0) {
       return [];
     }

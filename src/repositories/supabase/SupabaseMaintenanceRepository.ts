@@ -127,7 +127,7 @@ export class SupabaseMaintenanceRepository implements MaintenanceRepository {
 
   async addMaintenanceInfo(
     recordId: string,
-    info: Omit<MaintenanceInfo, 'id' | 'createdAt' | 'updatedAt' | 'images'>
+    info: Omit<MaintenanceInfo, 'id' | 'createdAt' | 'updatedAt' | 'images' | 'maintenanceRecordId' | 'orderIndex'>
   ): Promise<MaintenanceInfo> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');

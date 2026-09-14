@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Platform,
   Alert,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -316,7 +317,6 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.sm,
   },
   generatorReadyCard: {
-    borderRadius: theme.borderRadius.md,
     borderRadius: theme.borderRadius.md,
     padding: theme.spacing.md,
     flexDirection: 'row',

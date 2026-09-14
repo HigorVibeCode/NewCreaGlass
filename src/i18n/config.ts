@@ -98,7 +98,7 @@ export const initI18n = async (): Promise<void> => {
         interpolation: {
           escapeValue: false,
         },
-        compatibilityJSON: 'v3',
+        compatibilityJSON: 'v4',
       });
       i18nInitialized = true;
     }

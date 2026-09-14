@@ -136,7 +136,9 @@ export class MockMaintenanceRepository implements MaintenanceRepository {
       await this.saveHistory(history);
     }
 
-    return await this.getMaintenanceRecordById(recordId)!;
+    const updatedRecord = await this.getMaintenanceRecordById(recordId);
+    if (!updatedRecord) throw new Error('Maintenance record not found after update');
+    return updatedRecord;
   }
 
   async uploadCoverImage(file: { uri: string; name: string; type: string }): Promise<string> {
@@ -162,7 +164,7 @@ export class MockMaintenanceRepository implements MaintenanceRepository {
 
   async addMaintenanceInfo(
     recordId: string,
-    info: Omit<MaintenanceInfo, 'id' | 'createdAt' | 'updatedAt' | 'images'>
+    info: Omit<MaintenanceInfo, 'id' | 'createdAt' | 'updatedAt' | 'images' | 'maintenanceRecordId' | 'orderIndex'>
   ): Promise<MaintenanceInfo> {
     const infos = await this.getInfos();
     const recordInfos = infos.filter(i => i.maintenanceRecordId === recordId);

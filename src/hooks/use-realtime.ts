@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { supabase, clearSupabaseAuthStorage, isRefreshTokenError } from '../services/supabase';
-import { useQueryClient } from '@tanstack/react-query';
+import { notifyManager, useQueryClient } from '@tanstack/react-query';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { triggerNotificationAlert } from '../utils/notification-alert';
 import { useAuth } from '../store/auth-store';
@@ -23,9 +23,7 @@ export const useRealtime = () => {
     const setupSubscriptions = () => {
       // Subscription para documentos
       const documentsChannel = supabase
-        .channel('documents-changes', {
-          config: { private: true },
-        })
+        .channel('documents-changes')
         .on(
           'postgres_changes',
           {
@@ -43,9 +41,7 @@ export const useRealtime = () => {
 
       // Subscription para inventário
       const inventoryChannel = supabase
-        .channel('inventory-changes', {
-          config: { private: true },
-        })
+        .channel('inventory-changes')
         .on(
           'postgres_changes',
           {
@@ -76,9 +72,7 @@ export const useRealtime = () => {
 
       // Subscription para notificações (apenas novas notificações)
       const notificationsChannel = supabase
-        .channel('notifications-changes', {
-          config: { private: true },
-        })
+        .channel('notifications-changes')
         .on(
           'postgres_changes',
           {
@@ -184,7 +178,7 @@ export const useRealtime = () => {
                 });
 
                 // Forçar notificação de mudança para garantir que componentes reajam
-                queryClient.notifyManager.batch(() => {
+                notifyManager.batch(() => {
                   queryClient.invalidateQueries({ 
                     queryKey: ['notifications', currentUser.id],
                     exact: true,
@@ -222,9 +216,7 @@ export const useRealtime = () => {
       // Subscription para notification_reads (para atualizar quando notificações são marcadas como lidas)
       // IMPORTANTE: Não invalidar queries quando hidden_at está sendo setado (clear all)
       const notificationReadsChannel = supabase
-        .channel('notification-reads-changes', {
-          config: { private: true },
-        })
+        .channel('notification-reads-changes')
         .on(
           'postgres_changes',
           {
@@ -234,15 +226,17 @@ export const useRealtime = () => {
           },
           (payload) => {
             console.log('Notification read change:', payload);
+            const newRead = payload.new as { user_id?: string; hidden_at?: string | null };
+            const oldRead = payload.old as { hidden_at?: string | null } | null;
             
             // Invalidar queries apenas se for para o usuário atual
-            if (payload.new?.user_id && userRef.current && payload.new.user_id === userRef.current.id) {
+            if (newRead.user_id && userRef.current && newRead.user_id === userRef.current.id) {
               // Se hidden_at está sendo setado (clear all), NÃO invalidar
               // O optimistic update já removeu as notificações da lista
               // Isso previne que as notificações voltem após serem limpas
-              const isClearAll = payload.new.hidden_at !== null && 
-                                payload.new.hidden_at !== undefined &&
-                                (payload.old === null || payload.old?.hidden_at === null || payload.old?.hidden_at === undefined);
+              const isClearAll = newRead.hidden_at !== null &&
+                                newRead.hidden_at !== undefined &&
+                                (oldRead === null || oldRead.hidden_at === null || oldRead.hidden_at === undefined);
               
               if (isClearAll) {
                 console.log('Clear all detected (hidden_at set) - skipping invalidation to prevent notifications from reappearing');
@@ -264,9 +258,7 @@ export const useRealtime = () => {
 
       // Subscription para produção
       const productionChannel = supabase
-        .channel('productions-changes', {
-          config: { private: true },
-        })
+        .channel('productions-changes')
         .on(
           'postgres_changes',
           {
@@ -296,9 +288,7 @@ export const useRealtime = () => {
 
       // Subscription para eventos
       const eventsChannel = supabase
-        .channel('events-changes', {
-          config: { private: true },
-        })
+        .channel('events-changes')
         .on(
           'postgres_changes',
           {
@@ -315,9 +305,7 @@ export const useRealtime = () => {
 
       // Subscription para usuários (apenas para admins)
       const usersChannel = supabase
-        .channel('users-changes', {
-          config: { private: true },
-        })
+        .channel('users-changes')
         .on(
           'postgres_changes',
           {
@@ -334,9 +322,7 @@ export const useRealtime = () => {
 
       // Subscription para Blood Priority
       const bloodPriorityChannel = supabase
-        .channel('blood-priority-changes', {
-          config: { private: true },
-        })
+        .channel('blood-priority-changes')
         .on(
           'postgres_changes',
           {
@@ -352,9 +338,7 @@ export const useRealtime = () => {
         .subscribe();
 
       const directMessagesChannel = supabase
-        .channel('user-direct-messages-changes', {
-          config: { private: true },
-        })
+        .channel('user-direct-messages-changes')
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'user_direct_messages' },
@@ -422,19 +406,17 @@ export const useRealtimeSubscription = (
   useEffect(() => {
     const setupSubscription = () => {
       const channel = supabase
-        .channel(`${table}-realtime`, {
-          config: { private: true },
-        });
+        .channel(`${table}-realtime`);
 
       events.forEach((event) => {
-        channel.on(
+        (channel as any).on(
           'postgres_changes',
           {
             event: event === '*' ? '*' : event,
             schema,
             table,
           },
-          (payload) => {
+          (payload: unknown) => {
             console.log(`${table} ${event}:`, payload);
             queryClient.invalidateQueries({ queryKey: [table] });
           }
