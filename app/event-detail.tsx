@@ -7,57 +7,93 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRouteParams } from '../src/hooks/use-route-params';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
 import { repos } from '../src/services/container';
+import { formatDateTime as formatDateTimeUtil } from '../src/utils/date-format';
 import { Event, EventType } from '../src/types';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
+import { confirmDelete } from '../src/utils/confirm-dialog';
+import { pushWithParams } from '../src/utils/navigation';
+import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
+import { shareViaWhatsApp } from '../src/utils/share-links';
 
 export default function EventDetailScreen() {
   const { t } = useI18n();
   const router = useRouter();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const { eventId } = useLocalSearchParams<{ eventId: string }>();
+  const { eventId } = useRouteParams<{ eventId: string }>('/event-detail');
+  const goBack = useGoBack('/(tabs)/events');
 
   const [event, setEvent] = useState<Event | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const showMsg = (message: string) => {
+    if (Platform.OS === 'web') {
+      window.alert(message);
+    } else {
+      Alert.alert('', message);
+    }
+  };
+
+  const handleToggleCompleted = async () => {
+    if (!eventId || !event) return;
+    const newStatus = event.status === 'completed' ? 'active' : 'completed';
+    setIsProcessing(true);
+    try {
+      await repos.eventsRepo.updateEvent(eventId, { status: newStatus } as any);
+      await loadEvent();
+      showMsg(
+        newStatus === 'completed'
+          ? (t('events.eventCompleted') || 'Evento marcado como concluído')
+          : (t('events.eventReactivated') || 'Evento reativado')
+      );
+    } catch (error) {
+      console.error('Error updating event status:', error);
+      showMsg(t('events.updateEventError') || 'Falha ao atualizar evento');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const handleEdit = () => {
     if (!eventId) return;
-    router.push({
-      pathname: '/event-create',
-      params: { eventId },
-    });
+    pushWithParams(router, '/event-create', { eventId: String(eventId) });
   };
 
   const handleDelete = () => {
-    Alert.alert(
-      t('common.delete') || 'Delete',
-      'Are you sure you want to delete this event?',
-      [
-        { text: t('common.cancel') || 'Cancel', style: 'cancel' },
-        {
-          text: t('common.delete') || 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (!eventId) return;
-            try {
-              await repos.eventsRepo.deleteEvent(eventId);
-              Alert.alert(t('common.success') || 'Success', 'Event deleted successfully', [
-                { text: t('common.confirm') || 'OK', onPress: () => router.back() },
-              ]);
-            } catch (error) {
-              console.error('Error deleting event:', error);
-              Alert.alert(t('common.error') || 'Error', 'Failed to delete event');
-            }
-          },
-        },
-      ]
+    if (!eventId) return;
+    
+    confirmDelete(
+      t('common.delete'),
+      t('events.deleteConfirm'),
+      async () => {
+        await repos.eventsRepo.deleteEvent(eventId);
+        safeBack(router);
+      },
+      undefined,
+      t('common.delete'),
+      t('common.cancel'),
+      t('events.deletedSuccess'),
+      t('events.deleteError')
+    );
+  };
+
+  const handleShare = async () => {
+    if (!eventId) return;
+    await shareViaWhatsApp(
+      { entity: 'event', params: { eventId } },
+      `Event ${event?.title || ''}`.trim()
     );
   };
 
@@ -70,18 +106,17 @@ export default function EventDetailScreen() {
   const loadEvent = async () => {
     if (!eventId) return;
     setIsLoading(true);
+    setLoadError(false);
     try {
       const eventData = await repos.eventsRepo.getEventById(eventId);
       if (eventData) {
         setEvent(eventData);
       } else {
-        Alert.alert(t('common.error'), 'Event not found', [
-          { text: t('common.confirm'), onPress: () => router.back() },
-        ]);
+        setLoadError(true);
       }
     } catch (error) {
       console.error('Error loading event:', error);
-      Alert.alert(t('common.error'), 'Failed to load event');
+      setLoadError(true);
     } finally {
       setIsLoading(false);
     }
@@ -108,9 +143,7 @@ export default function EventDetailScreen() {
 
   const formatDateTime = (date: string, time: string): string => {
     if (!date) return '';
-    const dateObj = new Date(date);
-    const dateStr = dateObj.toLocaleDateString();
-    return time ? `${dateStr} ${time}` : dateStr;
+    return formatDateTimeUtil(date, time);
   };
 
   if (isLoading) {
@@ -121,8 +154,23 @@ export default function EventDetailScreen() {
     );
   }
 
-  if (!event) {
-    return null;
+  if (loadError || !event) {
+    return (
+      <ScreenWrapper>
+        <View style={styles.loadingContainer}>
+          <Ionicons name="alert-circle-outline" size={48} color={colors.textSecondary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary, marginTop: 12 }]}>
+            {t('common.error')}
+          </Text>
+          <TouchableOpacity
+            onPress={goBack}
+            style={{ marginTop: 16, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: colors.primary, borderRadius: 8 }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600' }}>{t('common.back') || 'Back'}</Text>
+          </TouchableOpacity>
+        </View>
+      </ScreenWrapper>
+    );
   }
 
   return (
@@ -130,7 +178,7 @@ export default function EventDetailScreen() {
       <View style={[styles.header, { paddingTop: insets.top + theme.spacing.md, backgroundColor: colors.background }]}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={goBack}
           activeOpacity={0.7}
         >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -142,9 +190,33 @@ export default function EventDetailScreen() {
       <ScrollView style={[styles.scrollView, { backgroundColor: colors.background }]}>
         <View style={styles.content}>
           <View style={[styles.headerCard, { backgroundColor: colors.cardBackground }]}>
-            <Text style={[styles.eventTitle, { color: colors.text }]}>{event.title}</Text>
+            <View style={styles.headerRow}>
+              <Text style={[styles.eventTitle, { color: colors.text, flex: 1 }]}>{event.title}</Text>
+              <View
+                style={[
+                  styles.statusBadge,
+                  { backgroundColor: event.status === 'completed' ? '#10b981' + '20' : '#ea580c' + '20' },
+                ]}
+              >
+                <Ionicons
+                  name={event.status === 'completed' ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={12}
+                  color={event.status === 'completed' ? '#10b981' : '#ea580c'}
+                />
+                <Text
+                  style={[
+                    styles.statusText,
+                    { color: event.status === 'completed' ? '#10b981' : '#ea580c' },
+                  ]}
+                >
+                  {event.status === 'completed'
+                    ? (t('events.statusCompleted') || 'Concluído')
+                    : (t('events.statusActive') || 'Ativo')}
+                </Text>
+              </View>
+            </View>
             <View style={styles.typeBadge}>
-              <Text style={[styles.typeText, { color: '#2563eb' }]}>
+              <Text style={[styles.typeText, { color: '#ea580c' }]}>
                 {getTypeLabel(event.type)}
               </Text>
             </View>
@@ -235,6 +307,40 @@ export default function EventDetailScreen() {
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={[styles.iconButton, { backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border }]}
+            onPress={handleShare}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="share-social-outline" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.actionButton,
+              { backgroundColor: event.status === 'completed' ? '#ea580c' : '#10b981' },
+            ]}
+            onPress={handleToggleCompleted}
+            disabled={isProcessing}
+            activeOpacity={0.7}
+          >
+            {isProcessing ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <>
+                <Ionicons
+                  name={event.status === 'completed' ? 'refresh-outline' : 'checkmark-circle'}
+                  size={20}
+                  color="#ffffff"
+                />
+                <Text style={[styles.actionButtonText, { color: '#ffffff' }]}>
+                  {event.status === 'completed'
+                    ? (t('events.reactivateEvent') || 'Reativar')
+                    : (t('events.completeEvent') || 'Concluir')}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.iconButton, { backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border }]}
             onPress={handleEdit}
             activeOpacity={0.7}
           >
@@ -261,6 +367,9 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: theme.typography.fontSize.md,
   },
   header: {
     flexDirection: 'row',
@@ -295,10 +404,30 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.md,
     ...theme.shadows.sm,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: theme.spacing.xs,
+    gap: theme.spacing.sm,
+  },
   eventTitle: {
     fontSize: theme.typography.fontSize.xl,
     fontWeight: theme.typography.fontWeight.bold,
     marginBottom: theme.spacing.sm,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.borderRadius.sm,
+    flexShrink: 0,
+  },
+  statusText: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
   typeBadge: {
     alignSelf: 'flex-start',
@@ -352,9 +481,24 @@ const styles = StyleSheet.create({
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'center',
     gap: theme.spacing.md,
     marginTop: theme.spacing.xl,
     marginBottom: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.md,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.borderRadius.md,
+    ...theme.shadows.sm,
+  },
+  actionButtonText: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
   iconButton: {
     width: 48,

@@ -15,15 +15,17 @@ interface DropdownProps {
   value: string;
   options: DropdownOption[];
   onSelect: (value: string) => void;
+  getOptionTextColor?: (option: DropdownOption, isSelected: boolean) => string | undefined;
 }
 
-export const Dropdown: React.FC<DropdownProps> = ({ label, value, options, onSelect }) => {
+export const Dropdown: React.FC<DropdownProps> = ({ label, value, options, onSelect, getOptionTextColor }) => {
   const [visible, setVisible] = useState(false);
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   
   const safeOptions = options && options.length > 0 ? options : [{ label: 'Select...', value: '' }];
   const selectedOption = safeOptions.find(opt => opt.value === value) || safeOptions[0];
+  const selectedOptionTextColor = getOptionTextColor?.(selectedOption, true);
 
   const handleSelect = (optionValue: string) => {
     onSelect(optionValue);
@@ -38,7 +40,7 @@ export const Dropdown: React.FC<DropdownProps> = ({ label, value, options, onSel
         onPress={() => setVisible(true)}
         activeOpacity={0.7}
       >
-        <Text style={[styles.selectedText, { color: colors.text }]}>{selectedOption.label}</Text>
+        <Text style={[styles.selectedText, { color: selectedOptionTextColor || colors.text }]}>{selectedOption.label}</Text>
         <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
       </TouchableOpacity>
 
@@ -64,31 +66,35 @@ export const Dropdown: React.FC<DropdownProps> = ({ label, value, options, onSel
                   showsVerticalScrollIndicator={true}
                   nestedScrollEnabled={true}
                 >
-                  {safeOptions.map((option) => (
-                    <TouchableOpacity
-                      key={option.value}
-                      style={[
-                        styles.optionItem,
-                        { borderBottomColor: colors.borderLight },
-                        value === option.value && { backgroundColor: colors.primary + '10' },
-                      ]}
-                      onPress={() => handleSelect(option.value)}
-                      activeOpacity={0.7}
-                    >
-                      <Text
+                  {safeOptions.map((option) => {
+                    const isSelected = value === option.value;
+                    const optionCustomColor = getOptionTextColor?.(option, isSelected);
+                    return (
+                      <TouchableOpacity
+                        key={option.value}
                         style={[
-                          styles.optionText,
-                          { color: colors.text },
-                          value === option.value && { fontWeight: theme.typography.fontWeight.semibold, color: colors.primary },
+                          styles.optionItem,
+                          { borderBottomColor: colors.borderLight },
+                          isSelected && { backgroundColor: colors.primary + '10' },
                         ]}
+                        onPress={() => handleSelect(option.value)}
+                        activeOpacity={0.7}
                       >
-                        {option.label}
-                      </Text>
-                      {value === option.value && (
-                        <Ionicons name="checkmark" size={20} color={colors.primary} />
-                      )}
-                    </TouchableOpacity>
-                  ))}
+                        <Text
+                          style={[
+                            styles.optionText,
+                            { color: optionCustomColor || colors.text },
+                            isSelected && { fontWeight: theme.typography.fontWeight.semibold, color: optionCustomColor || colors.primary },
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                        {isSelected && (
+                          <Ionicons name="checkmark" size={20} color={colors.primary} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
                 </ScrollView>
               </View>
             </TouchableWithoutFeedback>

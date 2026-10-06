@@ -22,10 +22,9 @@ export class SupabaseBloodPriorityRepository implements BloodPriorityRepository 
       .from('blood_priority_messages')
       .select('*')
       .eq('id', messageId)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
       console.error('Error fetching blood priority message:', error);
       throw new Error('Failed to fetch blood priority message');
     }
@@ -64,6 +63,27 @@ export class SupabaseBloodPriorityRepository implements BloodPriorityRepository 
     return this.mapToMessage(data);
   }
 
+  async deleteMessage(messageId: string): Promise<void> {
+    const { error: readsError } = await supabase
+      .from('blood_priority_reads')
+      .delete()
+      .eq('message_id', messageId);
+
+    if (readsError) {
+      console.error('Error deleting blood priority reads:', readsError);
+    }
+
+    const { error } = await supabase
+      .from('blood_priority_messages')
+      .delete()
+      .eq('id', messageId);
+
+    if (error) {
+      console.error('Error deleting blood priority message:', error);
+      throw new Error('Failed to delete blood priority message');
+    }
+  }
+
   async getUserReads(userId: string): Promise<BloodPriorityRead[]> {
     const { data, error } = await supabase
       .from('blood_priority_reads')
@@ -79,18 +99,16 @@ export class SupabaseBloodPriorityRepository implements BloodPriorityRepository 
   }
 
   async getUnreadMessages(userId: string): Promise<BloodPriorityMessage[]> {
-    // Get all messages
-    const allMessages = await this.getAllMessages();
-    
-    // Get confirmed reads for this user
-    const { data: reads } = await supabase
-      .from('blood_priority_reads')
-      .select('message_id')
-      .eq('user_id', userId)
-      .not('confirmed_at', 'is', null);
+    const [allMessages, { data: reads }] = await Promise.all([
+      this.getAllMessages(),
+      supabase
+        .from('blood_priority_reads')
+        .select('message_id')
+        .eq('user_id', userId)
+        .not('confirmed_at', 'is', null),
+    ]);
 
     const readMessageIds = new Set((reads || []).map((r: any) => r.message_id));
-    
     return allMessages.filter(m => !readMessageIds.has(m.id));
   }
 
@@ -101,7 +119,7 @@ export class SupabaseBloodPriorityRepository implements BloodPriorityRepository 
       .select('*')
       .eq('message_id', messageId)
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       // Update opened_at if not set

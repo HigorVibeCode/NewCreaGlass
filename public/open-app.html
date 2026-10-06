@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Open in Crea Glass</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font-family: Arial, sans-serif;
+        background: #0b1220;
+        color: #f8fafc;
+      }
+      .card {
+        width: min(520px, 92vw);
+        background: #111b2e;
+        border: 1px solid #223252;
+        border-radius: 12px;
+        padding: 20px;
+        box-sizing: border-box;
+      }
+      h1 {
+        margin: 0 0 10px 0;
+        font-size: 22px;
+      }
+      p {
+        margin: 0 0 12px 0;
+        color: #cbd5e1;
+        line-height: 1.4;
+      }
+      .btn {
+        width: 100%;
+        border: 0;
+        border-radius: 10px;
+        background: #2563eb;
+        color: #fff;
+        font-weight: 700;
+        padding: 12px 14px;
+        cursor: pointer;
+      }
+      .link {
+        margin-top: 10px;
+        display: block;
+        text-align: center;
+        color: #93c5fd;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>Abrindo no app...</h1>
+      <p>Se o app não abrir automaticamente, toque no botão abaixo.</p>
+      <button class="btn" id="openBtn" type="button">Abrir no Crea Glass</button>
+      <a class="link" id="fallbackLink" href="/">Continuar no navegador</a>
+    </main>
+    <script>
+      (function () {
+        const params = new URLSearchParams(window.location.search);
+        const rawTarget = params.get('target') || '/';
+        const providedDeep = params.get('deep');
+        const normalizedPath = rawTarget.startsWith('/') ? rawTarget : `/${rawTarget}`;
+        const deepLink = providedDeep || `crea-glass://${normalizedPath.replace(/^\//, '')}`;
+        const webUrl = `${window.location.origin}${normalizedPath}`;
+        const isAndroid = /android/i.test(navigator.userAgent || '');
+        const buildAndroidIntent = (url) => {
+          if (!url.startsWith('exp://')) return null;
+          const withoutScheme = url.replace(/^exp:\/\//, '');
+          const base = withoutScheme.split('#')[0];
+          return `intent://${base}#Intent;scheme=exp;package=host.exp.exponent;S.browser_fallback_url=${encodeURIComponent(webUrl)};end`;
+        };
+        const androidIntentUrl = buildAndroidIntent(deepLink);
+
+        const openBtn = document.getElementById('openBtn');
+        const fallbackLink = document.getElementById('fallbackLink');
+        if (fallbackLink) fallbackLink.href = webUrl;
+
+        let fallbackTimer = null;
+        let hasOpened = false;
+        const cancelFallback = () => {
+          if (fallbackTimer) window.clearTimeout(fallbackTimer);
+          fallbackTimer = null;
+        };
+        document.addEventListener('visibilitychange', () => {
+          if (document.hidden) {
+            hasOpened = true;
+            cancelFallback();
+          }
+        });
+
+        const tryViaIframe = () => {
+          const iframe = document.createElement('iframe');
+          iframe.style.display = 'none';
+          iframe.src = deepLink;
+          document.body.appendChild(iframe);
+          setTimeout(() => {
+            if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+          }, 1200);
+        };
+
+        const tryOpenApp = () => {
+          cancelFallback();
+          fallbackTimer = window.setTimeout(() => {
+            if (!hasOpened) window.location.replace(webUrl);
+          }, 1400);
+          if (isAndroid && androidIntentUrl) {
+            window.location.href = androidIntentUrl;
+            return;
+          }
+          tryViaIframe();
+          setTimeout(() => {
+            window.location.href = deepLink;
+          }, 80);
+        };
+
+        if (openBtn) openBtn.addEventListener('click', tryOpenApp);
+        tryOpenApp();
+      })();
+    </script>
+  </body>
+</html>

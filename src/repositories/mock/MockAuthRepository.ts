@@ -90,4 +90,11 @@ export class MockAuthRepository implements AuthRepository {
       return false;
     }
   }
+
+  async validatePassword(password: string): Promise<boolean> {
+    const session = await this.getCurrentSession();
+    if (!session?.user?.id) return false;
+    const storedPassword = await this.usersRepo.getUserPassword(session.user.id);
+    return storedPassword !== null && storedPassword === password;
+  }
 }

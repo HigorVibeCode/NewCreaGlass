@@ -1,5 +1,4 @@
-// Theme inspired by Monday.com
-// Clean, modern, strong hierarchy, rounded cards, subtle shadows, clear accent color
+import { Platform } from 'react-native';
 
 export const theme = {
   colors: {
@@ -120,29 +119,35 @@ export const theme = {
     xl: 16,
   },
   
-  shadows: {
-    sm: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 2,
-      elevation: 2,
-    },
-    md: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 4,
-      elevation: 4,
-    },
-    lg: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.1,
-      shadowRadius: 8,
-      elevation: 8,
-    },
-  },
+  shadows: Platform.OS === 'web'
+    ? {
+        sm: { boxShadow: '0px 1px 2px rgba(0,0,0,0.05)' },
+        md: { boxShadow: '0px 2px 4px rgba(0,0,0,0.08)' },
+        lg: { boxShadow: '0px 4px 8px rgba(0,0,0,0.1)' },
+      }
+    : {
+        sm: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.05,
+          shadowRadius: 2,
+          elevation: 2,
+        },
+        md: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.08,
+          shadowRadius: 4,
+          elevation: 4,
+        },
+        lg: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          elevation: 8,
+        },
+      },
 };
 
 export type Theme = typeof theme;

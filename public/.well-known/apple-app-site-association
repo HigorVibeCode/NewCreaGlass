@@ -1,0 +1,17 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "YOUR_TEAM_ID.com.anonymous.CreaGlass",
+        "paths": [
+          "/production-detail*",
+          "/work-order-detail*",
+          "/event-detail*",
+          "/inventory-item-detail*",
+          "/*"
+        ]
+      }
+    ]
+  }
+}

@@ -17,7 +17,6 @@ export const PermissionGuard: React.FC<PermissionGuardProps> = ({
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
   
-  // Master users always have access - check this first
   if (user?.userType === 'Master') {
     return <>{children}</>;
   }

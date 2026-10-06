@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { supabase } from '../services/supabase';
-import { useQueryClient } from '@tanstack/react-query';
+import { supabase, clearSupabaseAuthStorage, isRefreshTokenError } from '../services/supabase';
+import { notifyManager, useQueryClient } from '@tanstack/react-query';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { triggerNotificationAlert } from '../utils/notification-alert';
 import { useAuth } from '../store/auth-store';
@@ -14,15 +14,16 @@ export const useRealtime = () => {
   const queryClient = useQueryClient();
   const channelsRef = useRef<RealtimeChannel[]>([]);
   const { user } = useAuth();
+  const userId = user?.id;
+  const userRef = useRef(user);
+  userRef.current = user;
 
   useEffect(() => {
     // Configurar subscriptions para as principais tabelas
     const setupSubscriptions = () => {
       // Subscription para documentos
       const documentsChannel = supabase
-        .channel('documents-changes', {
-          config: { private: true },
-        })
+        .channel('documents-changes')
         .on(
           'postgres_changes',
           {
@@ -40,9 +41,7 @@ export const useRealtime = () => {
 
       // Subscription para inventário
       const inventoryChannel = supabase
-        .channel('inventory-changes', {
-          config: { private: true },
-        })
+        .channel('inventory-changes')
         .on(
           'postgres_changes',
           {
@@ -73,9 +72,7 @@ export const useRealtime = () => {
 
       // Subscription para notificações (apenas novas notificações)
       const notificationsChannel = supabase
-        .channel('notifications-changes', {
-          config: { private: true },
-        })
+        .channel('notifications-changes')
         .on(
           'postgres_changes',
           {
@@ -84,11 +81,12 @@ export const useRealtime = () => {
             table: 'notifications',
           },
           (payload) => {
+            const currentUser = userRef.current;
             console.log('[REALTIME] New notification event received:', {
               eventType: payload.eventType,
               hasNew: !!payload.new,
-              hasUser: !!user,
-              userId: user?.id,
+              hasUser: !!currentUser,
+              userId: currentUser?.id,
               notificationTargetUserId: payload.new?.target_user_id,
             });
             
@@ -97,18 +95,18 @@ export const useRealtime = () => {
               const notification = payload.new;
               
               // Verificar se temos usuário logado
-              if (!user) {
+              if (!currentUser) {
                 console.warn('[REALTIME] No user logged in, skipping notification');
                 return;
               }
               
               // Verificar se a notificação é para o usuário atual ou é global
-              const isForCurrentUser = !notification.target_user_id || notification.target_user_id === user.id;
+              const isForCurrentUser = !notification.target_user_id || notification.target_user_id === currentUser.id;
               
               console.log('[REALTIME] Notification check:', {
                 isForCurrentUser,
                 targetUserId: notification.target_user_id,
-                currentUserId: user.id,
+                currentUserId: currentUser.id,
               });
               
               if (isForCurrentUser) {
@@ -141,13 +139,13 @@ export const useRealtime = () => {
                   readAt: undefined, // Nova notificação não está lida ainda
                 };
 
-                console.log('[REALTIME] Adding new notification to cache for user:', user.id, 'notification ID:', mappedNotification.id);
+                console.log('[REALTIME] Adding new notification to cache for user:', currentUser.id, 'notification ID:', mappedNotification.id);
                 
                 // Adicionar a nova notificação ao cache imediatamente (optimistic update)
-                const currentData = queryClient.getQueryData<Notification[]>(['notifications', user.id]);
+                const currentData = queryClient.getQueryData<Notification[]>(['notifications', currentUser.id]);
                 console.log('[REALTIME] Current cache data:', currentData?.length || 0, 'notifications');
                 
-                queryClient.setQueryData<Notification[]>(['notifications', user.id], (old) => {
+                queryClient.setQueryData<Notification[]>(['notifications', currentUser.id], (old) => {
                   if (!old) {
                     console.log('[REALTIME] No existing cache, creating new array with notification');
                     return [mappedNotification];
@@ -168,7 +166,9 @@ export const useRealtime = () => {
                   
                   // Verificar se a atualização foi aplicada
                   setTimeout(() => {
-                    const verifyData = queryClient.getQueryData<Notification[]>(['notifications', user.id]);
+                    const uid = userRef.current?.id;
+                    if (!uid) return;
+                    const verifyData = queryClient.getQueryData<Notification[]>(['notifications', uid]);
                     console.log('[REALTIME] Cache verification after update:', verifyData?.length || 0, 'notifications');
                     const found = verifyData?.some(n => n.id === mappedNotification.id);
                     console.log('[REALTIME] Notification found in cache after update:', found);
@@ -178,16 +178,16 @@ export const useRealtime = () => {
                 });
 
                 // Forçar notificação de mudança para garantir que componentes reajam
-                queryClient.notifyManager.batch(() => {
+                notifyManager.batch(() => {
                   queryClient.invalidateQueries({ 
-                    queryKey: ['notifications', user.id],
+                    queryKey: ['notifications', currentUser.id],
                     exact: true,
-                    refetchType: 'none', // Não refetch, apenas notificar mudança
+                    refetchType: 'none',
                   });
                 });
 
                 // Atualizar contador de não lidas
-                queryClient.setQueryData<number>(['notifications', 'unreadCount', user.id], (old) => {
+                queryClient.setQueryData<number>(['notifications', 'unreadCount', currentUser.id], (old) => {
                   const newCount = (old || 0) + 1;
                   console.log('[REALTIME] Updating unread count:', old, '->', newCount);
                   return newCount;
@@ -199,7 +199,7 @@ export const useRealtime = () => {
                 setTimeout(() => {
                   console.log('Background sync: refetching notifications after delay');
                   queryClient.refetchQueries({ 
-                    queryKey: ['notifications', user.id],
+                    queryKey: ['notifications', currentUser.id],
                     exact: true 
                   }).then(() => {
                     console.log('Background sync completed');
@@ -216,9 +216,7 @@ export const useRealtime = () => {
       // Subscription para notification_reads (para atualizar quando notificações são marcadas como lidas)
       // IMPORTANTE: Não invalidar queries quando hidden_at está sendo setado (clear all)
       const notificationReadsChannel = supabase
-        .channel('notification-reads-changes', {
-          config: { private: true },
-        })
+        .channel('notification-reads-changes')
         .on(
           'postgres_changes',
           {
@@ -228,15 +226,17 @@ export const useRealtime = () => {
           },
           (payload) => {
             console.log('Notification read change:', payload);
+            const newRead = payload.new as { user_id?: string; hidden_at?: string | null };
+            const oldRead = payload.old as { hidden_at?: string | null } | null;
             
             // Invalidar queries apenas se for para o usuário atual
-            if (payload.new?.user_id && user && payload.new.user_id === user.id) {
+            if (newRead.user_id && userRef.current && newRead.user_id === userRef.current.id) {
               // Se hidden_at está sendo setado (clear all), NÃO invalidar
               // O optimistic update já removeu as notificações da lista
               // Isso previne que as notificações voltem após serem limpas
-              const isClearAll = payload.new.hidden_at !== null && 
-                                payload.new.hidden_at !== undefined &&
-                                (payload.old === null || payload.old?.hidden_at === null || payload.old?.hidden_at === undefined);
+              const isClearAll = newRead.hidden_at !== null &&
+                                newRead.hidden_at !== undefined &&
+                                (oldRead === null || oldRead.hidden_at === null || oldRead.hidden_at === undefined);
               
               if (isClearAll) {
                 console.log('Clear all detected (hidden_at set) - skipping invalidation to prevent notifications from reappearing');
@@ -246,8 +246,10 @@ export const useRealtime = () => {
               // Para outras operações (marcar como lida individual), invalidar normalmente
               // Mas com um pequeno delay para evitar múltiplas invalidações em batch
               setTimeout(() => {
-                queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
-                queryClient.invalidateQueries({ queryKey: ['notifications', 'unreadCount', user.id] });
+                const uid = userRef.current?.id;
+                if (!uid) return;
+                queryClient.invalidateQueries({ queryKey: ['notifications', uid] });
+                queryClient.invalidateQueries({ queryKey: ['notifications', 'unreadCount', uid] });
               }, 100);
             }
           }
@@ -256,9 +258,7 @@ export const useRealtime = () => {
 
       // Subscription para produção
       const productionChannel = supabase
-        .channel('productions-changes', {
-          config: { private: true },
-        })
+        .channel('productions-changes')
         .on(
           'postgres_changes',
           {
@@ -288,9 +288,7 @@ export const useRealtime = () => {
 
       // Subscription para eventos
       const eventsChannel = supabase
-        .channel('events-changes', {
-          config: { private: true },
-        })
+        .channel('events-changes')
         .on(
           'postgres_changes',
           {
@@ -307,9 +305,7 @@ export const useRealtime = () => {
 
       // Subscription para usuários (apenas para admins)
       const usersChannel = supabase
-        .channel('users-changes', {
-          config: { private: true },
-        })
+        .channel('users-changes')
         .on(
           'postgres_changes',
           {
@@ -326,9 +322,7 @@ export const useRealtime = () => {
 
       // Subscription para Blood Priority
       const bloodPriorityChannel = supabase
-        .channel('blood-priority-changes', {
-          config: { private: true },
-        })
+        .channel('blood-priority-changes')
         .on(
           'postgres_changes',
           {
@@ -343,6 +337,17 @@ export const useRealtime = () => {
         )
         .subscribe();
 
+      const directMessagesChannel = supabase
+        .channel('user-direct-messages-changes')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'user_direct_messages' },
+          () => {
+            queryClient.invalidateQueries({ queryKey: ['directMessages'] });
+          }
+        )
+        .subscribe();
+
       channelsRef.current = [
         documentsChannel,
         inventoryChannel,
@@ -352,24 +357,39 @@ export const useRealtime = () => {
         eventsChannel,
         usersChannel,
         bloodPriorityChannel,
+        directMessagesChannel,
       ];
     };
 
     // Verificar se está autenticado antes de criar subscriptions
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setupSubscriptions();
-      }
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (session) {
+          setupSubscriptions();
+        }
+      })
+      .catch((err) => {
+        if (isRefreshTokenError(err)) {
+          clearSupabaseAuthStorage();
+        }
+      });
 
     // Cleanup: remover todas as subscriptions quando o componente desmontar
     return () => {
-      channelsRef.current.forEach((channel) => {
-        supabase.removeChannel(channel);
-      });
-      channelsRef.current = [];
+      try {
+        channelsRef.current.forEach((channel) => {
+          try {
+            supabase.removeChannel(channel);
+          } catch (e) {
+            console.warn('[useRealtime] Error removing channel:', e);
+          }
+        });
+        channelsRef.current = [];
+      } catch (e) {
+        console.warn('[useRealtime] Cleanup error:', e);
+      }
     };
-  }, [queryClient, user]);
+  }, [queryClient, userId]);
 };
 
 /**
@@ -386,19 +406,17 @@ export const useRealtimeSubscription = (
   useEffect(() => {
     const setupSubscription = () => {
       const channel = supabase
-        .channel(`${table}-realtime`, {
-          config: { private: true },
-        });
+        .channel(`${table}-realtime`);
 
       events.forEach((event) => {
-        channel.on(
+        (channel as any).on(
           'postgres_changes',
           {
             event: event === '*' ? '*' : event,
             schema,
             table,
           },
-          (payload) => {
+          (payload: unknown) => {
             console.log(`${table} ${event}:`, payload);
             queryClient.invalidateQueries({ queryKey: [table] });
           }
@@ -409,16 +427,26 @@ export const useRealtimeSubscription = (
       channelRef.current = channel;
     };
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setupSubscription();
-      }
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (session) {
+          setupSubscription();
+        }
+      })
+      .catch((err) => {
+        if (isRefreshTokenError(err)) {
+          clearSupabaseAuthStorage();
+        }
+      });
 
     return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
+      try {
+        if (channelRef.current) {
+          supabase.removeChannel(channelRef.current);
+          channelRef.current = null;
+        }
+      } catch (e) {
+        console.warn('[useRealtimeSubscription] Cleanup error:', e);
       }
     };
   }, [table, schema, events, queryClient]);

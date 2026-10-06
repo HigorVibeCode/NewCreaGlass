@@ -35,4 +35,19 @@ export class MockEventsRepository implements EventsRepository {
     await this.saveEvents(events);
     return newEvent;
   }
+
+  async updateEvent(eventId: string, updates: Partial<Event>): Promise<Event> {
+    const events = await this.getEvents();
+    const index = events.findIndex((event) => event.id === eventId);
+    if (index < 0) throw new Error('Event not found');
+    const updatedEvent = { ...events[index], ...updates, id: eventId };
+    events[index] = updatedEvent;
+    await this.saveEvents(events);
+    return updatedEvent;
+  }
+
+  async deleteEvent(eventId: string): Promise<void> {
+    const events = await this.getEvents();
+    await this.saveEvents(events.filter((event) => event.id !== eventId));
+  }
 }

@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { useI18n } from '../src/hooks/use-i18n';
-import { useAppTheme } from '../src/hooks/use-app-theme';
 import { Dropdown, DropdownOption } from '../src/components/shared/Dropdown';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
@@ -18,19 +17,12 @@ const LANGUAGE_LABELS = {
 
 export default function SettingsScreen() {
   const { t, changeLanguage, currentLanguage } = useI18n();
-  const { themeMode, setThemeMode } = useAppTheme();
   const colors = useThemeColors();
 
   const languageOptions: DropdownOption[] = LANGUAGE_CODES.map(code => ({
     label: t(`settings.${LANGUAGE_LABELS[code]}`),
     value: code,
   }));
-
-  const themeOptions: DropdownOption[] = [
-    { label: t('settings.light'), value: 'light' },
-    { label: t('settings.dark'), value: 'dark' },
-    { label: t('settings.system'), value: 'system' },
-  ];
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -41,15 +33,6 @@ export default function SettingsScreen() {
             value={currentLanguage}
             options={languageOptions}
             onSelect={(value) => changeLanguage(value)}
-          />
-        </View>
-
-        <View style={styles.section}>
-          <Dropdown
-            label={t('settings.theme')}
-            value={themeMode}
-            options={themeOptions}
-            onSelect={(value) => setThemeMode(value as 'light' | 'dark' | 'system')}
           />
         </View>
       </View>

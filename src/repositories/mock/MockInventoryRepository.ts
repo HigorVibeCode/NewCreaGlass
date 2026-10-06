@@ -1,38 +1,49 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { InventoryRepository } from '../../services/repositories/interfaces';
-import { InventoryGroup, InventoryHistory, InventoryItem } from '../../types';
+import {
+  INVENTORY_GROUP_NAMES,
+  LEGACY_INVENTORY_GROUP_IDS,
+} from '../../constants/inventory-groups';
+import { InventoryGroup, InventoryHistory, InventoryItem, InventoryItemImage } from '../../types';
+
+const FIXED_INVENTORY_GROUPS: InventoryGroup[] = [
+  {
+    id: LEGACY_INVENTORY_GROUP_IDS.GLASS,
+    name: INVENTORY_GROUP_NAMES.GLASS,
+    createdBy: 'system',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: LEGACY_INVENTORY_GROUP_IDS.PROFILES,
+    name: INVENTORY_GROUP_NAMES.PROFILES,
+    createdBy: 'system',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: LEGACY_INVENTORY_GROUP_IDS.SUPPLIES,
+    name: INVENTORY_GROUP_NAMES.SUPPLIES,
+    createdBy: 'system',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: LEGACY_INVENTORY_GROUP_IDS.MONTAGE_ACCESSORIES,
+    name: INVENTORY_GROUP_NAMES.MONTAGE_ACCESSORIES,
+    createdBy: 'system',
+    createdAt: new Date().toISOString(),
+  },
+];
 
 const STORAGE_KEY_GROUPS = 'mock_inventory_groups';
 const STORAGE_KEY_ITEMS = 'mock_inventory_items';
 const STORAGE_KEY_HISTORY = 'mock_inventory_history';
+const STORAGE_KEY_ITEM_IMAGES = 'mock_inventory_item_images';
 
 export class MockInventoryRepository implements InventoryRepository {
   private async getGroups(): Promise<InventoryGroup[]> {
     const stored = await AsyncStorage.getItem(STORAGE_KEY_GROUPS);
     if (!stored) {
-      // Initialize with 3 fixed groups
-      const fixedGroups: InventoryGroup[] = [
-        {
-          id: 'group-glass',
-          name: 'Glass',
-          createdBy: 'system',
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: 'group-supplies',
-          name: 'Supplies',
-          createdBy: 'system',
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: 'group-spare-parts',
-          name: 'Spare Parts',
-          createdBy: 'system',
-          createdAt: new Date().toISOString(),
-        },
-      ];
-      await this.saveGroups(fixedGroups);
-      return fixedGroups;
+      await this.saveGroups(FIXED_INVENTORY_GROUPS);
+      return FIXED_INVENTORY_GROUPS;
     }
     return JSON.parse(stored);
   }
@@ -42,32 +53,12 @@ export class MockInventoryRepository implements InventoryRepository {
   }
   
   async getAllGroups(): Promise<InventoryGroup[]> {
-    // Always return the 3 fixed groups
-    return [
-      {
-        id: 'group-glass',
-        name: 'Glass',
-        createdBy: 'system',
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'group-supplies',
-        name: 'Supplies',
-        createdBy: 'system',
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'group-spare-parts',
-        name: 'Spare Parts',
-        createdBy: 'system',
-        createdAt: new Date().toISOString(),
-      },
-    ];
+    return FIXED_INVENTORY_GROUPS;
   }
   
   async createGroup(group: Omit<InventoryGroup, 'id' | 'createdAt'>): Promise<InventoryGroup> {
     // Groups cannot be created - they are fixed
-    throw new Error('Cannot create groups - only 3 fixed groups exist');
+    throw new Error('Cannot create groups - only fixed groups exist');
   }
   
   private async getItems(): Promise<InventoryItem[]> {
@@ -97,16 +88,48 @@ export class MockInventoryRepository implements InventoryRepository {
   
   async getItemsByGroup(groupId: string): Promise<InventoryItem[]> {
     const items = await this.getItems();
-    return items.filter(i => i.groupId === groupId);
+    const filtered = items.filter(i => i.groupId === groupId);
+    await this.attachImagesToItems(filtered);
+    return filtered;
   }
   
   async getAllItems(): Promise<InventoryItem[]> {
-    return this.getItems();
+    const items = await this.getItems();
+    await this.attachImagesToItems(items);
+    return items;
   }
   
   async getItemById(itemId: string): Promise<InventoryItem | null> {
     const items = await this.getItems();
-    return items.find(i => i.id === itemId) || null;
+    const item = items.find(i => i.id === itemId) || null;
+    if (item) await this.attachImagesToItems([item]);
+    return item;
+  }
+
+  async getItemsByIds(ids: string[]): Promise<InventoryItem[]> {
+    const items = await this.getItems();
+    const found = items.filter(i => ids.includes(i.id));
+    await this.attachImagesToItems(found);
+    return found;
+  }
+
+  private async getItemImages(): Promise<InventoryItemImage[]> {
+    const stored = await AsyncStorage.getItem(STORAGE_KEY_ITEM_IMAGES);
+    if (!stored) return [];
+    return JSON.parse(stored);
+  }
+
+  private async saveItemImages(images: InventoryItemImage[]): Promise<void> {
+    await AsyncStorage.setItem(STORAGE_KEY_ITEM_IMAGES, JSON.stringify(images));
+  }
+
+  private async attachImagesToItems(items: InventoryItem[]): Promise<void> {
+    const allImages = await this.getItemImages();
+    for (const item of items) {
+      item.images = allImages
+        .filter(im => im.itemId === item.id)
+        .sort((a, b) => (a.isMain === b.isMain ? a.sortOrder - b.sortOrder : a.isMain ? -1 : 1));
+    }
   }
   
   async createItem(item: Omit<InventoryItem, 'id' | 'createdAt'>): Promise<InventoryItem> {
@@ -241,4 +264,54 @@ export class MockInventoryRepository implements InventoryRepository {
     const history = await this.getHistory();
     return history.filter(h => h.itemId === itemId);
   }
+
+  async addItemImage(
+    itemId: string,
+    file: { uri: string; name: string; type: string },
+    isMain = false
+  ): Promise<InventoryItemImage> {
+    const images = await this.getItemImages();
+    const itemImages = images.filter(im => im.itemId === itemId);
+    if (itemImages.length >= 3) throw new Error('Maximum of 3 images per item');
+    if (isMain) {
+      for (const im of images) {
+        if (im.itemId === itemId) (im as InventoryItemImage).isMain = false;
+      }
+      await this.saveItemImages(images);
+    }
+    const newImage: InventoryItemImage = {
+      id: 'img-' + Date.now(),
+      itemId,
+      storagePath: `inventory-items/${itemId}/${Date.now()}.${file.name.split('.').pop() || 'jpg'}`,
+      sortOrder: itemImages.length,
+      isMain,
+      createdAt: new Date().toISOString(),
+    };
+    images.push(newImage);
+    await this.saveItemImages(images);
+    return newImage;
+  }
+
+  async deleteItemImage(imageId: string): Promise<void> {
+    const images = await this.getItemImages();
+    const filtered = images.filter(im => im.id !== imageId);
+    if (filtered.length === images.length) throw new Error('Image not found');
+    await this.saveItemImages(filtered);
+  }
+
+  async setMainItemImage(imageId: string): Promise<void> {
+    const images = await this.getItemImages();
+    const image = images.find(img => img.id === imageId);
+    if (!image) throw new Error('Image not found');
+    for (const im of images) {
+      (im as InventoryItemImage).isMain = im.itemId === image.itemId && im.id === imageId;
+    }
+    await this.saveItemImages(images);
+  }
+
+  async getItemImageUrlSigned(_storagePath: string): Promise<string> {
+    return '';
+  }
+
+  async prefetchItemImageUrls(_storagePaths: string[]): Promise<void> {}
 }

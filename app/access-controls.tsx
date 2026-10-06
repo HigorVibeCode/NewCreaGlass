@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, Alert } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback, Alert, Switch, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useAuth } from '../src/store/auth-store';
@@ -12,6 +12,101 @@ import { repos } from '../src/services/container';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { User, UserType } from '../src/types';
+import { confirmDialog } from '../src/utils/confirm-dialog';
+
+type PermissionDef = { key: string; descriptionI18nKey: string };
+
+interface PermissionGroup {
+  titleI18nKey: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  permissions: PermissionDef[];
+}
+
+const PERMISSION_GROUPS: PermissionGroup[] = [
+  {
+    titleI18nKey: 'permissions._group.production',
+    icon: 'construct',
+    permissions: [
+      { key: 'production.create', descriptionI18nKey: 'permissions.production.create' },
+      { key: 'production.update', descriptionI18nKey: 'permissions.production.update' },
+      { key: 'production.delete', descriptionI18nKey: 'permissions.production.delete' },
+    ],
+  },
+  {
+    titleI18nKey: 'permissions._group.documents',
+    icon: 'book',
+    permissions: [
+      { key: 'documents.view', descriptionI18nKey: 'permissions.documents.view' },
+      { key: 'documents.upload', descriptionI18nKey: 'permissions.documents.upload' },
+      { key: 'documents.create', descriptionI18nKey: 'permissions.documents.create' },
+      { key: 'documents.download', descriptionI18nKey: 'permissions.documents.download' },
+      { key: 'documents.update', descriptionI18nKey: 'permissions.documents.update' },
+      { key: 'documents.delete', descriptionI18nKey: 'permissions.documents.delete' },
+    ],
+  },
+  {
+    titleI18nKey: 'permissions._group.events',
+    icon: 'calendar',
+    permissions: [
+      { key: 'events.view', descriptionI18nKey: 'permissions.events.view' },
+      { key: 'events.create', descriptionI18nKey: 'permissions.events.create' },
+      { key: 'events.update', descriptionI18nKey: 'permissions.events.update' },
+      { key: 'events.delete', descriptionI18nKey: 'permissions.events.delete' },
+      { key: 'events.history', descriptionI18nKey: 'permissions.events.history' },
+      { key: 'events.report.create', descriptionI18nKey: 'permissions.events.report.create' },
+      { key: 'workOrders.view', descriptionI18nKey: 'permissions.workOrders.view' },
+      { key: 'workOrders.create', descriptionI18nKey: 'permissions.workOrders.create' },
+      { key: 'workOrders.update', descriptionI18nKey: 'permissions.workOrders.update' },
+      { key: 'workOrders.delete', descriptionI18nKey: 'permissions.workOrders.delete' },
+    ],
+  },
+  {
+    titleI18nKey: 'permissions._group.inventory',
+    icon: 'cube',
+    permissions: [
+      { key: 'inventory.create', descriptionI18nKey: 'permissions.inventory.create' },
+      { key: 'inventory.update', descriptionI18nKey: 'permissions.inventory.update' },
+      { key: 'inventory.delete', descriptionI18nKey: 'permissions.inventory.delete' },
+      { key: 'inventory.group.create', descriptionI18nKey: 'permissions.inventory.group.create' },
+      { key: 'inventory.item.create', descriptionI18nKey: 'permissions.inventory.item.create' },
+      { key: 'inventory.item.update', descriptionI18nKey: 'permissions.inventory.item.update' },
+      { key: 'inventory.item.delete', descriptionI18nKey: 'permissions.inventory.item.delete' },
+      { key: 'inventory.item.adjustStock', descriptionI18nKey: 'permissions.inventory.item.adjustStock' },
+      { key: 'inventory.viewHistory', descriptionI18nKey: 'permissions.inventory.viewHistory' },
+    ],
+  },
+  {
+    titleI18nKey: 'permissions._group.notifications',
+    icon: 'notifications',
+    permissions: [
+      { key: 'notifications.view', descriptionI18nKey: 'permissions.notifications.view' },
+      { key: 'bloodPriority.view', descriptionI18nKey: 'permissions.bloodPriority.view' },
+      { key: 'bloodPriority.confirmRead', descriptionI18nKey: 'permissions.bloodPriority.confirmRead' },
+      { key: 'bloodPriority.create', descriptionI18nKey: 'permissions.bloodPriority.create' },
+    ],
+  },
+  {
+    titleI18nKey: 'permissions._group.admin',
+    icon: 'shield-checkmark',
+    permissions: [
+      { key: 'accessControls.view', descriptionI18nKey: 'permissions.accessControls.view' },
+      { key: 'accessControls.manageUsers', descriptionI18nKey: 'permissions.accessControls.manageUsers' },
+      { key: 'accessControls.managePermissions', descriptionI18nKey: 'permissions.accessControls.managePermissions' },
+      { key: 'users.activateDeactivate', descriptionI18nKey: 'permissions.users.activateDeactivate' },
+      { key: 'users.create', descriptionI18nKey: 'permissions.users.create' },
+    ],
+  },
+  {
+    titleI18nKey: 'permissions._group.devices',
+    icon: 'qr-code',
+    permissions: [
+      { key: 'qr.scan', descriptionI18nKey: 'permissions.qr.scan' },
+      { key: 'nfc.read', descriptionI18nKey: 'permissions.nfc.read' },
+    ],
+  },
+];
+
+const REQUIRED_PERMISSIONS: PermissionDef[] = PERMISSION_GROUPS.flatMap(g => g.permissions);
 
 export default function AccessControlsScreen() {
   const { t } = useI18n();
@@ -19,7 +114,7 @@ export default function AccessControlsScreen() {
   const colors = useThemeColors();
   const queryClient = useQueryClient();
   const { data: users = [] } = useUsersQuery();
-  const { data: allPermissions = [] } = useAllPermissionsQuery();
+  const { data: allPermissions = [], isSuccess: permissionsLoaded } = useAllPermissionsQuery();
 
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
   const [showUserPermissionsModal, setShowUserPermissionsModal] = useState<string | null>(null);
@@ -30,6 +125,33 @@ export default function AccessControlsScreen() {
   const [changePasswordValue, setChangePasswordValue] = useState('');
 
   const isMaster = user?.userType === 'Master';
+  const permsSyncedRef = useRef(false);
+
+  // Auto-sync: ensure all required permissions exist in the database (runs once per mount)
+  useEffect(() => {
+    if (!isMaster || permsSyncedRef.current || !permissionsLoaded) return;
+    permsSyncedRef.current = true;
+
+    const syncPermissions = async () => {
+      const existingKeys = new Set(allPermissions.map(p => p.key));
+      const missing = REQUIRED_PERMISSIONS.filter(rp => !existingKeys.has(rp.key));
+      if (missing.length === 0) return;
+      console.log('[AccessControl] Creating missing permissions:', missing.map(m => m.key));
+      for (const perm of missing) {
+        try {
+          await repos.permissionsRepo.createPermission({
+            key: perm.key,
+            descriptionI18nKey: perm.descriptionI18nKey,
+          });
+        } catch (err) {
+          console.warn('[AccessControl] Failed to create permission:', perm.key, err);
+        }
+      }
+      // Refresh the permissions list
+      queryClient.invalidateQueries({ queryKey: ['allPermissions'] });
+    };
+    syncPermissions();
+  }, [isMaster, allPermissions]);
 
   const userTypeOptions: DropdownOption[] = [
     { label: 'Manager', value: 'Manager' },
@@ -102,13 +224,34 @@ export default function AccessControlsScreen() {
 
   const handleToggleUserActive = (userToToggle: User) => {
     if (userToToggle.userType === 'Master') {
-      Alert.alert(t('common.error'), 'Cannot deactivate Master user');
+      Alert.alert(t('common.error'), t('accessControls.onlyMasterCanManage'));
       return;
     }
-    toggleUserActiveMutation.mutate({
-      userId: userToToggle.id,
-      isActive: !userToToggle.isActive,
-    });
+    
+    const isActivating = !userToToggle.isActive;
+    
+    if (isActivating) {
+      // Ativar usuário - sem confirmação necessária
+      toggleUserActiveMutation.mutate({
+        userId: userToToggle.id,
+        isActive: true,
+      });
+    } else {
+      // Desativar usuário - pedir confirmação
+      confirmDialog(
+        t('accessControls.deactivateUser'),
+        t('accessControls.deactivateUserConfirm', { username: userToToggle.username }),
+        () => {
+          toggleUserActiveMutation.mutate({
+            userId: userToToggle.id,
+            isActive: false,
+          });
+        },
+        undefined,
+        t('accessControls.deactivate'),
+        t('common.cancel')
+      );
+    }
   };
 
   const handleChangePassword = () => {
@@ -147,6 +290,13 @@ export default function AccessControlsScreen() {
       queryClient.invalidateQueries({ queryKey: ['permissions', userId] });
     };
 
+    const permsByKey = new Map(allPermissions.map(p => [p.key, p]));
+
+    const assignedCount = REQUIRED_PERMISSIONS.filter(rp => {
+      const dbPerm = permsByKey.get(rp.key);
+      return dbPerm && userPermissions.includes(dbPerm.id);
+    }).length;
+
     if (!selectedUser) return null;
 
     return (
@@ -157,33 +307,70 @@ export default function AccessControlsScreen() {
         onRequestClose={() => setShowUserPermissionsModal(null)}
       >
         <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
-          <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+          <View style={[styles.permissionsModalContent, { backgroundColor: colors.background }]}>
             <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>
-                {t('accessControls.permissions')} - {selectedUser.username}
-              </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>
+                  {t('accessControls.permissions')} - {selectedUser.username}
+                </Text>
+                <Text style={[styles.permissionsCount, { color: colors.textSecondary }]}>
+                  {assignedCount}/{REQUIRED_PERMISSIONS.length}
+                </Text>
+              </View>
               <TouchableOpacity onPress={() => setShowUserPermissionsModal(null)}>
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.modalBody}>
-              {allPermissions.map((permission) => {
-                const isAssigned = userPermissions.includes(permission.id);
+            <ScrollView style={styles.permissionsScrollBody}>
+              {PERMISSION_GROUPS.map((group) => {
+                const groupPerms = group.permissions
+                  .map(gp => ({ def: gp, dbPerm: permsByKey.get(gp.key) }))
+                  .filter(item => item.dbPerm);
+
+                if (groupPerms.length === 0) return null;
+
+                const groupAssigned = groupPerms.filter(gp => userPermissions.includes(gp.dbPerm!.id)).length;
+
                 return (
-                  <TouchableOpacity
-                    key={permission.id}
-                    style={[
-                      styles.permissionItem,
-                      { borderBottomColor: colors.borderLight },
-                      isAssigned && { backgroundColor: colors.primary + '10' },
-                    ]}
-                    onPress={() => togglePermission(permission.id)}
-                  >
-                    <Text style={[styles.permissionText, { color: colors.text }]}>
-                      {t(permission.descriptionI18nKey)}
-                    </Text>
-                    {isAssigned && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
-                  </TouchableOpacity>
+                  <View key={group.titleI18nKey} style={styles.permissionGroup}>
+                    <View style={[styles.groupHeader, { backgroundColor: colors.cardBackground }]}>
+                      <Ionicons
+                        name={group.icon as any}
+                        size={18}
+                        color={colors.primary}
+                        style={{ marginRight: 8 }}
+                      />
+                      <Text style={[styles.groupTitle, { color: colors.text }]}>
+                        {t(group.titleI18nKey)}
+                      </Text>
+                      <Text style={[styles.groupCount, { color: colors.textTertiary }]}>
+                        {groupAssigned}/{groupPerms.length}
+                      </Text>
+                    </View>
+                    {groupPerms.map(({ def, dbPerm }) => {
+                      const isAssigned = userPermissions.includes(dbPerm!.id);
+                      return (
+                        <View
+                          key={dbPerm!.id}
+                          style={[
+                            styles.permissionItem,
+                            { borderBottomColor: colors.borderLight },
+                            isAssigned && { backgroundColor: colors.primary + '10' },
+                          ]}
+                        >
+                          <Text style={[styles.permissionText, { color: colors.text }]}>
+                            {t(def.descriptionI18nKey)}
+                          </Text>
+                          <Switch
+                            value={isAssigned}
+                            onValueChange={() => togglePermission(dbPerm!.id)}
+                            trackColor={{ false: colors.border, true: colors.primary }}
+                            thumbColor={Platform.OS === 'android' ? colors.background : undefined}
+                          />
+                        </View>
+                      );
+                    })}
+                  </View>
                 );
               })}
             </ScrollView>
@@ -542,16 +729,54 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 100,
   },
+  permissionsModalContent: {
+    borderRadius: theme.borderRadius.lg,
+    width: '100%',
+    maxWidth: 500,
+    maxHeight: '90%',
+    ...theme.shadows.lg,
+  },
+  permissionsScrollBody: {
+    paddingHorizontal: theme.spacing.md,
+    paddingBottom: theme.spacing.lg,
+  },
+  permissionsCount: {
+    fontSize: theme.typography.fontSize.xs,
+    marginTop: 2,
+  },
+  permissionGroup: {
+    marginBottom: theme.spacing.md,
+  },
+  groupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.borderRadius.sm,
+    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
+  },
+  groupTitle: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.bold,
+    flex: 1,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+  },
+  groupCount: {
+    fontSize: theme.typography.fontSize.xs,
+  },
   permissionItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.md,
     borderBottomWidth: 1,
+    marginLeft: theme.spacing.sm,
   },
   permissionText: {
-    fontSize: theme.typography.fontSize.md,
+    fontSize: theme.typography.fontSize.sm,
     flex: 1,
   },
   modalSubtitle: {
