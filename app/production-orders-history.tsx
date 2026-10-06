@@ -12,13 +12,16 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
+import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
+import { formatDate } from '../src/utils/date-format';
 import { repos } from '../src/services/container';
 import { Production } from '../src/types';
 import { ProductionStatusBadge } from '../src/components/shared/ProductionStatusBadge';
 import { getStatusAppearance } from '../src/utils/production-status';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
+import { pushWithParams } from '../src/utils/navigation';
 
 export default function ProductionOrdersHistoryScreen() {
   const { t } = useI18n();
@@ -83,8 +86,9 @@ export default function ProductionOrdersHistoryScreen() {
         <View style={styles.headerContent}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={() => safeBack(router)}
             activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
@@ -128,10 +132,7 @@ export default function ProductionOrdersHistoryScreen() {
                   style={[styles.card, { backgroundColor: colors.cardBackground }]}
                   activeOpacity={0.7}
                   onPress={() => {
-                    router.push({
-                      pathname: '/production-detail',
-                      params: { productionId: production.id },
-                    });
+                    pushWithParams(router, '/production-detail', { productionId: production.id });
                   }}
                 >
                   <View style={[styles.cardIndicator, { backgroundColor: statusColor }]} />
@@ -158,14 +159,14 @@ export default function ProductionOrdersHistoryScreen() {
                       <View style={styles.metaRow}>
                         <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
                         <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-                          {t('production.dueDate')}: {new Date(production.dueDate).toLocaleDateString()}
+                          {t('production.dueDate')}: {formatDate(production.dueDate)}
                         </Text>
                       </View>
                       {production.createdAt && (
                         <View style={styles.metaRow}>
                           <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
                           <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-                            {new Date(production.createdAt).toLocaleDateString()}
+                            {formatDate(production.createdAt)}
                           </Text>
                         </View>
                       )}
@@ -193,6 +194,11 @@ const styles = StyleSheet.create({
   backButton: {
     padding: theme.spacing.xs,
     marginLeft: -theme.spacing.xs,
+    zIndex: 10,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
     flex: 1,

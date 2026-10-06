@@ -8,15 +8,8 @@ export const usePermissions = () => {
   const { data: permissions = [] } = usePermissionsQuery(user?.id);
   
   const hasPermission = (permissionKey: PermissionKey): boolean => {
-    // Always return false if no user
     if (!user) return false;
-    
-    // Master user has ALL permissions - check this FIRST before anything else
-    if (user.userType === 'Master') {
-      return true;
-    }
-    
-    // For non-Master users, check permissions
+    if (user.userType === 'Master') return true;
     return can(user, permissionKey, permissions);
   };
   
@@ -26,8 +19,10 @@ export const usePermissions = () => {
       // Return all possible permission keys for Master
       return [
         'documents.upload',
+        'documents.create',
         'documents.view',
         'documents.download',
+        'documents.update',
         'documents.delete',
         'inventory.create',
         'inventory.update',
@@ -58,6 +53,10 @@ export const usePermissions = () => {
         'events.delete',
         'events.history',
         'events.report.create',
+        'workOrders.create',
+        'workOrders.view',
+        'workOrders.update',
+        'workOrders.delete',
       ] as PermissionKey[];
     }
     return permissions.map(p => p.key as PermissionKey);

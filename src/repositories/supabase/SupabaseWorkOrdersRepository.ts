@@ -26,12 +26,60 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
       throw new Error('Failed to fetch work orders');
     }
 
-    // Load related data for each work order
-    const workOrders = await Promise.all(
-      (data || []).map(async (wo) => this.loadWorkOrderWithRelations(wo))
-    );
+    const rows = data || [];
+    if (rows.length === 0) return [];
 
-    return workOrders;
+    const ids = rows.map((r: any) => r.id);
+
+    const [
+      { data: allCheckIns },
+      { data: allTimeStatuses },
+      { data: allServiceLogs },
+      { data: allEvidences },
+      { data: allChecklistItems },
+      { data: allSignatures },
+    ] = await Promise.all([
+      supabase.from('work_order_checkins').select('*').in('work_order_id', ids).order('timestamp', { ascending: false }),
+      supabase.from('work_order_time_statuses').select('*').in('work_order_id', ids).order('start_time', { ascending: true }),
+      supabase.from('work_order_service_logs').select('*').in('work_order_id', ids).order('timestamp', { ascending: false }),
+      supabase.from('work_order_evidences').select('*').in('work_order_id', ids).order('type', { ascending: true }),
+      supabase.from('work_order_checklist_items').select('*').in('work_order_id', ids).order('type', { ascending: true }),
+      supabase.from('work_order_signatures').select('*').in('work_order_id', ids),
+    ]);
+
+    const groupBy = <T>(items: T[] | null, key: (item: T) => string) => {
+      const map = new Map<string, T[]>();
+      for (const item of items || []) {
+        const k = key(item);
+        if (!map.has(k)) map.set(k, []);
+        map.get(k)!.push(item);
+      }
+      return map;
+    };
+
+    const checkInsMap = groupBy(allCheckIns, (r: any) => r.work_order_id);
+    const timeStatusesMap = groupBy(allTimeStatuses, (r: any) => r.work_order_id);
+    const serviceLogsMap = groupBy(allServiceLogs, (r: any) => r.work_order_id);
+    const evidencesMap = groupBy(allEvidences, (r: any) => r.work_order_id);
+    const checklistMap = groupBy(allChecklistItems, (r: any) => r.work_order_id);
+    const signaturesMap = groupBy(allSignatures, (r: any) => r.work_order_id);
+
+    return rows.map((wo: any) => {
+      const checkInRows = checkInsMap.get(wo.id) || [];
+      const checkIn = checkInRows.length > 0 ? this.mapToCheckIn(checkInRows[0]) : undefined;
+      const sigRows = signaturesMap.get(wo.id) || [];
+      const signature = sigRows.length > 0 ? this.mapToSignature(sigRows[0]) : undefined;
+
+      return this.mapToWorkOrder({
+        ...wo,
+        checkIn,
+        timeStatuses: (timeStatusesMap.get(wo.id) || []).map((ts: any) => this.mapToTimeStatus(ts)),
+        serviceLogs: (serviceLogsMap.get(wo.id) || []).map((sl: any) => this.mapToServiceLog(sl)),
+        evidences: (evidencesMap.get(wo.id) || []).map((ev: any) => this.mapToEvidence(ev)),
+        checklistItems: (checklistMap.get(wo.id) || []).map((ci: any) => this.mapToChecklistItem(ci)),
+        signature,
+      });
+    });
   }
 
   async getWorkOrderById(workOrderId: string): Promise<WorkOrder | null> {
@@ -39,10 +87,9 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
       .from('work_orders')
       .select('*')
       .eq('id', workOrderId)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
       console.error('Error fetching work order:', error);
       throw new Error('Failed to fetch work order');
     }
@@ -63,6 +110,7 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
     const { data: woData, error: woError } = await supabase
       .from('work_orders')
       .insert({
+        client_id: workOrder.clientId ?? null,
         client_name: workOrder.clientName,
         client_address: workOrder.clientAddress,
         client_contact: workOrder.clientContact,
@@ -76,6 +124,7 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
         team_members: workOrder.teamMembers || [],
         responsible: workOrder.responsible,
         is_locked: workOrder.isLocked || false,
+        production_order_id: workOrder.productionOrderId ?? null,
         created_by: authUser.id,
       })
       .select()
@@ -108,7 +157,44 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
       }
     }
 
-    return this.loadWorkOrderWithRelations(woData);
+    const createdWorkOrder = await this.loadWorkOrderWithRelations(woData);
+
+    // Create notification for new work order
+    try {
+      const { repos } = await import('../../services/container');
+      const payload = {
+        workOrderId: createdWorkOrder.id,
+        workOrderName: `${createdWorkOrder.clientName} - ${createdWorkOrder.serviceType}`,
+        clientName: createdWorkOrder.clientName,
+        serviceType: createdWorkOrder.serviceType,
+        dueDate: createdWorkOrder.scheduledDate,
+        scheduledDate: createdWorkOrder.scheduledDate,
+        scheduledTime: createdWorkOrder.scheduledTime,
+      };
+      
+      if (__DEV__) {
+        console.log('[SupabaseWorkOrdersRepository] Creating workOrder.created notification with payload:', {
+          scheduledDate: payload.scheduledDate,
+          scheduledTime: payload.scheduledTime,
+          scheduledDateType: typeof payload.scheduledDate,
+          scheduledTimeType: typeof payload.scheduledTime,
+          fullPayload: payload,
+        });
+      }
+      
+      await repos.notificationsRepo.createNotification({
+        type: 'workOrder.created',
+        payloadJson: payload,
+        createdBySystem: true,
+        targetUserId: null, // Global notification
+      });
+      console.log('[SupabaseWorkOrdersRepository] Notification created for new work order');
+    } catch (error) {
+      console.error('[SupabaseWorkOrdersRepository] Error creating notification:', error);
+      // Don't fail work order creation if notification fails
+    }
+
+    return createdWorkOrder;
   }
 
   async updateWorkOrder(workOrderId: string, updates: Partial<WorkOrder>): Promise<WorkOrder> {
@@ -119,6 +205,7 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
 
     const updateData: any = {};
     if (updates.clientName !== undefined) updateData.client_name = updates.clientName;
+    if (updates.clientId !== undefined) updateData.client_id = updates.clientId;
     if (updates.clientAddress !== undefined) updateData.client_address = updates.clientAddress;
     if (updates.clientContact !== undefined) updateData.client_contact = updates.clientContact;
     if (updates.serviceType !== undefined) updateData.service_type = updates.serviceType;
@@ -131,6 +218,7 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
     if (updates.teamMembers !== undefined) updateData.team_members = updates.teamMembers;
     if (updates.responsible !== undefined) updateData.responsible = updates.responsible;
     if (updates.isLocked !== undefined) updateData.is_locked = updates.isLocked;
+    if (updates.productionOrderId !== undefined) updateData.production_order_id = updates.productionOrderId;
 
     const { data, error } = await supabase
       .from('work_orders')
@@ -148,6 +236,16 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
   }
 
   async deleteWorkOrder(workOrderId: string): Promise<void> {
+    // Best effort cleanup to avoid stale links on production orders.
+    const { error: unlinkError } = await supabase
+      .from('productions')
+      .update({ linked_work_order_id: null })
+      .eq('linked_work_order_id', workOrderId);
+
+    if (unlinkError) {
+      console.error('Error unlinking production from work order:', unlinkError);
+    }
+
     const { error } = await supabase.from('work_orders').delete().eq('id', workOrderId);
 
     if (error) {
@@ -195,10 +293,9 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
       .eq('work_order_id', workOrderId)
       .order('timestamp', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
       console.error('Error fetching check-in:', error);
       throw new Error('Failed to fetch check-in');
     }
@@ -288,10 +385,9 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
       .is('end_time', null)
       .order('start_time', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
       console.error('Error fetching current time status:', error);
       throw new Error('Failed to fetch current time status');
     }
@@ -512,10 +608,9 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
       .from('work_order_signatures')
       .select('*')
       .eq('work_order_id', workOrderId)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
       console.error('Error fetching signature:', error);
       throw new Error('Failed to fetch signature');
     }
@@ -544,27 +639,18 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
     return this.loadWorkOrderWithRelations(data);
   }
 
-  // Private helper methods
   private async loadWorkOrderWithRelations(woData: any): Promise<WorkOrder> {
     const workOrderId = woData.id;
 
-    // Load check-in
-    const checkIn = await this.getCheckIn(workOrderId);
-
-    // Load time statuses
-    const timeStatuses = await this.getTimeStatuses(workOrderId);
-
-    // Load service logs
-    const serviceLogs = await this.getServiceLogs(workOrderId);
-
-    // Load evidences
-    const evidences = await this.getEvidences(workOrderId);
-
-    // Load checklist items
-    const checklistItems = await this.getChecklistItems(workOrderId);
-
-    // Load signature
-    const signature = await this.getSignature(workOrderId);
+    const [checkIn, timeStatuses, serviceLogs, evidences, checklistItems, signature] =
+      await Promise.all([
+        this.getCheckIn(workOrderId),
+        this.getTimeStatuses(workOrderId),
+        this.getServiceLogs(workOrderId),
+        this.getEvidences(workOrderId),
+        this.getChecklistItems(workOrderId),
+        this.getSignature(workOrderId),
+      ]);
 
     return this.mapToWorkOrder({
       ...woData,
@@ -580,6 +666,7 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
   private mapToWorkOrder(data: any): WorkOrder {
     return {
       id: data.id,
+      clientId: data.client_id || undefined,
       clientName: data.client_name,
       clientAddress: data.client_address,
       clientContact: data.client_contact,
@@ -593,6 +680,7 @@ export class SupabaseWorkOrdersRepository implements WorkOrdersRepository {
       teamMembers: data.team_members || [],
       responsible: data.responsible,
       isLocked: data.is_locked || false,
+      productionOrderId: data.production_order_id || undefined,
       checkIn: data.checkIn || undefined,
       timeStatuses: data.timeStatuses || [],
       serviceLogs: data.serviceLogs || [],

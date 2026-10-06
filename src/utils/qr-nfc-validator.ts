@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { QRScanResult, NFCReadResult } from '../platform/qr';
+import { QRScanResult } from '../platform/qr';
+import { NFCReadResult } from '../platform/nfc';
 
 // Schema for validating scanned data
 const scannedDataSchema = z.object({

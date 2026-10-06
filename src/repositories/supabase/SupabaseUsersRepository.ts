@@ -23,10 +23,9 @@ export class SupabaseUsersRepository implements UsersRepository {
       .from('users')
       .select('*')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null; // Not found
       console.error('Error fetching user:', error);
       throw new Error('Failed to fetch user');
     }
@@ -39,10 +38,9 @@ export class SupabaseUsersRepository implements UsersRepository {
       .from('users')
       .select('*')
       .eq('username', username)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null; // Not found
       console.error('Error fetching user by username:', error);
       throw new Error('Failed to fetch user');
     }
@@ -51,26 +49,32 @@ export class SupabaseUsersRepository implements UsersRepository {
   }
 
   async createUser(user: Omit<User, 'id' | 'createdAt'>, password?: string): Promise<User> {
-    // Note: User creation in Supabase Auth must be done via admin API or Edge Function
-    // For now, this will create the user profile, but auth user must be created separately
-    // In production, use an Edge Function to create both auth user and profile atomically
-    
-    // Use Edge Function to create user (which handles both auth user and profile)
+    // User creation is performed atomically by an authenticated Edge Function.
     try {
+      if (!password) {
+        throw new Error('Password is required');
+      }
+
       const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://gnbdumignnzftyzdoztv.supabase.co';
       const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImduYmR1bWlnbm56ZnR5emRvenR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0OTg2NjEsImV4cCI6MjA4NDA3NDY2MX0.Nxqt5rpp17bWnIJXt6xxtDztp0Zh0WWUx3alfHDMMr8';
-      
+
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (sessionError || !accessToken) {
+        throw new Error('Authentication required to create users');
+      }
+
       const response = await fetch(`${supabaseUrl}/functions/v1/create-master-user`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Authorization': `Bearer ${accessToken}`,
           'apikey': supabaseAnonKey,
         },
         body: JSON.stringify({
           username: user.username,
           email: `${user.username.toLowerCase()}@creaglass.local`,
-          password: password || 'defaultPassword123',
+          password,
           userType: user.userType,
         }),
       });
@@ -100,7 +104,9 @@ export class SupabaseUsersRepository implements UsersRepository {
       
       // Fetch the created user
       if (result.userId) {
-        return await this.getUserById(result.userId);
+        const createdUser = await this.getUserById(result.userId);
+        if (!createdUser) throw new Error('User created but profile could not be loaded');
+        return createdUser;
       } else {
         throw new Error('User created but userId not returned');
       }
@@ -154,12 +160,25 @@ export class SupabaseUsersRepository implements UsersRepository {
     throw new Error('Password change must be done through Edge Function or Supabase Auth API');
   }
 
+  async updatePreferredLanguage(userId: string, language: string): Promise<void> {
+    const { error } = await supabase
+      .from('users')
+      .update({ preferred_language: language })
+      .eq('id', userId);
+
+    if (error) {
+      console.error('Error updating preferred language:', error);
+      // Non-critical - don't throw, just log
+    }
+  }
+
   private mapToUser(data: any): User {
     return {
       id: data.id,
       username: data.username,
       userType: data.user_type as UserType,
       isActive: data.is_active,
+      preferredLanguage: data.preferred_language || 'en',
       createdAt: data.created_at,
     };
   }

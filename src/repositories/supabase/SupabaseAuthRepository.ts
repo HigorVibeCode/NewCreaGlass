@@ -1,6 +1,6 @@
 import { AuthRepository } from '../../services/repositories/interfaces';
 import { Session, User } from '../../types';
-import { supabase } from '../../services/supabase';
+import { supabase, clearSupabaseAuthStorage, isRefreshTokenError } from '../../services/supabase';
 
 export class SupabaseAuthRepository implements AuthRepository {
   private supabase;
@@ -16,7 +16,7 @@ export class SupabaseAuthRepository implements AuthRepository {
         .from('users')
         .select('id, username, user_type, is_active, created_at')
         .eq('username', username)
-        .single();
+        .maybeSingle();
 
       if (userError || !userData) {
         throw new Error('Invalid credentials');
@@ -92,7 +92,11 @@ export class SupabaseAuthRepository implements AuthRepository {
   async logout(): Promise<void> {
     try {
       await this.supabase.auth.signOut();
-    } catch (error) {
+    } catch (error: any) {
+      if (isRefreshTokenError(error)) {
+        await clearSupabaseAuthStorage();
+        return;
+      }
       console.error('Logout error:', error);
       throw error;
     }
@@ -101,8 +105,15 @@ export class SupabaseAuthRepository implements AuthRepository {
   async getCurrentSession(): Promise<Session | null> {
     try {
       const { data: { session: supabaseSession }, error } = await this.supabase.auth.getSession();
-      
-      if (error || !supabaseSession) {
+
+      if (error) {
+        if (isRefreshTokenError(error)) {
+          await clearSupabaseAuthStorage();
+        }
+        return null;
+      }
+
+      if (!supabaseSession) {
         return null;
       }
 
@@ -111,7 +122,7 @@ export class SupabaseAuthRepository implements AuthRepository {
         .from('users')
         .select('*')
         .eq('id', supabaseSession.user.id)
-        .single();
+        .maybeSingle();
 
       if (userError || !userData) {
         return null;
@@ -129,7 +140,11 @@ export class SupabaseAuthRepository implements AuthRepository {
         user,
         token: supabaseSession.access_token,
       };
-    } catch (error) {
+    } catch (error: any) {
+      if (isRefreshTokenError(error)) {
+        await clearSupabaseAuthStorage();
+        return null;
+      }
       console.error('Error getting current session:', error);
       return null;
     }
@@ -144,9 +159,15 @@ export class SupabaseAuthRepository implements AuthRepository {
 
       // Get current Supabase session
       const { data: { session: supabaseSession }, error: sessionError } = await this.supabase.auth.getSession();
-      
-      if (sessionError || !supabaseSession) {
-        console.log('No Supabase session found:', sessionError?.message);
+
+      if (sessionError) {
+        if (isRefreshTokenError(sessionError)) {
+          await clearSupabaseAuthStorage();
+        }
+        return false;
+      }
+
+      if (!supabaseSession) {
         return false;
       }
 
@@ -161,10 +182,9 @@ export class SupabaseAuthRepository implements AuthRepository {
         .from('users')
         .select('is_active')
         .eq('id', session.user.id)
-        .single();
+        .maybeSingle();
 
       if (userError || !userData) {
-        console.log('User not found or error:', userError?.message);
         return false;
       }
 
@@ -177,8 +197,31 @@ export class SupabaseAuthRepository implements AuthRepository {
       // Session is valid if Supabase session exists and user is active
       // Token comparison can be skipped as Supabase manages session lifecycle
       return true;
-    } catch (error) {
-      console.error('Error validating session:', error);
+    } catch (error: any) {
+      if (isRefreshTokenError(error)) {
+        await clearSupabaseAuthStorage();
+      }
+      return false;
+    }
+  }
+
+  async validatePassword(password: string): Promise<boolean> {
+    try {
+      const { data: { session } } = await this.supabase.auth.getSession();
+      if (!session?.user?.id) return false;
+      const { data: userData, error: userError } = await this.supabase
+        .from('users')
+        .select('username')
+        .eq('id', session.user.id)
+        .maybeSingle();
+      if (userError || !userData?.username) return false;
+      const emailToUse = `${userData.username.toLowerCase()}@creaglass.local`;
+      const { error } = await this.supabase.auth.signInWithPassword({
+        email: emailToUse,
+        password,
+      });
+      return !error;
+    } catch {
       return false;
     }
   }

@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+import DateTimePicker, {
+  DateTimePickerEvent,
+} from '@react-native-community/datetimepicker';
 import { theme } from '../../theme';
 import { useThemeColors } from '../../hooks/use-theme-colors';
 import { useI18n } from '../../hooks/use-i18n';
@@ -11,90 +13,187 @@ interface TimePickerProps {
   value: string;
   onSelect: (time: string) => void;
   placeholder?: string;
+  compact?: boolean;
+  /** Identificador estável (ex.: tabela de ajuste) — evita remount do input web */
+  pickerKey?: string;
 }
 
-export const TimePicker: React.FC<TimePickerProps> = ({ label, value, onSelect, placeholder }) => {
+function parseTimeToDate(timeString: string): Date {
+  const now = new Date();
+  if (!timeString || !/^\d{1,2}:\d{2}$/.test(timeString)) return now;
+  const [h, m] = timeString.split(':').map(Number);
+  const date = new Date();
+  date.setHours(h ?? 0, m ?? 0, 0, 0);
+  return date;
+}
+
+function formatTimeFromDate(date: Date): string {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+export const TimePicker: React.FC<TimePickerProps> = ({
+  label,
+  value,
+  onSelect,
+  placeholder,
+  compact,
+  pickerKey,
+}) => {
   const { t } = useI18n();
   const colors = useThemeColors();
-  const [showPicker, setShowPicker] = useState(false);
+  const [showIosPicker, setShowIosPicker] = useState(false);
+  const [showAndroidPicker, setShowAndroidPicker] = useState(false);
 
-  const parseTime = (timeString: string): Date => {
-    const now = new Date();
-    if (!timeString) return now;
-    
-    const parts = timeString.split(':');
-    if (parts.length === 2) {
-      const hours = parseInt(parts[0] || '0', 10);
-      const minutes = parseInt(parts[1] || '0', 10);
-      const date = new Date();
-      date.setHours(hours, minutes, 0, 0);
-      return date;
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+
+  const displayValue = /^\d{2}:\d{2}$/.test(value) ? value : '';
+  const currentTime = parseTimeToDate(displayValue || value);
+
+  const applySelectedTime = useCallback((date: Date) => {
+    onSelectRef.current(formatTimeFromDate(date));
+  }, []);
+
+  const handlePickerChange = useCallback((event: DateTimePickerEvent, selectedTime?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowAndroidPicker(false);
+    } else {
+      setShowIosPicker(false);
     }
-    
-    return now;
+
+    if (event.type === 'dismissed' || !selectedTime) {
+      return;
+    }
+
+    applySelectedTime(selectedTime);
+  }, [applySelectedTime]);
+
+  const handleWebTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedTime = e.target.value;
+    if (selectedTime) {
+      onSelectRef.current(selectedTime);
+    }
   };
 
-  const formatTime = (date: Date): string => {
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${hours}:${minutes}`;
+  const normalizeTimeForWeb = (timeValue: string): string => {
+    if (/^\d{2}:\d{2}$/.test(timeValue)) return timeValue;
+    return '';
+  };
+
+  const openPicker = () => {
+    if (Platform.OS === 'android') {
+      setShowAndroidPicker(true);
+    } else if (Platform.OS === 'ios') {
+      setShowIosPicker(true);
+    }
   };
 
   const formatDisplayTime = (timeString: string): string => {
-    if (!timeString) return placeholder || t('common.select');
-    return timeString;
+    if (/^\d{2}:\d{2}$/.test(timeString)) return timeString;
+    return placeholder || t('common.select');
   };
 
-  const currentTime = parseTime(value);
+  if (Platform.OS === 'web') {
+    const normalizedValue = normalizeTimeForWeb(displayValue);
 
-  const handleTimeChange = (event: any, selectedTime?: Date) => {
-    if (Platform.OS === 'android') {
-      DateTimePickerAndroid.dismiss('time');
-    } else {
-      setShowPicker(false);
-    }
-
-    if (event.type === 'set' && selectedTime) {
-      onSelect(formatTime(selectedTime));
-    }
-  };
-
-  const showTimePicker = () => {
-    if (Platform.OS === 'android') {
-      DateTimePickerAndroid.open({
-        value: currentTime,
-        mode: 'time',
-        is24Hour: true,
-        onChange: handleTimeChange,
-        display: 'default', // Opens spinner/wheel picker
-      });
-    } else {
-      // iOS - show inline picker
-      setShowPicker(true);
-    }
-  };
+    return (
+      <View
+        key={pickerKey}
+        style={[styles.container, compact && styles.containerCompact]}
+      >
+        {!compact && label ? (
+          <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text>
+        ) : null}
+        <View
+          style={[
+            styles.timePicker,
+            compact && styles.timePickerCompact,
+            { backgroundColor: colors.backgroundSecondary, borderColor: colors.border },
+          ]}
+        >
+          <View style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+            {React.createElement('input', {
+              type: 'time',
+              value: normalizedValue,
+              onChange: handleWebTimeChange,
+              onClick: (e: React.MouseEvent) => e.stopPropagation(),
+              onMouseDown: (e: React.MouseEvent) => e.stopPropagation(),
+              placeholder: placeholder || t('common.select'),
+              style: {
+                flex: 1,
+                fontSize: `${compact ? theme.typography.fontSize.sm : theme.typography.fontSize.md}px`,
+                fontFamily:
+                  "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+                fontWeight: theme.typography.fontWeight.regular,
+                color: normalizedValue ? colors.text : colors.textTertiary,
+                backgroundColor: 'transparent',
+                border: 'none',
+                outline: 'none',
+                padding: '0px',
+                margin: '0px',
+                cursor: 'pointer',
+                width: '100%',
+                minHeight: '20px',
+                lineHeight: '20px',
+              } as React.CSSProperties,
+            })}
+          </View>
+          <Ionicons
+            name="time-outline"
+            size={20}
+            color={colors.textSecondary}
+            style={{ marginLeft: theme.spacing.xs, flexShrink: 0 }}
+          />
+        </View>
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.container}>
-      <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text>
+    <View
+      key={pickerKey}
+      style={[styles.container, compact && styles.containerCompact]}
+    >
+      {!compact && label ? (
+        <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text>
+      ) : null}
       <TouchableOpacity
-        style={[styles.timePicker, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
-        onPress={showTimePicker}
+        style={[
+          styles.timePicker,
+          compact && styles.timePickerCompact,
+          { backgroundColor: colors.backgroundSecondary, borderColor: colors.border },
+        ]}
+        onPress={openPicker}
         activeOpacity={0.7}
       >
-        <Text style={[styles.selectedText, { color: value ? colors.text : colors.textTertiary }]}>
-          {formatDisplayTime(value)}
+        <Text
+          style={[
+            compact ? styles.selectedTextCompact : styles.selectedText,
+            { color: displayValue ? colors.text : colors.textTertiary },
+          ]}
+        >
+          {formatDisplayTime(displayValue || value)}
         </Text>
         <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
       </TouchableOpacity>
 
-      {Platform.OS === 'ios' && showPicker && (
+      {Platform.OS === 'android' && showAndroidPicker && (
         <DateTimePicker
           value={currentTime}
           mode="time"
-          display="spinner" // iOS shows wheel/spinner picker
-          onChange={handleTimeChange}
-          style={styles.iosPicker}
+          is24Hour
+          display="default"
+          onChange={handlePickerChange}
+        />
+      )}
+
+      {Platform.OS === 'ios' && showIosPicker && (
+        <DateTimePicker
+          value={currentTime}
+          mode="time"
+          display="spinner"
+          onChange={handlePickerChange}
+          style={compact ? styles.iosPickerCompact : styles.iosPicker}
         />
       )}
     </View>
@@ -104,6 +203,18 @@ export const TimePicker: React.FC<TimePickerProps> = ({ label, value, onSelect, 
 const styles = StyleSheet.create({
   container: {
     marginBottom: theme.spacing.md,
+  },
+  containerCompact: {
+    marginBottom: 0,
+    flex: 1,
+    width: '100%',
+    minWidth: 0,
+  },
+  timePickerCompact: {
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.xs,
+    minHeight: 40,
+    width: '100%',
   },
   label: {
     fontSize: theme.typography.fontSize.sm,
@@ -123,8 +234,17 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.md,
     flex: 1,
   },
+  selectedTextCompact: {
+    fontSize: theme.typography.fontSize.sm,
+    flex: 1,
+    fontVariant: ['tabular-nums'],
+  },
   iosPicker: {
     width: '100%',
     height: 200,
+  },
+  iosPickerCompact: {
+    width: '100%',
+    height: 140,
   },
 });

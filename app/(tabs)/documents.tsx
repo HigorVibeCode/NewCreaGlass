@@ -6,7 +6,9 @@ import { useI18n } from '../../src/hooks/use-i18n';
 import { ScreenWrapper } from '../../src/components/shared/ScreenWrapper';
 import { useThemeColors } from '../../src/hooks/use-theme-colors';
 import { useAppTheme } from '../../src/hooks/use-app-theme';
+import { useAuth } from '../../src/store/auth-store';
 import { theme } from '../../src/theme';
+import { pushWithParams } from '../../src/utils/navigation';
 
 interface DocumentCategory {
   id: string;
@@ -17,19 +19,22 @@ interface DocumentCategory {
 }
 
 export default function DocumentsScreen() {
+  'use no memo';
   const { t } = useI18n();
   const router = useRouter();
   const colors = useThemeColors();
   const { effectiveTheme } = useAppTheme();
   const isDark = effectiveTheme === 'dark';
+  const { user } = useAuth();
+  const isMaster = user?.userType === 'Master';
 
   const categories: DocumentCategory[] = [
     {
-      id: 'legalRequirements',
-      icon: 'shield-checkmark',
-      iconColor: '#3b82f6',
-      iconBgColor: '#dbeafe',
-      chevronColor: '#3b82f6',
+      id: 'proceduresInstructionsTrainings',
+      icon: 'school',
+      iconColor: '#10b981',
+      iconBgColor: '#d1fae5',
+      chevronColor: '#10b981',
     },
     {
       id: 'equipmentTools',
@@ -39,26 +44,20 @@ export default function DocumentsScreen() {
       chevronColor: '#f59e0b',
     },
     {
-      id: 'proceduresManuals',
-      icon: 'document-text',
-      iconColor: '#a855f7',
-      iconBgColor: '#f3e8ff',
-      chevronColor: '#a855f7',
-    },
-    {
-      id: 'professionalTraining',
-      icon: 'school',
-      iconColor: '#10b981',
-      iconBgColor: '#d1fae5',
-      chevronColor: '#10b981',
+      id: 'legalRequirements',
+      icon: 'shield-checkmark',
+      iconColor: '#3b82f6',
+      iconBgColor: '#dbeafe',
+      chevronColor: '#3b82f6',
     },
   ];
 
   const handleCategoryPress = (categoryId: string) => {
-    router.push({
-      pathname: '/documents-category',
-      params: { categoryId },
-    } as any);
+    if (categoryId === 'proceduresInstructionsTrainings') {
+      pushWithParams(router, '/trainings-list', { category: 'professional' });
+    } else {
+      pushWithParams(router, '/documents-category', { categoryId: String(categoryId) });
+    }
   };
 
   return (
@@ -104,6 +103,43 @@ export default function DocumentsScreen() {
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* Analytics featured card — Master only */}
+        {isMaster && (
+          <TouchableOpacity
+            style={[styles.categoryCard, { backgroundColor: colors.cardBackground }]}
+            onPress={() => router.push('/analytics' as any)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.categoryContent}>
+              <View
+                style={[
+                  styles.iconContainer,
+                  {
+                    backgroundColor: isDark ? '#e0e7ff40' : '#e0e7ff',
+                  },
+                ]}
+              >
+                <Ionicons name="analytics" size={24} color="#6366f1" />
+              </View>
+              <View style={styles.textContainer}>
+                <Text style={[styles.categoryTitle, { color: colors.text }]}>
+                  {t('documents.categories.analytics.title')}
+                </Text>
+                <Text style={[styles.categorySubtitle, { color: colors.textSecondary }]}>
+                  {t('documents.categories.analytics.subtitle')}
+                </Text>
+              </View>
+              <View style={[styles.chevronContainer, { backgroundColor: colors.backgroundSecondary }]}>
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color="#6366f1"
+                />
+              </View>
+            </View>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </ScreenWrapper>
   );
@@ -115,7 +151,9 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: theme.spacing.lg,
+    gap: theme.spacing.md,
   },
+  // ── Regular cards ──
   categoriesContainer: {
     gap: theme.spacing.md,
   },

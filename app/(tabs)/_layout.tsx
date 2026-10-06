@@ -10,6 +10,7 @@ import { useThemeColors } from '../../src/hooks/use-theme-colors';
 import { TopBar } from '../../src/components/shared/TopBar';
 
 export default function TabLayout() {
+  'use no memo';
   const { t } = useI18n();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();

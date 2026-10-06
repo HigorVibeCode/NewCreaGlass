@@ -116,4 +116,8 @@ export class MockUsersRepository implements UsersRepository {
     }
     await this.setUserPassword(userId, newPassword);
   }
+
+  async updatePreferredLanguage(userId: string, language: string): Promise<void> {
+    await this.updateUser(userId, { preferredLanguage: language });
+  }
 }

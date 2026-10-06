@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, ComponentProps } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, ComponentProps } from 'react';
 import {
   View,
   StyleSheet,
@@ -10,20 +10,26 @@ import {
   TouchableWithoutFeedback,
   RefreshControl,
   ActivityIndicator,
+  Animated,
+  Easing,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../../src/hooks/use-i18n';
 import { ScreenWrapper } from '../../src/components/shared/ScreenWrapper';
 import { DatePicker } from '../../src/components/shared/DatePicker';
+import { Dropdown, DropdownOption } from '../../src/components/shared/Dropdown';
 import { PermissionGuard } from '../../src/components/shared/PermissionGuard';
 import { ProductionStatusBadge } from '../../src/components/shared/ProductionStatusBadge';
-import { getStatusAppearance, getStatusLabel as getStatusLabelFor } from '../../src/utils/production-status';
+import { getStatusAppearance, getStatusLabel as getStatusLabelFor, isWaitingStatus } from '../../src/utils/production-status';
 import { repos } from '../../src/services/container';
-import { Production, ProductionStatus } from '../../src/types';
+import { supabase } from '../../src/services/supabase';
+import { Production, ProductionCompany, ProductionStatus, InventoryItem } from '../../src/types';
 import { theme } from '../../src/theme';
 import { useThemeColors } from '../../src/hooks/use-theme-colors';
+import { pushWithParams } from '../../src/utils/navigation';
+import { formatDate } from '../../src/utils/date-format';
 import {
   PRODUCTION_STATUSES,
   PRODUCTION_VIEWS,
@@ -37,18 +43,111 @@ import {
   matchesView,
   sortProductions,
   isDefaultFilters,
+  countSheetFilters,
   daysUntilDue,
   formatDateKey,
   isFinished,
 } from '../../src/utils/production-filters';
 
+// Alert levels for waiting status cards
+// 0 = no alert, 1 = >8h slow pulse, 2 = >24h pulse+darker, 3 = >48h pulse+alert
+type WaitingAlertLevel = 0 | 1 | 2 | 3;
+
+
+/** Compute alert level based on hours waiting */
+function getAlertLevel(hours: number): WaitingAlertLevel {
+  if (hours > 48) return 3;
+  if (hours > 24) return 2;
+  if (hours > 8) return 1;
+  return 0;
+}
+
+/** Pulse speed per alert level (ms per half-cycle) */
+function getPulseDuration(level: WaitingAlertLevel): number {
+  switch (level) {
+    case 1: return 1800; // slow
+    case 2: return 1200; // medium
+    case 3: return 800;  // fast
+    default: return 1800;
+  }
+}
+
+/** Color for pulse — always the same vivid yellow */
+function getPulseColor(_level: WaitingAlertLevel): string {
+  return '#eab308'; // yellow-500 vivid for all levels
+}
+
+/** Animated wrapper that adds a pulse glow effect for waiting cards */
+function WaitingPulseCard({ children, alertLevel }: { children: React.ReactNode; alertLevel: WaitingAlertLevel }) {
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (alertLevel > 0) {
+      const duration = getPulseDuration(alertLevel);
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: false,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 0,
+            duration,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: false,
+          }),
+        ]),
+      );
+      loop.start();
+      return () => loop.stop();
+    }
+  }, [alertLevel]);
+
+  if (alertLevel === 0) {
+    return <>{children}</>;
+  }
+
+  const color = getPulseColor(alertLevel);
+
+  const borderColor = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [`${color}00`, `${color}90`],
+  });
+
+  const shadowOpacity = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, alertLevel >= 2 ? 0.5 : 0.3],
+  });
+
+  return (
+    <Animated.View
+      style={{
+        borderRadius: theme.borderRadius.md,
+        borderWidth: alertLevel >= 2 ? 2 : 1.5,
+        borderColor,
+        shadowColor: color,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity,
+        shadowRadius: alertLevel >= 3 ? 12 : 8,
+        elevation: alertLevel >= 2 ? 6 : 4,
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
 const DATE_FIELDS: DateField[] = ['createdAt', 'dueDate'];
+const COMPANIES: ProductionCompany[] = ['3S', 'Crea Glass'];
 
 type FilterSheet = 'period' | 'sort' | 'status';
 
 const MAX_GLASS_LINES = 3;
 
 export default function ProductionScreen() {
+  'use no memo';
   const { t } = useI18n();
   const router = useRouter();
   const colors = useThemeColors();
@@ -60,11 +159,58 @@ export default function ProductionScreen() {
   const [filters, setFilters] = useState<ProductionFilters>(DEFAULT_FILTERS);
   const [draftFilters, setDraftFilters] = useState<ProductionFilters>(DEFAULT_FILTERS);
   const [activeSheet, setActiveSheet] = useState<FilterSheet | null>(null);
+  const [glassItems, setGlassItems] = useState<Map<string, InventoryItem>>(new Map());
+  const [waitingHoursMap, setWaitingHoursMap] = useState<Map<string, number>>(new Map());
+  const isFocused = useIsFocused();
 
   const loadProductions = useCallback(async () => {
     try {
-      const allProductions = await repos.productionRepo.getAllProductions();
-      setProductions(allProductions);
+      const fetchedProductions = await repos.productionRepo.getAllProductions();
+      setProductions(fetchedProductions);
+
+      const glassIds = new Set<string>();
+      fetchedProductions.forEach((prod) => {
+        prod.items.forEach((item) => {
+          if (item.glassId) glassIds.add(item.glassId);
+        });
+      });
+
+      const waitingProds = fetchedProductions.filter((p) => isWaitingStatus(p.status));
+      const waitingIds = waitingProds.map((p) => p.id);
+
+      const [fetchedGlass, historyResult] = await Promise.all([
+        glassIds.size > 0
+          ? repos.inventoryRepo.getItemsByIds(Array.from(glassIds))
+          : Promise.resolve([] as InventoryItem[]),
+        waitingIds.length > 0
+          ? supabase
+              .from('production_status_history')
+              .select('production_id, changed_at')
+              .in('production_id', waitingIds)
+              .order('changed_at', { ascending: false })
+          : Promise.resolve({ data: null }),
+      ]);
+
+      const glassMap = new Map<string, InventoryItem>();
+      fetchedGlass.forEach((item) => glassMap.set(item.id, item));
+      setGlassItems(glassMap);
+
+      // Hours since the order entered its current waiting phase
+      const latestChangeMap = new Map<string, string>();
+      for (const entry of historyResult.data || []) {
+        if (!latestChangeMap.has(entry.production_id)) {
+          latestChangeMap.set(entry.production_id, entry.changed_at);
+        }
+      }
+      const now = Date.now();
+      const hoursMap = new Map<string, number>();
+      for (const prod of waitingProds) {
+        const timestamp = latestChangeMap.get(prod.id) || prod.createdAt;
+        if (timestamp) {
+          hoursMap.set(prod.id, (now - new Date(timestamp).getTime()) / (1000 * 60 * 60));
+        }
+      }
+      setWaitingHoursMap(hoursMap);
     } catch (error) {
       console.error('Error loading productions:', error);
     } finally {
@@ -73,11 +219,15 @@ export default function ProductionScreen() {
     }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
+  useEffect(() => {
+    if (isFocused) {
+      // Always enter the screen with default filters (last 30 days, active orders)
+      setFilters(DEFAULT_FILTERS);
+      setView('active');
+      setSearch('');
       loadProductions();
-    }, [loadProductions])
-  );
+    }
+  }, [isFocused, loadProductions]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -86,8 +236,8 @@ export default function ProductionScreen() {
 
   // Search + filters apply to every view; chip counts reflect them
   const filtered = useMemo(
-    () => applyFilters(productions, search, filters),
-    [productions, search, filters]
+    () => applyFilters(productions, search, filters, (glassId) => glassItems.get(glassId)?.name),
+    [productions, search, filters, glassItems]
   );
 
   const viewCounts = useMemo(() => {
@@ -103,7 +253,24 @@ export default function ProductionScreen() {
     [filtered, view, filters.sort]
   );
 
-  const statusFilterCount = filters.statuses.length;
+  const sheetFilterCount = countSheetFilters(filters);
+
+  const glassOptions: DropdownOption[] = useMemo(() => {
+    const usedGlassIds = new Set<string>();
+    productions.forEach((production) => {
+      production.items.forEach((item) => {
+        if (item.glassId) usedGlassIds.add(item.glassId);
+      });
+    });
+    const options = Array.from(usedGlassIds)
+      .map((glassId) => {
+        const glass = glassItems.get(glassId);
+        return glass ? { label: glass.name, value: glass.id } : null;
+      })
+      .filter((option): option is DropdownOption => option !== null)
+      .sort((a, b) => a.label.localeCompare(b.label));
+    return [{ label: t('production.dashboard.allGlass'), value: 'all' }, ...options];
+  }, [productions, glassItems, t]);
   const hasAnyFilter = !isDefaultFilters(filters) || search.trim().length > 0;
 
   const openSheet = (sheet: FilterSheet) => {
@@ -122,7 +289,7 @@ export default function ProductionScreen() {
   const clearDraftSection = () => {
     setDraftFilters((prev) =>
       activeSheet === 'status'
-        ? { ...prev, statuses: [] }
+        ? { ...prev, statuses: [], company: 'all', glassId: 'all' }
         : {
             ...prev,
             dateField: DEFAULT_FILTERS.dateField,
@@ -177,6 +344,13 @@ export default function ProductionScreen() {
     return { label: dateLabel, color: colors.warning, icon: 'time-outline' };
   };
 
+  // Compact date for the card corner: "1 Oct", or "1 Oct 25" outside the current year
+  const formatCardDate = (value: string): string => {
+    const full = formatDate(value);
+    const year = String(new Date().getFullYear());
+    return full.endsWith(` ${year}`) ? full.slice(0, -(year.length + 1)) : full.replace(/ (\d{2})(\d{2})$/, ' $2');
+  };
+
   const getItemsSummary = (production: Production): string => {
     if (!production.items || production.items.length === 0) return '';
     const pieces = production.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
@@ -195,7 +369,7 @@ export default function ProductionScreen() {
       } else {
         lines.set(key, {
           quantity: Number(item.quantity) || 0,
-          name: item.glassName || '',
+          name: glassItems.get(item.glassId)?.name || '',
           type: item.glassType
             ? t(`production.glassTypes.${item.glassType}`, { defaultValue: item.glassType })
             : '',
@@ -262,19 +436,19 @@ export default function ProductionScreen() {
             onPress={() => openSheet('status')}
             activeOpacity={0.7}
           >
-            <Ionicons name="options-outline" size={20} color={statusFilterCount > 0 ? colors.primary : colors.text} />
-            {statusFilterCount > 0 && (
+            <Ionicons name="options-outline" size={20} color={sheetFilterCount > 0 ? colors.primary : colors.text} />
+            {sheetFilterCount > 0 && (
               <View style={[styles.badge, { backgroundColor: colors.primary }]}>
-                <Text style={[styles.badgeText, { color: colors.textInverse }]}>{statusFilterCount}</Text>
+                <Text style={[styles.badgeText, { color: colors.textInverse }]}>{sheetFilterCount}</Text>
               </View>
             )}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.iconButton, { backgroundColor: colors.backgroundSecondary }]}
-            onPress={() => router.push('/production-orders-history')}
+            onPress={() => router.push('/clients')}
             activeOpacity={0.7}
           >
-            <Ionicons name="checkbox-outline" size={20} color={colors.text} />
+            <Ionicons name="people-outline" size={20} color={colors.text} />
           </TouchableOpacity>
           <PermissionGuard permission="production.create">
             <TouchableOpacity
@@ -401,26 +575,49 @@ export default function ProductionScreen() {
               const due = getDueInfo(production);
               const itemsSummary = getItemsSummary(production);
               const glassLines = getGlassLines(production);
+              const waitingHours = isWaitingStatus(production.status) ? waitingHoursMap.get(production.id) || 0 : 0;
+              const alertLevel: WaitingAlertLevel = waitingHours > 0 ? getAlertLevel(waitingHours) : 0;
               return (
+                <WaitingPulseCard key={production.id} alertLevel={alertLevel}>
                 <TouchableOpacity
-                  key={production.id}
                   style={[styles.orderCard, { backgroundColor: colors.cardBackground }]}
                   activeOpacity={0.7}
-                  onPress={() => router.push({
-                    pathname: '/production-detail',
-                    params: { productionId: production.id },
-                  })}
+                  onPress={() => pushWithParams(router, '/production-detail', { productionId: production.id })}
                 >
                   <View style={[styles.cardIndicator, { backgroundColor: statusColor }]} />
                   <View style={styles.cardBody}>
-                    <Text style={[styles.clientName, { color: colors.text }]} numberOfLines={1}>
-                      {production.clientName}
-                    </Text>
+                    <View style={styles.cardHeaderRow}>
+                      <Text style={[styles.clientName, { color: colors.text }]} numberOfLines={1}>
+                        {production.clientName}
+                      </Text>
+                      <View style={styles.cardDates}>
+                        <Text style={[styles.cardDatesText, { color: colors.textTertiary }]}>
+                          {formatCardDate(production.createdAt)}
+                        </Text>
+                        <Ionicons name="arrow-forward" size={10} color={colors.textTertiary} />
+                        <Text style={[styles.cardDatesText, { color: colors.textSecondary }]}>
+                          {formatCardDate(production.dueDate)}
+                        </Text>
+                      </View>
+                    </View>
                     <Text style={[styles.orderMeta, { color: colors.textSecondary }]} numberOfLines={1}>
                       #{production.orderNumber}
                       {production.orderType ? ` · ${production.orderType}` : ''}
                     </Text>
-                    <ProductionStatusBadge status={production.status} style={styles.statusBadge} />
+                    <ProductionStatusBadge
+                      status={production.status}
+                      style={styles.statusBadge}
+                      trailing={
+                        waitingHours > 0 ? (
+                          <Text style={[styles.waitingTime, { color: statusColor }]}>
+                            {' · '}
+                            {waitingHours >= 24
+                              ? `${Math.floor(waitingHours / 24)}d ${Math.floor(waitingHours % 24)}h`
+                              : `${Math.floor(waitingHours)}h`}
+                          </Text>
+                        ) : null
+                      }
+                    />
                     {glassLines.length > 0 && (
                       <View style={[styles.glassList, { borderColor: colors.borderLight }]}>
                         {glassLines.slice(0, MAX_GLASS_LINES).map((line, index) => (
@@ -452,6 +649,7 @@ export default function ProductionScreen() {
                     </View>
                   </View>
                 </TouchableOpacity>
+                </WaitingPulseCard>
               );
             })}
           </View>
@@ -476,7 +674,7 @@ export default function ProductionScreen() {
                   ? t('production.dashboard.period')
                   : activeSheet === 'sort'
                     ? t('production.dashboard.sortBy')
-                    : t('production.dashboard.status')}
+                    : t('production.dashboard.filters')}
               </Text>
               <TouchableOpacity onPress={closeSheet}>
                 <Ionicons name="close" size={24} color={colors.text} />
@@ -574,7 +772,36 @@ export default function ProductionScreen() {
               )}
 
               {activeSheet === 'status' && (
-                <View style={[styles.chipWrap, styles.statusChips]}>
+                <>
+                <Dropdown
+                  label={t('production.dashboard.glass')}
+                  value={draftFilters.glassId}
+                  options={glassOptions}
+                  onSelect={(value) => setDraftFilters((prev) => ({ ...prev, glassId: value }))}
+                />
+                <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+                  {t('production.dashboard.company')}
+                </Text>
+                <View style={styles.chipWrap}>
+                  {renderChip(
+                    t('production.allCompanies'),
+                    draftFilters.company === 'all',
+                    () => setDraftFilters((prev) => ({ ...prev, company: 'all' })),
+                    'company-all'
+                  )}
+                  {COMPANIES.map((company) =>
+                    renderChip(
+                      company,
+                      draftFilters.company === company,
+                      () => setDraftFilters((prev) => ({ ...prev, company })),
+                      `company-${company}`
+                    )
+                  )}
+                </View>
+                <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+                  {t('production.dashboard.status')}
+                </Text>
+                <View style={styles.chipWrap}>
                   {PRODUCTION_STATUSES.map((status) =>
                     renderChip(
                       getStatusLabel(status),
@@ -586,6 +813,7 @@ export default function ProductionScreen() {
                     )
                   )}
                 </View>
+                </>
               )}
             </ScrollView>
 
@@ -774,7 +1002,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: theme.spacing.sm,
   },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  cardDates: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    flexShrink: 0,
+  },
+  cardDatesText: {
+    fontSize: 11,
+    fontVariant: ['tabular-nums'],
+  },
   clientName: {
+    flex: 1,
     fontSize: theme.typography.fontSize.md,
     fontWeight: theme.typography.fontWeight.semibold,
   },
@@ -916,8 +1160,9 @@ const styles = StyleSheet.create({
   optionRowText: {
     fontSize: theme.typography.fontSize.md,
   },
-  statusChips: {
-    marginTop: theme.spacing.sm,
+  waitingTime: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
   segmentText: {
     fontSize: theme.typography.fontSize.sm,

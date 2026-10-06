@@ -49,6 +49,13 @@ export class MockBloodPriorityRepository implements BloodPriorityRepository {
     return newMessage;
   }
   
+  async deleteMessage(messageId: string): Promise<void> {
+    const messages = await this.getMessages();
+    await this.saveMessages(messages.filter(m => m.id !== messageId));
+    const reads = await this.getReads();
+    await this.saveReads(reads.filter(r => r.messageId !== messageId));
+  }
+
   async getUserReads(userId: string): Promise<BloodPriorityRead[]> {
     const reads = await this.getReads();
     return reads.filter(r => r.userId === userId);
