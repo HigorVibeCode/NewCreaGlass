@@ -316,7 +316,7 @@
         "finished": "Completati",
         "all": "Tutti"
       },
-      "searchPlaceholder": "Cerca cliente o ordine",
+      "searchPlaceholder": "Cliente, ordine o vetro",
       "filters": "Filtri",
       "status": "Stato",
       "period": "Periodo",
@@ -350,7 +350,21 @@
       "overdueBy": "Ritardo {{count}}g",
       "dueToday": "Scade oggi",
       "dueTomorrow": "Scade domani",
-      "pieces": "{{count}} pz"
+      "pieces": "{{count}} pz",
+      "moreGlass": "+{{count}} altro/i vetro/i",
+      "periodsShort": {
+        "last7": "7 giorni",
+        "last30": "30 giorni",
+        "last90": "90 giorni",
+        "thisWeek": "Questa sett.",
+        "thisMonth": "Questo mese",
+        "any": "Tutto"
+      },
+      "sortsShort": {
+        "newest": "Recenti",
+        "dueDate": "Consegna",
+        "client": "A–Z"
+      }
     }
   },
   "events": {

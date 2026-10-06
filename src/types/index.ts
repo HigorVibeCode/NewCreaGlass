@@ -145,6 +145,7 @@ export interface ProductionAttachment {
 export interface ProductionItem {
   id: string;
   glassId: string; // InventoryItem ID
+  glassName?: string; // InventoryItem name, filled by list queries
   glassType: GlassType;
   quantity: number;
   areaM2: number;

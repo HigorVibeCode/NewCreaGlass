@@ -44,6 +44,8 @@ const DATE_FIELDS: DateField[] = ['createdAt', 'dueDate'];
 
 type FilterSheet = 'period' | 'sort' | 'status';
 
+const MAX_GLASS_LINES = 3;
+
 export default function ProductionScreen() {
   const { t } = useI18n();
   const router = useRouter();
@@ -141,7 +143,7 @@ export default function ProductionScreen() {
       const to = filters.customTo ? formatDateKey(filters.customTo) : '…';
       return `${from} – ${to}`;
     }
-    return t(`production.dashboard.periods.${filters.period}`);
+    return t(`production.dashboard.periodsShort.${filters.period}`);
   };
 
   const clearAllFilters = () => {
@@ -220,6 +222,27 @@ export default function ProductionScreen() {
     const pieces = production.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
     const area = production.items.reduce((sum, item) => sum + (Number(item.areaM2) || 0), 0);
     return `${t('production.dashboard.pieces', { count: pieces })} · ${area.toFixed(2)} m²`;
+  };
+
+  // Same glass + type merged into one line with summed quantity
+  const getGlassLines = (production: Production) => {
+    const lines = new Map<string, { quantity: number; name: string; type: string }>();
+    (production.items || []).forEach((item) => {
+      const key = `${item.glassId}|${item.glassType}`;
+      const line = lines.get(key);
+      if (line) {
+        line.quantity += Number(item.quantity) || 0;
+      } else {
+        lines.set(key, {
+          quantity: Number(item.quantity) || 0,
+          name: item.glassName || '',
+          type: item.glassType
+            ? t(`production.glassTypes.${item.glassType}`, { defaultValue: item.glassType })
+            : '',
+        });
+      }
+    });
+    return Array.from(lines.values());
   };
 
   const renderChip = (label: string, selected: boolean, onPress: () => void, key: string, accent?: string) => (
@@ -305,13 +328,12 @@ export default function ProductionScreen() {
             <Ionicons name="calendar-outline" size={16} color={colors.primary} />
             <Text style={[styles.quickButtonText, { color: colors.text }]} numberOfLines={1}>
               {getPeriodLabel()}
-              {filters.period !== 'any' && (
+              {filters.period !== 'any' && filters.dateField !== DEFAULT_FILTERS.dateField && (
                 <Text style={{ color: colors.textSecondary }}>
                   {` · ${t(`production.dashboard.dateFields.${filters.dateField}`)}`}
                 </Text>
               )}
             </Text>
-            <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.quickButton, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
@@ -320,9 +342,8 @@ export default function ProductionScreen() {
           >
             <Ionicons name="swap-vertical" size={16} color={colors.primary} />
             <Text style={[styles.quickButtonText, { color: colors.text }]} numberOfLines={1}>
-              {t(`production.dashboard.sorts.${filters.sort}`)}
+              {t(`production.dashboard.sortsShort.${filters.sort}`)}
             </Text>
-            <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
 
@@ -411,6 +432,7 @@ export default function ProductionScreen() {
               const statusColor = getStatusColor(production.status);
               const due = getDueInfo(production);
               const itemsSummary = getItemsSummary(production);
+              const glassLines = getGlassLines(production);
               return (
                 <TouchableOpacity
                   key={production.id}
@@ -437,13 +459,33 @@ export default function ProductionScreen() {
                       #{production.orderNumber}
                       {production.orderType ? ` · ${production.orderType}` : ''}
                     </Text>
+                    {glassLines.length > 0 && (
+                      <View style={[styles.glassList, { borderColor: colors.borderLight }]}>
+                        {glassLines.slice(0, MAX_GLASS_LINES).map((line, index) => (
+                          <View key={index} style={styles.glassLine}>
+                            <Text style={[styles.glassQty, { color: colors.text }]}>{line.quantity}×</Text>
+                            <Text style={[styles.glassName, { color: colors.text }]} numberOfLines={1}>
+                              {line.name || line.type || '-'}
+                              {line.name && line.type ? (
+                                <Text style={{ color: colors.textSecondary }}>{` · ${line.type}`}</Text>
+                              ) : null}
+                            </Text>
+                          </View>
+                        ))}
+                        {glassLines.length > MAX_GLASS_LINES && (
+                          <Text style={[styles.glassMore, { color: colors.textSecondary }]}>
+                            {t('production.dashboard.moreGlass', { count: glassLines.length - MAX_GLASS_LINES })}
+                          </Text>
+                        )}
+                      </View>
+                    )}
                     <View style={styles.cardRow}>
                       <View style={styles.dueRow}>
                         <Ionicons name={due.icon} size={14} color={due.color} />
                         <Text style={[styles.dueText, { color: due.color }]}>{due.label}</Text>
                       </View>
                       {itemsSummary ? (
-                        <Text style={[styles.itemsText, { color: colors.textSecondary }]}>{itemsSummary}</Text>
+                        <Text style={[styles.itemsText, { color: colors.text }]}>{itemsSummary}</Text>
                       ) : null}
                     </View>
                   </View>
@@ -625,6 +667,8 @@ const styles = StyleSheet.create({
   },
   searchBox: {
     flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
     height: 40,
@@ -635,6 +679,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
+    minWidth: 0,
     fontSize: theme.typography.fontSize.sm,
     paddingVertical: 0,
   },
@@ -674,9 +719,10 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.sm,
     borderWidth: 1,
     gap: 6,
+    flexShrink: 1,
   },
   quickButtonWide: {
-    flex: 1,
+    flexGrow: 1,
   },
   quickButtonText: {
     flexShrink: 1,
@@ -793,7 +839,33 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.fontWeight.medium,
   },
   itemsText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.semibold,
+  },
+  glassList: {
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    paddingVertical: theme.spacing.xs,
+    marginVertical: 2,
+    gap: 2,
+  },
+  glassLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  glassQty: {
+    minWidth: 28,
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  glassName: {
+    flex: 1,
+    fontSize: theme.typography.fontSize.sm,
+  },
+  glassMore: {
     fontSize: theme.typography.fontSize.xs,
+    marginLeft: 32,
   },
   sheetContainer: {
     flex: 1,

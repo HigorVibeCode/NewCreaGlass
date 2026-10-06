@@ -313,7 +313,7 @@
         "finished": "Finalizados",
         "all": "Todos"
       },
-      "searchPlaceholder": "Buscar cliente ou pedido",
+      "searchPlaceholder": "Cliente, pedido ou vidro",
       "filters": "Filtros",
       "status": "Status",
       "period": "Período",
@@ -347,7 +347,21 @@
       "overdueBy": "Atrasado {{count}}d",
       "dueToday": "Vence hoje",
       "dueTomorrow": "Vence amanhã",
-      "pieces": "{{count}} pç"
+      "pieces": "{{count}} pç",
+      "moreGlass": "+{{count}} outro(s) vidro(s)",
+      "periodsShort": {
+        "last7": "7 dias",
+        "last30": "30 dias",
+        "last90": "90 dias",
+        "thisWeek": "Esta semana",
+        "thisMonth": "Este mês",
+        "any": "Tudo"
+      },
+      "sortsShort": {
+        "newest": "Recentes",
+        "dueDate": "Entrega",
+        "client": "A–Z"
+      }
     }
   },
   "events": {

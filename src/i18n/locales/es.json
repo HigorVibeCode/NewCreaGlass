@@ -316,7 +316,7 @@
         "finished": "Finalizados",
         "all": "Todos"
       },
-      "searchPlaceholder": "Buscar cliente o pedido",
+      "searchPlaceholder": "Cliente, pedido o vidrio",
       "filters": "Filtros",
       "status": "Estado",
       "period": "Período",
@@ -350,7 +350,21 @@
       "overdueBy": "Atrasado {{count}}d",
       "dueToday": "Vence hoy",
       "dueTomorrow": "Vence mañana",
-      "pieces": "{{count}} pzs"
+      "pieces": "{{count}} pzs",
+      "moreGlass": "+{{count}} vidrio(s) más",
+      "periodsShort": {
+        "last7": "7 días",
+        "last30": "30 días",
+        "last90": "90 días",
+        "thisWeek": "Esta semana",
+        "thisMonth": "Este mes",
+        "any": "Todo"
+      },
+      "sortsShort": {
+        "newest": "Recientes",
+        "dueDate": "Entrega",
+        "client": "A–Z"
+      }
     }
   },
   "events": {

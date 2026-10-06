@@ -49,6 +49,35 @@ export class SupabaseProductionRepository implements ProductionRepository {
       });
     }
 
+    // Glass names for the cards, one batched lookup on inventory
+    const glassIds = Array.from(
+      new Set(
+        Array.from(itemsByProduction.values())
+          .flat()
+          .map((item) => item.glassId)
+          .filter(Boolean)
+      )
+    );
+    const glassNames = new Map<string, string>();
+    for (let i = 0; i < glassIds.length; i += BATCH_SIZE) {
+      const { data: glassData, error: glassError } = await supabase
+        .from('inventory_items')
+        .select('id, name')
+        .in('id', glassIds.slice(i, i + BATCH_SIZE));
+
+      if (glassError) {
+        console.error('Error fetching glass names:', glassError);
+        continue;
+      }
+
+      (glassData || []).forEach((glass: any) => glassNames.set(glass.id, glass.name));
+    }
+    itemsByProduction.forEach((items) =>
+      items.forEach((item) => {
+        item.glassName = glassNames.get(item.glassId);
+      })
+    );
+
     return rows.map((prod: any) => this.mapToProduction(prod, itemsByProduction.get(prod.id) || [], []));
   }
 

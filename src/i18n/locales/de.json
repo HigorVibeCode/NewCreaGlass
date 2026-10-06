@@ -313,7 +313,7 @@
         "finished": "Abgeschlossen",
         "all": "Alle"
       },
-      "searchPlaceholder": "Kunde oder Auftrag suchen",
+      "searchPlaceholder": "Kunde, Auftrag oder Glas",
       "filters": "Filter",
       "status": "Status",
       "period": "Zeitraum",
@@ -347,7 +347,21 @@
       "overdueBy": "{{count}} T. überfällig",
       "dueToday": "Heute fällig",
       "dueTomorrow": "Morgen fällig",
-      "pieces": "{{count}} Stk."
+      "pieces": "{{count}} Stk.",
+      "moreGlass": "+{{count}} weitere(s) Glas",
+      "periodsShort": {
+        "last7": "7 Tage",
+        "last30": "30 Tage",
+        "last90": "90 Tage",
+        "thisWeek": "Diese Woche",
+        "thisMonth": "Dieser Monat",
+        "any": "Alle"
+      },
+      "sortsShort": {
+        "newest": "Neueste",
+        "dueDate": "Termin",
+        "client": "A–Z"
+      }
     }
   },
   "events": {

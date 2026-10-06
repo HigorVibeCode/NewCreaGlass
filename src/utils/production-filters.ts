@@ -153,7 +153,8 @@ export const applyFilters = (
 
   return productions.filter((p) => {
     if (term) {
-      const haystack = `${p.clientName} ${p.orderNumber} ${p.orderType}`.toLowerCase();
+      const glassNames = (p.items || []).map((item) => item.glassName || '').join(' ');
+      const haystack = `${p.clientName} ${p.orderNumber} ${p.orderType} ${glassNames}`.toLowerCase();
       if (!haystack.includes(term)) return false;
     }
     if (filters.statuses.length > 0 && !filters.statuses.includes(p.status)) return false;
