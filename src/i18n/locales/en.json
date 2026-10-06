@@ -275,7 +275,19 @@
       "ready_for_dispatch": "Ready for Dispatch",
       "delivered": "Delivered",
       "completed": "Completed",
-      "cancelled": "Cancelled"
+      "cancelled": "Cancelled",
+      "awaiting_film": "Awaiting Film Application",
+      "awaiting_workart": "Awaiting Work Art",
+      "burn_paper": "Burn Paper",
+      "waiting_for_sandblasting": "Waiting for Sandblasting",
+      "sandblasting": "Sandblasting in Progress",
+      "awaiting_oil_application": "Awaiting Oil Application",
+      "awaiting_oil_drying": "Awaiting Oil Drying",
+      "awaiting_inspection": "Awaiting Inspection",
+      "inspected": "Inspected",
+      "pack_glass_box": "Pack in Glass Box",
+      "pack_pallet": "Pack on Pallet",
+      "pack_paper": "Pack with Paper"
     },
     "orderType": {
       "standard": "Standard",

@@ -272,7 +272,19 @@
       "ready_for_dispatch": "Versandbereit",
       "delivered": "Geliefert",
       "completed": "Abgeschlossen",
-      "cancelled": "Storniert"
+      "cancelled": "Storniert",
+      "awaiting_film": "Wartet auf Folie",
+      "awaiting_workart": "Wartet auf Work Art",
+      "burn_paper": "Papier abbrennen",
+      "waiting_for_sandblasting": "Wartet auf Sandstrahlen",
+      "sandblasting": "Sandstrahlen läuft",
+      "awaiting_oil_application": "Wartet auf Öl-Auftrag",
+      "awaiting_oil_drying": "Wartet auf Öl-Trocknung",
+      "awaiting_inspection": "Wartet auf Kontrolle",
+      "inspected": "Kontrolliert",
+      "pack_glass_box": "In Glass Box verpacken",
+      "pack_pallet": "Auf Palette verpacken",
+      "pack_paper": "Mit Papier verpacken"
     },
     "orderType": {
       "standard": "Standard",

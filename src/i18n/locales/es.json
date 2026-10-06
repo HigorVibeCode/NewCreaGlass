@@ -275,7 +275,19 @@
       "ready_for_dispatch": "Listo para Envío",
       "delivered": "Entregado",
       "completed": "Completada",
-      "cancelled": "Cancelado"
+      "cancelled": "Cancelado",
+      "awaiting_film": "Esperando Aplicación de Película",
+      "awaiting_workart": "Esperando Work Art",
+      "burn_paper": "Quemar Papel",
+      "waiting_for_sandblasting": "Esperando Arenado",
+      "sandblasting": "Arenado en Proceso",
+      "awaiting_oil_application": "Esperando Aplicación de Aceite",
+      "awaiting_oil_drying": "Esperando Secado del Aceite",
+      "awaiting_inspection": "Esperando Revisión",
+      "inspected": "Revisado",
+      "pack_glass_box": "Embalar en Glass Box",
+      "pack_pallet": "Embalar en Palé",
+      "pack_paper": "Embalar con Papel"
     },
     "orderType": {
       "standard": "Estándar",

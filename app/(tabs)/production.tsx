@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, ComponentProps } from 'react';
 import {
   View,
   StyleSheet,
@@ -18,6 +18,8 @@ import { useI18n } from '../../src/hooks/use-i18n';
 import { ScreenWrapper } from '../../src/components/shared/ScreenWrapper';
 import { DatePicker } from '../../src/components/shared/DatePicker';
 import { PermissionGuard } from '../../src/components/shared/PermissionGuard';
+import { ProductionStatusBadge } from '../../src/components/shared/ProductionStatusBadge';
+import { getStatusAppearance, getStatusLabel as getStatusLabelFor } from '../../src/utils/production-status';
 import { repos } from '../../src/services/container';
 import { Production, ProductionStatus } from '../../src/types';
 import { theme } from '../../src/theme';
@@ -131,12 +133,6 @@ export default function ProductionScreen() {
     );
   };
 
-  const getStatusLabel = (status: string): string => {
-    // Fallback keeps unknown database statuses readable
-    const fallback = status.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
-    return t(`production.status.${status}`, { defaultValue: fallback });
-  };
-
   const getPeriodLabel = (): string => {
     if (filters.period === 'custom') {
       const from = filters.customFrom ? formatDateKey(filters.customFrom) : '…';
@@ -160,44 +156,8 @@ export default function ProductionScreen() {
     }));
   };
 
-  const getStatusColor = (status: ProductionStatus): string => {
-    switch (status) {
-      case 'not_authorized':
-        return colors.error;
-      case 'authorized':
-        return colors.success; // Green (most important phase)
-      case 'cutting':
-        return colors.info;
-      case 'polishing':
-        return '#06b6d4'; // Cyan
-      case 'waiting_for_tempering':
-        return colors.warning;
-      case 'on_oven':
-        return '#f59e0b'; // Amber
-      case 'tempered':
-        return '#8b5cf6'; // Purple
-      case 'on_cabin':
-        return colors.info;
-      case 'laminating':
-        return '#06b6d4'; // Cyan
-      case 'laminated':
-        return '#3b82f6'; // Blue
-      case 'waiting_for_packing':
-        return colors.warning;
-      case 'packed':
-        return '#06b6d4'; // Cyan
-      case 'ready_for_dispatch':
-        return '#f59e0b'; // Amber
-      case 'delivered':
-        return colors.success;
-      case 'completed':
-        return colors.success;
-      case 'cancelled':
-        return colors.textTertiary;
-      default:
-        return colors.textSecondary;
-    }
-  };
+  const getStatusLabel = (status: string) => getStatusLabelFor(t, status);
+  const getStatusColor = (status: string) => getStatusAppearance(status, colors).color;
 
   const getDueInfo = (production: Production): { label: string; color: string; icon: 'alert-circle' | 'time-outline' | 'calendar-outline' } => {
     const dateLabel = formatDateKey(production.dueDate);
@@ -245,7 +205,14 @@ export default function ProductionScreen() {
     return Array.from(lines.values());
   };
 
-  const renderChip = (label: string, selected: boolean, onPress: () => void, key: string, accent?: string) => (
+  const renderChip = (
+    label: string,
+    selected: boolean,
+    onPress: () => void,
+    key: string,
+    accent?: string,
+    icon?: ComponentProps<typeof Ionicons>['name']
+  ) => (
     <TouchableOpacity
       key={key}
       style={[
@@ -256,6 +223,7 @@ export default function ProductionScreen() {
       onPress={onPress}
       activeOpacity={0.7}
     >
+      {icon && <Ionicons name={icon} size={14} color={accent || colors.textSecondary} />}
       <Text
         style={[
           styles.chipText,
@@ -445,20 +413,14 @@ export default function ProductionScreen() {
                 >
                   <View style={[styles.cardIndicator, { backgroundColor: statusColor }]} />
                   <View style={styles.cardBody}>
-                    <View style={styles.cardRow}>
-                      <Text style={[styles.clientName, { color: colors.text }]} numberOfLines={1}>
-                        {production.clientName}
-                      </Text>
-                      <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
-                        <Text style={[styles.statusText, { color: statusColor }]} numberOfLines={1}>
-                          {getStatusLabel(production.status)}
-                        </Text>
-                      </View>
-                    </View>
+                    <Text style={[styles.clientName, { color: colors.text }]} numberOfLines={1}>
+                      {production.clientName}
+                    </Text>
                     <Text style={[styles.orderMeta, { color: colors.textSecondary }]} numberOfLines={1}>
                       #{production.orderNumber}
                       {production.orderType ? ` · ${production.orderType}` : ''}
                     </Text>
+                    <ProductionStatusBadge status={production.status} style={styles.statusBadge} />
                     {glassLines.length > 0 && (
                       <View style={[styles.glassList, { borderColor: colors.borderLight }]}>
                         {glassLines.slice(0, MAX_GLASS_LINES).map((line, index) => (
@@ -619,7 +581,8 @@ export default function ProductionScreen() {
                       draftFilters.statuses.includes(status),
                       () => toggleDraftStatus(status),
                       status,
-                      getStatusColor(status)
+                      getStatusColor(status),
+                      getStatusAppearance(status, colors).icon
                     )
                   )}
                 </View>
@@ -812,19 +775,12 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   clientName: {
-    flex: 1,
     fontSize: theme.typography.fontSize.md,
     fontWeight: theme.typography.fontWeight.semibold,
   },
   statusBadge: {
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 2,
-    borderRadius: theme.borderRadius.sm,
-    maxWidth: '50%',
-  },
-  statusText: {
-    fontSize: theme.typography.fontSize.xs,
-    fontWeight: theme.typography.fontWeight.semibold,
+    alignSelf: 'flex-start',
+    marginTop: 2,
   },
   orderMeta: {
     fontSize: theme.typography.fontSize.sm,
@@ -920,6 +876,9 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
     borderRadius: theme.borderRadius.full,

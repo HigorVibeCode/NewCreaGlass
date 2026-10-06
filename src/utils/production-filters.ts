@@ -1,27 +1,16 @@
 import { Production, ProductionStatus } from '../types';
 
-// Ordered as the production workflow, used for status filter chips
-export const PRODUCTION_STATUSES: ProductionStatus[] = [
-  'not_authorized',
-  'authorized',
-  'cutting',
-  'polishing',
-  'waiting_for_tempering',
-  'on_oven',
-  'tempered',
-  'on_cabin',
-  'laminating',
-  'laminated',
+export { PRODUCTION_STATUSES } from './production-status';
+
+const FINISHED_STATUSES: ProductionStatus[] = ['delivered', 'completed', 'cancelled'];
+const SHIPPING_STATUSES: ProductionStatus[] = [
+  'pack_glass_box',
+  'pack_pallet',
+  'pack_paper',
   'waiting_for_packing',
   'packed',
   'ready_for_dispatch',
-  'delivered',
-  'completed',
-  'cancelled',
 ];
-
-const FINISHED_STATUSES: ProductionStatus[] = ['delivered', 'completed', 'cancelled'];
-const SHIPPING_STATUSES: ProductionStatus[] = ['waiting_for_packing', 'packed', 'ready_for_dispatch'];
 
 export type ProductionView = 'active' | 'overdue' | 'dueSoon' | 'shipping' | 'finished' | 'all';
 export const PRODUCTION_VIEWS: ProductionView[] = ['active', 'overdue', 'dueSoon', 'shipping', 'finished', 'all'];
