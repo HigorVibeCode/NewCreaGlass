@@ -274,7 +274,8 @@
       "packed": "Embalado",
       "ready_for_dispatch": "Listo para Envío",
       "delivered": "Entregado",
-      "completed": "Completada"
+      "completed": "Completada",
+      "cancelled": "Cancelado"
     },
     "orderType": {
       "standard": "Estándar",
@@ -315,7 +316,7 @@
         "finished": "Finalizados",
         "all": "Todos"
       },
-      "searchPlaceholder": "Buscar cliente o pedido",
+      "searchPlaceholder": "Cliente, pedido o vidrio",
       "filters": "Filtros",
       "status": "Estado",
       "period": "Período",
@@ -325,11 +326,13 @@
         "createdAt": "Creación"
       },
       "periods": {
-        "any": "Cualquiera",
-        "today": "Hoy",
+        "last7": "Últimos 7 días",
+        "last30": "Últimos 30 días",
+        "last90": "Últimos 90 días",
         "thisWeek": "Esta semana",
         "thisMonth": "Este mes",
-        "custom": "Personalizado"
+        "custom": "Personalizado",
+        "any": "Todo el período"
       },
       "from": "Desde",
       "to": "Hasta",
@@ -347,7 +350,21 @@
       "overdueBy": "Atrasado {{count}}d",
       "dueToday": "Vence hoy",
       "dueTomorrow": "Vence mañana",
-      "pieces": "{{count}} pzs"
+      "pieces": "{{count}} pzs",
+      "moreGlass": "+{{count}} vidrio(s) más",
+      "periodsShort": {
+        "last7": "7 días",
+        "last30": "30 días",
+        "last90": "90 días",
+        "thisWeek": "Esta semana",
+        "thisMonth": "Este mes",
+        "any": "Todo"
+      },
+      "sortsShort": {
+        "newest": "Recientes",
+        "dueDate": "Entrega",
+        "client": "A–Z"
+      }
     }
   },
   "events": {

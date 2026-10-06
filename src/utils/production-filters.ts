@@ -17,16 +17,19 @@ export const PRODUCTION_STATUSES: ProductionStatus[] = [
   'ready_for_dispatch',
   'delivered',
   'completed',
+  'cancelled',
 ];
 
-const FINISHED_STATUSES: ProductionStatus[] = ['delivered', 'completed'];
+const FINISHED_STATUSES: ProductionStatus[] = ['delivered', 'completed', 'cancelled'];
 const SHIPPING_STATUSES: ProductionStatus[] = ['waiting_for_packing', 'packed', 'ready_for_dispatch'];
 
 export type ProductionView = 'active' | 'overdue' | 'dueSoon' | 'shipping' | 'finished' | 'all';
 export const PRODUCTION_VIEWS: ProductionView[] = ['active', 'overdue', 'dueSoon', 'shipping', 'finished', 'all'];
 
 export type DateField = 'dueDate' | 'createdAt';
-export type PeriodPreset = 'any' | 'today' | 'thisWeek' | 'thisMonth' | 'custom';
+export type PeriodPreset = 'last7' | 'last30' | 'last90' | 'thisWeek' | 'thisMonth' | 'custom' | 'any';
+export const PERIOD_PRESETS: PeriodPreset[] = ['last7', 'last30', 'last90', 'thisWeek', 'thisMonth', 'custom', 'any'];
+export const SORT_OPTIONS: SortOption[] = ['newest', 'dueDate', 'client'];
 export type SortOption = 'dueDate' | 'newest' | 'client';
 
 export interface ProductionFilters {
@@ -38,13 +41,14 @@ export interface ProductionFilters {
   sort: SortOption;
 }
 
+// Always-on default: orders created in the last 30 days, newest first
 export const DEFAULT_FILTERS: ProductionFilters = {
   statuses: [],
-  dateField: 'dueDate',
-  period: 'any',
+  dateField: 'createdAt',
+  period: 'last30',
   customFrom: '',
   customTo: '',
-  sort: 'dueDate',
+  sort: 'newest',
 };
 
 const DUE_SOON_DAYS = 7;
@@ -92,8 +96,12 @@ export const formatDateKey = (value: string): string => {
 const getPeriodRange = (filters: ProductionFilters, today: Date): [string | null, string | null] => {
   const todayStart = keyToDate(toDateKey(today));
   switch (filters.period) {
-    case 'today':
-      return [toDateKey(todayStart), toDateKey(todayStart)];
+    case 'last7':
+    case 'last30':
+    case 'last90': {
+      const days = filters.period === 'last7' ? 7 : filters.period === 'last30' ? 30 : 90;
+      return [toDateKey(addDays(todayStart, -(days - 1))), toDateKey(todayStart)];
+    }
     case 'thisWeek': {
       // Week starts on Monday
       const monday = addDays(todayStart, -((todayStart.getDay() + 6) % 7));
@@ -145,7 +153,8 @@ export const applyFilters = (
 
   return productions.filter((p) => {
     if (term) {
-      const haystack = `${p.clientName} ${p.orderNumber} ${p.orderType}`.toLowerCase();
+      const glassNames = (p.items || []).map((item) => item.glassName || '').join(' ');
+      const haystack = `${p.clientName} ${p.orderNumber} ${p.orderType} ${glassNames}`.toLowerCase();
       if (!haystack.includes(term)) return false;
     }
     if (filters.statuses.length > 0 && !filters.statuses.includes(p.status)) return false;
@@ -174,5 +183,8 @@ export const sortProductions = (productions: Production[], sort: SortOption): Pr
   }
 };
 
-export const countActiveFilters = (filters: ProductionFilters): number =>
-  (filters.statuses.length > 0 ? 1 : 0) + (filters.period !== 'any' ? 1 : 0);
+export const isDefaultFilters = (filters: ProductionFilters): boolean =>
+  filters.statuses.length === 0 &&
+  filters.dateField === DEFAULT_FILTERS.dateField &&
+  filters.period === DEFAULT_FILTERS.period &&
+  filters.sort === DEFAULT_FILTERS.sort;

@@ -271,7 +271,8 @@
       "packed": "Verpackt",
       "ready_for_dispatch": "Versandbereit",
       "delivered": "Geliefert",
-      "completed": "Abgeschlossen"
+      "completed": "Abgeschlossen",
+      "cancelled": "Storniert"
     },
     "orderType": {
       "standard": "Standard",
@@ -312,7 +313,7 @@
         "finished": "Abgeschlossen",
         "all": "Alle"
       },
-      "searchPlaceholder": "Kunde oder Auftrag suchen",
+      "searchPlaceholder": "Kunde, Auftrag oder Glas",
       "filters": "Filter",
       "status": "Status",
       "period": "Zeitraum",
@@ -322,11 +323,13 @@
         "createdAt": "Erstellt"
       },
       "periods": {
-        "any": "Beliebig",
-        "today": "Heute",
+        "last7": "Letzte 7 Tage",
+        "last30": "Letzte 30 Tage",
+        "last90": "Letzte 90 Tage",
         "thisWeek": "Diese Woche",
         "thisMonth": "Dieser Monat",
-        "custom": "Benutzerdefiniert"
+        "custom": "Benutzerdefiniert",
+        "any": "Gesamter Zeitraum"
       },
       "from": "Von",
       "to": "Bis",
@@ -344,7 +347,21 @@
       "overdueBy": "{{count}} T. überfällig",
       "dueToday": "Heute fällig",
       "dueTomorrow": "Morgen fällig",
-      "pieces": "{{count}} Stk."
+      "pieces": "{{count}} Stk.",
+      "moreGlass": "+{{count}} weitere(s) Glas",
+      "periodsShort": {
+        "last7": "7 Tage",
+        "last30": "30 Tage",
+        "last90": "90 Tage",
+        "thisWeek": "Diese Woche",
+        "thisMonth": "Dieser Monat",
+        "any": "Alle"
+      },
+      "sortsShort": {
+        "newest": "Neueste",
+        "dueDate": "Termin",
+        "client": "A–Z"
+      }
     }
   },
   "events": {

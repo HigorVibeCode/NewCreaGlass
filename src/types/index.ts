@@ -127,7 +127,8 @@ export type ProductionStatus =
   | 'packed'
   | 'ready_for_dispatch'
   | 'delivered'
-  | 'completed';
+  | 'completed'
+  | 'cancelled';
 export type OrderType = 'standard' | 'urgent' | 'custom';
 export type GlassType = 'tempered' | 'strengthened' | 'float' | 'laminated' | 'textured' | 'sandblasted' | 'cuted' | 'insulated';
 export type StructureType = 'none' | 'linear' | 'abstract' | 'organic' | 'check_project';
@@ -144,6 +145,7 @@ export interface ProductionAttachment {
 export interface ProductionItem {
   id: string;
   glassId: string; // InventoryItem ID
+  glassName?: string; // InventoryItem name, filled by list queries
   glassType: GlassType;
   quantity: number;
   areaM2: number;
