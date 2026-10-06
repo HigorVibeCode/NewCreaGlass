@@ -524,7 +524,10 @@
       "inspected": "Inspected",
       "pack_glass_box": "Pack in Glass Box",
       "pack_pallet": "Pack on Pallet",
-      "pack_paper": "Pack with Paper"
+      "pack_paper": "Pack with Paper",
+      "packed_glass_box": "Packed in Glass Box",
+      "packed_pallet": "Packed on Pallet",
+      "packed_paper": "Packed with Paper"
     },
     "orderType": {
       "standard": "Standard",

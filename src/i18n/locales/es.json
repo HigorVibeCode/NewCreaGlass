@@ -470,7 +470,10 @@
       "inspected": "Revisado",
       "pack_glass_box": "Embalar en Glass Box",
       "pack_pallet": "Embalar en Palé",
-      "pack_paper": "Embalar con Papel"
+      "pack_paper": "Embalar con Papel",
+      "packed_glass_box": "Embalado en Glass Box",
+      "packed_pallet": "Embalado en Palé",
+      "packed_paper": "Embalado con Papel"
     },
     "orderType": {
       "standard": "Estándar",

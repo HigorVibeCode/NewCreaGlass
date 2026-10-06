@@ -9,6 +9,9 @@ const SHIPPING_STATUSES: ProductionStatus[] = [
   'pack_paper',
   'waiting_for_packing',
   'packed',
+  'packed_glass_box',
+  'packed_pallet',
+  'packed_paper',
   'ready_for_dispatch',
 ];
 

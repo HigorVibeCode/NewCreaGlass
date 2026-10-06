@@ -522,7 +522,10 @@
       "inspected": "Conferido",
       "pack_glass_box": "Embalar para Glass Box",
       "pack_pallet": "Embalar para Palete",
-      "pack_paper": "Embalar com Papel"
+      "pack_paper": "Embalar com Papel",
+      "packed_glass_box": "Embalado com Glass Box",
+      "packed_pallet": "Embalado em Palete",
+      "packed_paper": "Embalado com Papel"
     },
     "orderType": {
       "standard": "Padrão",

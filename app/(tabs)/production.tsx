@@ -29,6 +29,7 @@ import { Production, ProductionCompany, ProductionStatus, InventoryItem } from '
 import { theme } from '../../src/theme';
 import { useThemeColors } from '../../src/hooks/use-theme-colors';
 import { pushWithParams } from '../../src/utils/navigation';
+import { formatDate } from '../../src/utils/date-format';
 import {
   PRODUCTION_STATUSES,
   PRODUCTION_VIEWS,
@@ -343,6 +344,13 @@ export default function ProductionScreen() {
     return { label: dateLabel, color: colors.warning, icon: 'time-outline' };
   };
 
+  // Compact date for the card corner: "1 Oct", or "1 Oct 25" outside the current year
+  const formatCardDate = (value: string): string => {
+    const full = formatDate(value);
+    const year = String(new Date().getFullYear());
+    return full.endsWith(` ${year}`) ? full.slice(0, -(year.length + 1)) : full.replace(/ (\d{2})(\d{2})$/, ' $2');
+  };
+
   const getItemsSummary = (production: Production): string => {
     if (!production.items || production.items.length === 0) return '';
     const pieces = production.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
@@ -578,9 +586,20 @@ export default function ProductionScreen() {
                 >
                   <View style={[styles.cardIndicator, { backgroundColor: statusColor }]} />
                   <View style={styles.cardBody}>
-                    <Text style={[styles.clientName, { color: colors.text }]} numberOfLines={1}>
-                      {production.clientName}
-                    </Text>
+                    <View style={styles.cardHeaderRow}>
+                      <Text style={[styles.clientName, { color: colors.text }]} numberOfLines={1}>
+                        {production.clientName}
+                      </Text>
+                      <View style={styles.cardDates}>
+                        <Text style={[styles.cardDatesText, { color: colors.textTertiary }]}>
+                          {formatCardDate(production.createdAt)}
+                        </Text>
+                        <Ionicons name="arrow-forward" size={10} color={colors.textTertiary} />
+                        <Text style={[styles.cardDatesText, { color: colors.textSecondary }]}>
+                          {formatCardDate(production.dueDate)}
+                        </Text>
+                      </View>
+                    </View>
                     <Text style={[styles.orderMeta, { color: colors.textSecondary }]} numberOfLines={1}>
                       #{production.orderNumber}
                       {production.orderType ? ` · ${production.orderType}` : ''}
@@ -983,7 +1002,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: theme.spacing.sm,
   },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  cardDates: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    flexShrink: 0,
+  },
+  cardDatesText: {
+    fontSize: 11,
+    fontVariant: ['tabular-nums'],
+  },
   clientName: {
+    flex: 1,
     fontSize: theme.typography.fontSize.md,
     fontWeight: theme.typography.fontWeight.semibold,
   },

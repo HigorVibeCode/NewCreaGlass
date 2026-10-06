@@ -806,9 +806,9 @@ export default function ProductionDetailScreen() {
             >
               <Ionicons
                 name={getStatusAppearance(production.status, colors).icon}
-                size={16}
+                size={14}
                 color={getStatusColor(production.status)}
-                style={{ marginRight: theme.spacing.xs }}
+                style={{ marginRight: 4 }}
               />
               <Text
                 style={[
@@ -818,7 +818,7 @@ export default function ProductionDetailScreen() {
               >
                 {getStatusLabel(production.status)}
               </Text>
-              <Ionicons name="chevron-down" size={16} color={getStatusColor(production.status)} style={{ marginLeft: theme.spacing.xs }} />
+              <Ionicons name="chevron-down" size={14} color={getStatusColor(production.status)} style={{ marginLeft: 2 }} />
             </TouchableOpacity>
           </View>
           <Text style={[styles.orderType, { color: colors.textSecondary }]}>
@@ -1244,28 +1244,31 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.lg,
     ...theme.shadows.sm,
   },
-  // Stacked so long phase names never push the badge off screen
   headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: theme.spacing.sm,
+    gap: theme.spacing.md,
     marginBottom: theme.spacing.sm,
   },
   clientName: {
     fontSize: theme.typography.fontSize.xl,
     fontWeight: theme.typography.fontWeight.bold,
+    flex: 1,
   },
+  // Capped width so long phase names wrap inside the badge instead of overflowing
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    maxWidth: '100%',
-    paddingHorizontal: theme.spacing.md,
+    maxWidth: '62%',
+    paddingHorizontal: theme.spacing.sm,
     paddingVertical: theme.spacing.sm,
     borderRadius: theme.borderRadius.md,
     minHeight: 36,
   },
   statusText: {
     flexShrink: 1,
-    fontSize: theme.typography.fontSize.sm,
+    fontSize: theme.typography.fontSize.xs,
     fontWeight: theme.typography.fontWeight.semibold,
   },
   orderType: {

@@ -467,7 +467,10 @@
       "inspected": "Kontrolliert",
       "pack_glass_box": "In Glass Box verpacken",
       "pack_pallet": "Auf Palette verpacken",
-      "pack_paper": "Mit Papier verpacken"
+      "pack_paper": "Mit Papier verpacken",
+      "packed_glass_box": "In Glass Box verpackt",
+      "packed_pallet": "Auf Palette verpackt",
+      "packed_paper": "Mit Papier verpackt"
     },
     "orderType": {
       "standard": "Standard",

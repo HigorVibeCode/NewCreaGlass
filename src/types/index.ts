@@ -280,6 +280,9 @@ export type ProductionStatus =
   | 'pack_glass_box'
   | 'pack_pallet'
   | 'pack_paper'
+  | 'packed_glass_box'
+  | 'packed_pallet'
+  | 'packed_paper'
   // Blue group
   | 'packed'
   | 'ready_for_dispatch'
