@@ -1245,5 +1245,11 @@
       "lastActivity": "Última atividade",
       "never": "Nunca"
     }
+  },
+  "attachmentViewer": {
+    "download": "Baixar",
+    "loadError": "Não foi possível abrir o arquivo",
+    "dxfPreview": "Prévia do desenho",
+    "dxfEmpty": "Nenhum desenho encontrado no arquivo"
   }
 }

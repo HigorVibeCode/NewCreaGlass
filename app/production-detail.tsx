@@ -46,6 +46,12 @@ import { pushWithParams } from '../src/utils/navigation';
 import { generateHybridLinks, shareViaWhatsApp } from '../src/utils/share-links';
 import { useRouteParams } from '../src/hooks/use-route-params';
 import { GlassType, InventoryItem, PaintType, Production, ProductionStatus, ProductionStatusHistory, StructureType, User } from '../src/types';
+import {
+  AttachmentViewer,
+  ViewerAttachment,
+  canViewInApp,
+  getViewerKind,
+} from '../src/components/shared/AttachmentViewer';
 import { ProductionStatusBadge } from '../src/components/shared/ProductionStatusBadge';
 import { PRODUCTION_STATUSES, getStatusAppearance, getStatusLabel as getStatusLabelFor } from '../src/utils/production-status';
 
@@ -181,6 +187,7 @@ export default function ProductionDetailScreen() {
     attachmentFolders.dxf.length > 0;
   const [isLinkingWorkOrder, setIsLinkingWorkOrder] = useState(false);
   const [statusHistory, setStatusHistory] = useState<ProductionStatusHistory[]>([]);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [historyUsers, setHistoryUsers] = useState<Map<string, User>>(new Map());
 
   useEffect(() => {
@@ -524,6 +531,19 @@ export default function ProductionDetailScreen() {
     }
   };
 
+  const getAttachmentStorageKey = (attachment: { storagePath: string; originalStoragePath?: string }) =>
+    attachment.originalStoragePath || extractStorageObjectKey(attachment.storagePath) || attachment.storagePath;
+
+  const viewerAttachments: ViewerAttachment[] = useMemo(
+    () =>
+      (production?.attachments ?? []).map((attachment) => ({
+        storageKey: getAttachmentStorageKey(attachment),
+        name: attachment.originalName || attachment.filename,
+        mimeType: attachment.mimeType,
+      })),
+    [production?.attachments]
+  );
+
   const handleAttachmentPress = async (attachment: {
     storagePath: string;
     originalStoragePath?: string;
@@ -532,10 +552,17 @@ export default function ProductionDetailScreen() {
     filename: string;
   }) => {
     try {
-      const storageKey =
-        attachment.originalStoragePath ||
-        extractStorageObjectKey(attachment.storagePath) ||
-        attachment.storagePath;
+      const storageKey = getAttachmentStorageKey(attachment);
+      const name = attachment.originalName || attachment.filename;
+
+      // Images, DXF (and PDF outside Android) open in the in-app viewer
+      if (canViewInApp(getViewerKind(name, attachment.mimeType))) {
+        const index = viewerAttachments.findIndex((item) => item.storageKey === storageKey);
+        if (index >= 0) {
+          setViewerIndex(index);
+          return;
+        }
+      }
 
       await downloadAndOpenAttachment(
         storageKey,
@@ -1215,6 +1242,12 @@ export default function ProductionDetailScreen() {
         </View>
       </TouchableWithoutFeedback>
     </Modal>
+
+    <AttachmentViewer
+      attachments={viewerAttachments}
+      index={viewerIndex}
+      onClose={() => setViewerIndex(null)}
+    />
     </>
   );
 }
