@@ -271,7 +271,8 @@
       "packed": "Verpackt",
       "ready_for_dispatch": "Versandbereit",
       "delivered": "Geliefert",
-      "completed": "Abgeschlossen"
+      "completed": "Abgeschlossen",
+      "cancelled": "Storniert"
     },
     "orderType": {
       "standard": "Standard",
@@ -322,11 +323,13 @@
         "createdAt": "Erstellt"
       },
       "periods": {
-        "any": "Beliebig",
-        "today": "Heute",
+        "last7": "Letzte 7 Tage",
+        "last30": "Letzte 30 Tage",
+        "last90": "Letzte 90 Tage",
         "thisWeek": "Diese Woche",
         "thisMonth": "Dieser Monat",
-        "custom": "Benutzerdefiniert"
+        "custom": "Benutzerdefiniert",
+        "any": "Gesamter Zeitraum"
       },
       "from": "Von",
       "to": "Bis",

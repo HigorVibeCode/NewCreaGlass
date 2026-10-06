@@ -127,7 +127,8 @@ export type ProductionStatus =
   | 'packed'
   | 'ready_for_dispatch'
   | 'delivered'
-  | 'completed';
+  | 'completed'
+  | 'cancelled';
 export type OrderType = 'standard' | 'urgent' | 'custom';
 export type GlassType = 'tempered' | 'strengthened' | 'float' | 'laminated' | 'textured' | 'sandblasted' | 'cuted' | 'insulated';
 export type StructureType = 'none' | 'linear' | 'abstract' | 'organic' | 'check_project';

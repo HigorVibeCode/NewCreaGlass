@@ -25,24 +25,24 @@ import { useThemeColors } from '../../src/hooks/use-theme-colors';
 import {
   PRODUCTION_STATUSES,
   PRODUCTION_VIEWS,
+  PERIOD_PRESETS,
+  SORT_OPTIONS,
   DEFAULT_FILTERS,
   ProductionView,
   ProductionFilters,
   DateField,
-  PeriodPreset,
-  SortOption,
   applyFilters,
   matchesView,
   sortProductions,
-  countActiveFilters,
+  isDefaultFilters,
   daysUntilDue,
   formatDateKey,
   isFinished,
 } from '../../src/utils/production-filters';
 
-const PERIODS: PeriodPreset[] = ['any', 'today', 'thisWeek', 'thisMonth', 'custom'];
-const DATE_FIELDS: DateField[] = ['dueDate', 'createdAt'];
-const SORTS: SortOption[] = ['dueDate', 'newest', 'client'];
+const DATE_FIELDS: DateField[] = ['createdAt', 'dueDate'];
+
+type FilterSheet = 'period' | 'sort' | 'status';
 
 export default function ProductionScreen() {
   const { t } = useI18n();
@@ -55,7 +55,7 @@ export default function ProductionScreen() {
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<ProductionFilters>(DEFAULT_FILTERS);
   const [draftFilters, setDraftFilters] = useState<ProductionFilters>(DEFAULT_FILTERS);
-  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [activeSheet, setActiveSheet] = useState<FilterSheet | null>(null);
 
   const loadProductions = useCallback(async () => {
     try {
@@ -99,17 +99,49 @@ export default function ProductionScreen() {
     [filtered, view, filters.sort]
   );
 
-  const activeFilterCount = countActiveFilters(filters);
-  const hasAnyFilter = activeFilterCount > 0 || search.trim().length > 0;
+  const statusFilterCount = filters.statuses.length;
+  const hasAnyFilter = !isDefaultFilters(filters) || search.trim().length > 0;
 
-  const openFilters = () => {
+  const openSheet = (sheet: FilterSheet) => {
     setDraftFilters(filters);
-    setFilterModalVisible(true);
+    setActiveSheet(sheet);
   };
+
+  const closeSheet = () => setActiveSheet(null);
 
   const applyDraftFilters = () => {
     setFilters(draftFilters);
-    setFilterModalVisible(false);
+    setActiveSheet(null);
+  };
+
+  // Clear only the section being edited
+  const clearDraftSection = () => {
+    setDraftFilters((prev) =>
+      activeSheet === 'status'
+        ? { ...prev, statuses: [] }
+        : {
+            ...prev,
+            dateField: DEFAULT_FILTERS.dateField,
+            period: DEFAULT_FILTERS.period,
+            customFrom: '',
+            customTo: '',
+          }
+    );
+  };
+
+  const getStatusLabel = (status: string): string => {
+    // Fallback keeps unknown database statuses readable
+    const fallback = status.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+    return t(`production.status.${status}`, { defaultValue: fallback });
+  };
+
+  const getPeriodLabel = (): string => {
+    if (filters.period === 'custom') {
+      const from = filters.customFrom ? formatDateKey(filters.customFrom) : '…';
+      const to = filters.customTo ? formatDateKey(filters.customTo) : '…';
+      return `${from} – ${to}`;
+    }
+    return t(`production.dashboard.periods.${filters.period}`);
   };
 
   const clearAllFilters = () => {
@@ -158,6 +190,8 @@ export default function ProductionScreen() {
         return colors.success;
       case 'completed':
         return colors.success;
+      case 'cancelled':
+        return colors.textTertiary;
       default:
         return colors.textSecondary;
     }
@@ -234,13 +268,13 @@ export default function ProductionScreen() {
           </View>
           <TouchableOpacity
             style={[styles.iconButton, { backgroundColor: colors.backgroundSecondary }]}
-            onPress={openFilters}
+            onPress={() => openSheet('status')}
             activeOpacity={0.7}
           >
-            <Ionicons name="options-outline" size={20} color={activeFilterCount > 0 ? colors.primary : colors.text} />
-            {activeFilterCount > 0 && (
+            <Ionicons name="options-outline" size={20} color={statusFilterCount > 0 ? colors.primary : colors.text} />
+            {statusFilterCount > 0 && (
               <View style={[styles.badge, { backgroundColor: colors.primary }]}>
-                <Text style={[styles.badgeText, { color: colors.textInverse }]}>{activeFilterCount}</Text>
+                <Text style={[styles.badgeText, { color: colors.textInverse }]}>{statusFilterCount}</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -260,6 +294,36 @@ export default function ProductionScreen() {
               <Ionicons name="add" size={22} color={colors.textInverse} />
             </TouchableOpacity>
           </PermissionGuard>
+        </View>
+
+        <View style={styles.quickBar}>
+          <TouchableOpacity
+            style={[styles.quickButton, styles.quickButtonWide, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
+            onPress={() => openSheet('period')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="calendar-outline" size={16} color={colors.primary} />
+            <Text style={[styles.quickButtonText, { color: colors.text }]} numberOfLines={1}>
+              {getPeriodLabel()}
+              {filters.period !== 'any' && (
+                <Text style={{ color: colors.textSecondary }}>
+                  {` · ${t(`production.dashboard.dateFields.${filters.dateField}`)}`}
+                </Text>
+              )}
+            </Text>
+            <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.quickButton, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
+            onPress={() => openSheet('sort')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="swap-vertical" size={16} color={colors.primary} />
+            <Text style={[styles.quickButtonText, { color: colors.text }]} numberOfLines={1}>
+              {t(`production.dashboard.sorts.${filters.sort}`)}
+            </Text>
+            <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
+          </TouchableOpacity>
         </View>
 
         <ScrollView
@@ -310,18 +374,18 @@ export default function ProductionScreen() {
           })}
         </ScrollView>
 
-        {hasAnyFilter && (
-          <View style={styles.resultsRow}>
-            <Text style={[styles.resultsText, { color: colors.textSecondary }]}>
-              {t('production.dashboard.results', { count: visibleProductions.length })}
-            </Text>
+        <View style={styles.resultsRow}>
+          <Text style={[styles.resultsText, { color: colors.textSecondary }]}>
+            {t('production.dashboard.results', { count: visibleProductions.length })}
+          </Text>
+          {hasAnyFilter && (
             <TouchableOpacity onPress={clearAllFilters} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Text style={[styles.clearLink, { color: colors.primary }]}>
                 {t('production.dashboard.clearFilters')}
               </Text>
             </TouchableOpacity>
-          </View>
-        )}
+          )}
+        </View>
       </View>
 
       <ScrollView
@@ -365,7 +429,7 @@ export default function ProductionScreen() {
                       </Text>
                       <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
                         <Text style={[styles.statusText, { color: statusColor }]} numberOfLines={1}>
-                          {t(`production.status.${production.status}`)}
+                          {getStatusLabel(production.status)}
                         </Text>
                       </View>
                     </View>
@@ -391,128 +455,157 @@ export default function ProductionScreen() {
       </ScrollView>
 
       <Modal
-        visible={filterModalVisible}
+        visible={activeSheet !== null}
         transparent
         animationType="slide"
-        onRequestClose={() => setFilterModalVisible(false)}
+        onRequestClose={closeSheet}
       >
         <View style={styles.sheetContainer}>
-          <TouchableWithoutFeedback onPress={() => setFilterModalVisible(false)}>
+          <TouchableWithoutFeedback onPress={closeSheet}>
             <View style={[styles.sheetBackdrop, { backgroundColor: colors.overlay }]} />
           </TouchableWithoutFeedback>
           <View style={[styles.sheet, { backgroundColor: colors.background }]}>
             <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
             <View style={[styles.sheetHeader, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.sheetTitle, { color: colors.text }]}>{t('production.dashboard.filters')}</Text>
-              <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
+              <Text style={[styles.sheetTitle, { color: colors.text }]}>
+                {activeSheet === 'period'
+                  ? t('production.dashboard.period')
+                  : activeSheet === 'sort'
+                    ? t('production.dashboard.sortBy')
+                    : t('production.dashboard.status')}
+              </Text>
+              <TouchableOpacity onPress={closeSheet}>
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetContent}>
-              <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-                {t('production.dashboard.sortBy')}
-              </Text>
-              <View style={styles.chipWrap}>
-                {SORTS.map((s) =>
-                  renderChip(
-                    t(`production.dashboard.sorts.${s}`),
-                    draftFilters.sort === s,
-                    () => setDraftFilters((prev) => ({ ...prev, sort: s })),
-                    s
-                  )
-                )}
-              </View>
-
-              <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-                {t('production.dashboard.period')}
-              </Text>
-              <View style={styles.segment}>
-                {DATE_FIELDS.map((field) => {
-                  const selected = draftFilters.dateField === field;
+              {activeSheet === 'sort' &&
+                SORT_OPTIONS.map((s) => {
+                  const selected = filters.sort === s;
                   return (
                     <TouchableOpacity
-                      key={field}
-                      style={[
-                        styles.segmentItem,
-                        { borderColor: colors.border },
-                        selected && { backgroundColor: colors.primary, borderColor: colors.primary },
-                      ]}
-                      onPress={() => setDraftFilters((prev) => ({ ...prev, dateField: field }))}
+                      key={s}
+                      style={[styles.optionRow, { borderBottomColor: colors.borderLight }]}
+                      onPress={() => {
+                        // Sorting applies immediately, no confirm step
+                        setFilters((prev) => ({ ...prev, sort: s }));
+                        closeSheet();
+                      }}
                       activeOpacity={0.7}
                     >
-                      <Text style={[styles.segmentText, { color: selected ? colors.textInverse : colors.text }]}>
-                        {t(`production.dashboard.dateFields.${field}`)}
+                      <Text
+                        style={[
+                          styles.optionRowText,
+                          { color: selected ? colors.primary : colors.text },
+                          selected && { fontWeight: theme.typography.fontWeight.semibold },
+                        ]}
+                      >
+                        {t(`production.dashboard.sorts.${s}`)}
                       </Text>
+                      {selected && <Ionicons name="checkmark" size={20} color={colors.primary} />}
                     </TouchableOpacity>
                   );
                 })}
-              </View>
-              <View style={styles.chipWrap}>
-                {PERIODS.map((p) =>
-                  renderChip(
-                    t(`production.dashboard.periods.${p}`),
-                    draftFilters.period === p,
-                    () => setDraftFilters((prev) => ({ ...prev, period: p })),
-                    p
-                  )
-                )}
-              </View>
-              {draftFilters.period === 'custom' && (
-                <View style={styles.customRange}>
-                  <View style={styles.customRangeItem}>
-                    <DatePicker
-                      label={t('production.dashboard.from')}
-                      value={draftFilters.customFrom}
-                      onSelect={(date) => setDraftFilters((prev) => ({ ...prev, customFrom: date }))}
-                    />
+
+              {activeSheet === 'period' && (
+                <>
+                  <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+                    {t('production.dashboard.dateField')}
+                  </Text>
+                  <View style={styles.segment}>
+                    {DATE_FIELDS.map((field, index) => {
+                      const selected = draftFilters.dateField === field;
+                      return (
+                        <TouchableOpacity
+                          key={field}
+                          style={[
+                            styles.segmentItem,
+                            { borderColor: colors.border },
+                            index === 0 ? styles.segmentFirst : styles.segmentLast,
+                            selected && { backgroundColor: colors.primary, borderColor: colors.primary },
+                          ]}
+                          onPress={() => setDraftFilters((prev) => ({ ...prev, dateField: field }))}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.segmentText, { color: selected ? colors.textInverse : colors.text }]}>
+                            {t(`production.dashboard.dateFields.${field}`)}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
-                  <View style={styles.customRangeItem}>
-                    <DatePicker
-                      label={t('production.dashboard.to')}
-                      value={draftFilters.customTo}
-                      onSelect={(date) => setDraftFilters((prev) => ({ ...prev, customTo: date }))}
-                    />
+                  <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+                    {t('production.dashboard.period')}
+                  </Text>
+                  <View style={styles.chipWrap}>
+                    {PERIOD_PRESETS.map((p) =>
+                      renderChip(
+                        t(`production.dashboard.periods.${p}`),
+                        draftFilters.period === p,
+                        () => setDraftFilters((prev) => ({ ...prev, period: p })),
+                        p
+                      )
+                    )}
                   </View>
-                </View>
+                  {draftFilters.period === 'custom' && (
+                    <View style={styles.customRange}>
+                      <View style={styles.customRangeItem}>
+                        <DatePicker
+                          label={t('production.dashboard.from')}
+                          value={draftFilters.customFrom}
+                          onSelect={(date) => setDraftFilters((prev) => ({ ...prev, customFrom: date }))}
+                        />
+                      </View>
+                      <View style={styles.customRangeItem}>
+                        <DatePicker
+                          label={t('production.dashboard.to')}
+                          value={draftFilters.customTo}
+                          onSelect={(date) => setDraftFilters((prev) => ({ ...prev, customTo: date }))}
+                        />
+                      </View>
+                    </View>
+                  )}
+                </>
               )}
 
-              <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-                {t('production.dashboard.status')}
-              </Text>
-              <View style={styles.chipWrap}>
-                {PRODUCTION_STATUSES.map((status) =>
-                  renderChip(
-                    t(`production.status.${status}`),
-                    draftFilters.statuses.includes(status),
-                    () => toggleDraftStatus(status),
-                    status,
-                    getStatusColor(status)
-                  )
-                )}
-              </View>
+              {activeSheet === 'status' && (
+                <View style={[styles.chipWrap, styles.statusChips]}>
+                  {PRODUCTION_STATUSES.map((status) =>
+                    renderChip(
+                      getStatusLabel(status),
+                      draftFilters.statuses.includes(status),
+                      () => toggleDraftStatus(status),
+                      status,
+                      getStatusColor(status)
+                    )
+                  )}
+                </View>
+              )}
             </ScrollView>
 
-            <View style={[styles.sheetFooter, { borderTopColor: colors.border }]}>
-              <TouchableOpacity
-                style={[styles.footerButton, { backgroundColor: colors.backgroundSecondary }]}
-                onPress={() => setDraftFilters(DEFAULT_FILTERS)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.footerButtonText, { color: colors.text }]}>
-                  {t('production.dashboard.clear')}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.footerButton, styles.footerButtonPrimary, { backgroundColor: colors.primary }]}
-                onPress={applyDraftFilters}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.footerButtonText, { color: colors.textInverse }]}>
-                  {t('production.dashboard.apply')}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            {activeSheet !== 'sort' && (
+              <View style={[styles.sheetFooter, { borderTopColor: colors.border }]}>
+                <TouchableOpacity
+                  style={[styles.footerButton, { backgroundColor: colors.backgroundSecondary }]}
+                  onPress={clearDraftSection}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.footerButtonText, { color: colors.text }]}>
+                    {t('production.dashboard.clear')}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.footerButton, styles.footerButtonPrimary, { backgroundColor: colors.primary }]}
+                  onPress={applyDraftFilters}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.footerButtonText, { color: colors.textInverse }]}>
+                    {t('production.dashboard.apply')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -568,9 +661,31 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: theme.typography.fontWeight.bold,
   },
+  quickBar: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
+  },
+  quickButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 36,
+    paddingHorizontal: theme.spacing.sm,
+    borderRadius: theme.borderRadius.sm,
+    borderWidth: 1,
+    gap: 6,
+  },
+  quickButtonWide: {
+    flex: 1,
+  },
+  quickButtonText: {
+    flexShrink: 1,
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
   viewTabs: {
     gap: theme.spacing.sm,
-    paddingVertical: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
   },
   viewTab: {
     flexDirection: 'row',
@@ -750,6 +865,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: theme.spacing.sm,
     borderWidth: 1,
+  },
+  segmentFirst: {
+    borderTopLeftRadius: theme.borderRadius.sm,
+    borderBottomLeftRadius: theme.borderRadius.sm,
+  },
+  segmentLast: {
+    borderTopRightRadius: theme.borderRadius.sm,
+    borderBottomRightRadius: theme.borderRadius.sm,
+    borderLeftWidth: 0,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    minHeight: 52,
+    borderBottomWidth: 1,
+  },
+  optionRowText: {
+    fontSize: theme.typography.fontSize.md,
+  },
+  statusChips: {
+    marginTop: theme.spacing.sm,
   },
   segmentText: {
     fontSize: theme.typography.fontSize.sm,

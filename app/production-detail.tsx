@@ -112,6 +112,8 @@ export default function ProductionDetailScreen() {
         return t('production.status.delivered');
       case 'completed':
         return t('production.status.completed');
+      case 'cancelled':
+        return t('production.status.cancelled');
       default:
         return status;
     }
@@ -149,6 +151,8 @@ export default function ProductionDetailScreen() {
         return colors.success;
       case 'completed':
         return colors.success;
+      case 'cancelled':
+        return colors.textTertiary;
       default:
         return colors.textSecondary;
     }
@@ -174,6 +178,7 @@ export default function ProductionDetailScreen() {
     { label: t('production.status.ready_for_dispatch'), value: 'ready_for_dispatch' },
     { label: t('production.status.delivered'), value: 'delivered' },
     { label: t('production.status.completed'), value: 'completed' },
+    { label: t('production.status.cancelled'), value: 'cancelled' },
   ];
 
   const handleStatusSelect = async (newStatus: ProductionStatus) => {
