@@ -305,6 +305,49 @@
       "printed": "Printed",
       "satiniert": "Satiniert",
       "check_project": "Check Project"
+    },
+    "dashboard": {
+      "views": {
+        "active": "Active",
+        "overdue": "Overdue",
+        "dueSoon": "Next 7 days",
+        "shipping": "Shipping",
+        "finished": "Finished",
+        "all": "All"
+      },
+      "searchPlaceholder": "Search client or order",
+      "filters": "Filters",
+      "status": "Status",
+      "period": "Period",
+      "dateField": "Date based on",
+      "dateFields": {
+        "dueDate": "Due date",
+        "createdAt": "Created"
+      },
+      "periods": {
+        "any": "Any",
+        "today": "Today",
+        "thisWeek": "This week",
+        "thisMonth": "This month",
+        "custom": "Custom"
+      },
+      "from": "From",
+      "to": "To",
+      "sortBy": "Sort by",
+      "sorts": {
+        "dueDate": "Due date",
+        "newest": "Newest",
+        "client": "Client (A–Z)"
+      },
+      "clear": "Clear",
+      "apply": "Apply",
+      "clearFilters": "Clear filters",
+      "results": "{{count}} order(s)",
+      "noResults": "No orders match these filters",
+      "overdueBy": "Overdue {{count}}d",
+      "dueToday": "Due today",
+      "dueTomorrow": "Due tomorrow",
+      "pieces": "{{count}} pcs"
     }
   },
   "events": {

@@ -302,6 +302,49 @@
       "printed": "Gedruckt",
       "satiniert": "Satiniert",
       "check_project": "Check Project"
+    },
+    "dashboard": {
+      "views": {
+        "active": "Aktiv",
+        "overdue": "Überfällig",
+        "dueSoon": "Nächste 7 Tage",
+        "shipping": "Versand",
+        "finished": "Abgeschlossen",
+        "all": "Alle"
+      },
+      "searchPlaceholder": "Kunde oder Auftrag suchen",
+      "filters": "Filter",
+      "status": "Status",
+      "period": "Zeitraum",
+      "dateField": "Datum bezogen auf",
+      "dateFields": {
+        "dueDate": "Liefertermin",
+        "createdAt": "Erstellt"
+      },
+      "periods": {
+        "any": "Beliebig",
+        "today": "Heute",
+        "thisWeek": "Diese Woche",
+        "thisMonth": "Dieser Monat",
+        "custom": "Benutzerdefiniert"
+      },
+      "from": "Von",
+      "to": "Bis",
+      "sortBy": "Sortieren nach",
+      "sorts": {
+        "dueDate": "Liefertermin",
+        "newest": "Neueste",
+        "client": "Kunde (A–Z)"
+      },
+      "clear": "Zurücksetzen",
+      "apply": "Anwenden",
+      "clearFilters": "Filter zurücksetzen",
+      "results": "{{count}} Auftrag/Aufträge",
+      "noResults": "Keine Aufträge für diese Filter",
+      "overdueBy": "{{count}} T. überfällig",
+      "dueToday": "Heute fällig",
+      "dueTomorrow": "Morgen fällig",
+      "pieces": "{{count}} Stk."
     }
   },
   "events": {

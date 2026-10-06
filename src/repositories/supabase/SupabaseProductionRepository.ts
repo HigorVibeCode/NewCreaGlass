@@ -23,12 +23,33 @@ export class SupabaseProductionRepository implements ProductionRepository {
       throw new Error('Failed to fetch productions');
     }
 
-    // Load relations for each production
-    const productions = await Promise.all(
-      (data || []).map(async (prod) => await this.loadProductionWithRelations(prod))
-    );
+    const rows = data || [];
+    if (rows.length === 0) return [];
 
-    return productions;
+    // List views only need items; load them in batches instead of one request per order.
+    // Attachments (signed URLs) are loaded on the detail screen via getProductionById.
+    const ids = rows.map((prod: any) => prod.id);
+    const itemsByProduction = new Map<string, ProductionItem[]>();
+    const BATCH_SIZE = 100;
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+      const { data: itemsData, error: itemsError } = await supabase
+        .from('production_items')
+        .select('*')
+        .in('production_id', ids.slice(i, i + BATCH_SIZE));
+
+      if (itemsError) {
+        console.error('Error fetching production items:', itemsError);
+        continue;
+      }
+
+      (itemsData || []).forEach((item: any) => {
+        const list = itemsByProduction.get(item.production_id) || [];
+        list.push(this.mapToItem(item));
+        itemsByProduction.set(item.production_id, list);
+      });
+    }
+
+    return rows.map((prod: any) => this.mapToProduction(prod, itemsByProduction.get(prod.id) || [], []));
   }
 
   async getProductionById(productionId: string): Promise<Production | null> {
@@ -418,15 +439,7 @@ export class SupabaseProductionRepository implements ProductionRepository {
       .select('*')
       .eq('production_id', productionId);
 
-    const items: ProductionItem[] = (itemsData || []).map((item: any) => ({
-      id: item.id,
-      glassId: item.glass_id,
-      glassType: item.glass_type,
-      quantity: item.quantity,
-      areaM2: item.area_m2,
-      structureType: item.structure_type,
-      paintType: item.paint_type,
-    }));
+    const items: ProductionItem[] = (itemsData || []).map((item: any) => this.mapToItem(item));
 
     // Load attachments
     const { data: attachmentsData } = await supabase
@@ -460,6 +473,26 @@ export class SupabaseProductionRepository implements ProductionRepository {
       })
     );
 
+    return this.mapToProduction(prodData, items, attachments);
+  }
+
+  private mapToItem(item: any): ProductionItem {
+    return {
+      id: item.id,
+      glassId: item.glass_id,
+      glassType: item.glass_type,
+      quantity: item.quantity,
+      areaM2: item.area_m2,
+      structureType: item.structure_type,
+      paintType: item.paint_type,
+    };
+  }
+
+  private mapToProduction(
+    prodData: any,
+    items: ProductionItem[],
+    attachments: ProductionAttachment[]
+  ): Production {
     return {
       id: prodData.id,
       clientName: prodData.client_name,

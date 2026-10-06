@@ -1,46 +1,73 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Modal, TouchableWithoutFeedback } from 'react-native';
+import React, { useState, useCallback, useMemo } from 'react';
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Modal,
+  TouchableWithoutFeedback,
+  RefreshControl,
+  ActivityIndicator,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../../src/hooks/use-i18n';
 import { ScreenWrapper } from '../../src/components/shared/ScreenWrapper';
-import { DropdownOption } from '../../src/components/shared/Dropdown';
+import { DatePicker } from '../../src/components/shared/DatePicker';
 import { PermissionGuard } from '../../src/components/shared/PermissionGuard';
 import { repos } from '../../src/services/container';
 import { Production, ProductionStatus } from '../../src/types';
 import { theme } from '../../src/theme';
 import { useThemeColors } from '../../src/hooks/use-theme-colors';
-import { useAuth } from '../../src/store/auth-store';
+import {
+  PRODUCTION_STATUSES,
+  PRODUCTION_VIEWS,
+  DEFAULT_FILTERS,
+  ProductionView,
+  ProductionFilters,
+  DateField,
+  PeriodPreset,
+  SortOption,
+  applyFilters,
+  matchesView,
+  sortProductions,
+  countActiveFilters,
+  daysUntilDue,
+  formatDateKey,
+  isFinished,
+} from '../../src/utils/production-filters';
+
+const PERIODS: PeriodPreset[] = ['any', 'today', 'thisWeek', 'thisMonth', 'custom'];
+const DATE_FIELDS: DateField[] = ['dueDate', 'createdAt'];
+const SORTS: SortOption[] = ['dueDate', 'newest', 'client'];
 
 export default function ProductionScreen() {
   const { t } = useI18n();
   const router = useRouter();
   const colors = useThemeColors();
-  const { user } = useAuth();
   const [productions, setProductions] = useState<Production[]>([]);
-  const [selectedStatus, setSelectedStatus] = useState<ProductionStatus | 'all'>('all');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [view, setView] = useState<ProductionView>('active');
+  const [search, setSearch] = useState('');
+  const [filters, setFilters] = useState<ProductionFilters>(DEFAULT_FILTERS);
+  const [draftFilters, setDraftFilters] = useState<ProductionFilters>(DEFAULT_FILTERS);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
 
   const loadProductions = useCallback(async () => {
-    setIsLoading(true);
     try {
-      const status = selectedStatus === 'all' ? undefined : selectedStatus;
-      const allProductions = await repos.productionRepo.getAllProductions(status);
-      // Filter out completed productions - they go to history only
-      const activeProductions = allProductions.filter(p => p.status !== 'completed');
-      setProductions(activeProductions);
+      const allProductions = await repos.productionRepo.getAllProductions();
+      setProductions(allProductions);
     } catch (error) {
       console.error('Error loading productions:', error);
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
-  }, [selectedStatus]);
-
-  useEffect(() => {
-    loadProductions();
-  }, [loadProductions]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -48,28 +75,56 @@ export default function ProductionScreen() {
     }, [loadProductions])
   );
 
-  const handleCreateProduction = () => {
-    router.push('/production-create');
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    loadProductions();
   };
 
-  const statusOptions: DropdownOption[] = [
-    { label: t('production.status.all'), value: 'all' },
-    { label: t('production.status.not_authorized'), value: 'not_authorized' },
-    { label: t('production.status.authorized'), value: 'authorized' },
-    { label: t('production.status.cutting'), value: 'cutting' },
-    { label: t('production.status.polishing'), value: 'polishing' },
-    { label: t('production.status.waiting_for_tempering'), value: 'waiting_for_tempering' },
-    { label: t('production.status.on_oven'), value: 'on_oven' },
-    { label: t('production.status.tempered'), value: 'tempered' },
-    { label: t('production.status.on_cabin'), value: 'on_cabin' },
-    { label: t('production.status.laminating'), value: 'laminating' },
-    { label: t('production.status.laminated'), value: 'laminated' },
-    { label: t('production.status.waiting_for_packing'), value: 'waiting_for_packing' },
-    { label: t('production.status.packed'), value: 'packed' },
-    { label: t('production.status.ready_for_dispatch'), value: 'ready_for_dispatch' },
-    { label: t('production.status.delivered'), value: 'delivered' },
-    { label: t('production.status.completed'), value: 'completed' },
-  ];
+  // Search + filters apply to every view; chip counts reflect them
+  const filtered = useMemo(
+    () => applyFilters(productions, search, filters),
+    [productions, search, filters]
+  );
+
+  const viewCounts = useMemo(() => {
+    const counts = {} as Record<ProductionView, number>;
+    PRODUCTION_VIEWS.forEach((v) => {
+      counts[v] = filtered.filter((p) => matchesView(p, v)).length;
+    });
+    return counts;
+  }, [filtered]);
+
+  const visibleProductions = useMemo(
+    () => sortProductions(filtered.filter((p) => matchesView(p, view)), filters.sort),
+    [filtered, view, filters.sort]
+  );
+
+  const activeFilterCount = countActiveFilters(filters);
+  const hasAnyFilter = activeFilterCount > 0 || search.trim().length > 0;
+
+  const openFilters = () => {
+    setDraftFilters(filters);
+    setFilterModalVisible(true);
+  };
+
+  const applyDraftFilters = () => {
+    setFilters(draftFilters);
+    setFilterModalVisible(false);
+  };
+
+  const clearAllFilters = () => {
+    setFilters(DEFAULT_FILTERS);
+    setSearch('');
+  };
+
+  const toggleDraftStatus = (status: ProductionStatus) => {
+    setDraftFilters((prev) => ({
+      ...prev,
+      statuses: prev.statuses.includes(status)
+        ? prev.statuses.filter((s) => s !== status)
+        : [...prev.statuses, status],
+    }));
+  };
 
   const getStatusColor = (status: ProductionStatus): string => {
     switch (status) {
@@ -108,146 +163,191 @@ export default function ProductionScreen() {
     }
   };
 
-  const getStatusLabel = (status: ProductionStatus): string => {
-    switch (status) {
-      case 'not_authorized':
-        return t('production.status.not_authorized');
-      case 'authorized':
-        return t('production.status.authorized');
-      case 'cutting':
-        return t('production.status.cutting');
-      case 'polishing':
-        return t('production.status.polishing');
-      case 'waiting_for_tempering':
-        return t('production.status.waiting_for_tempering');
-      case 'on_oven':
-        return t('production.status.on_oven');
-      case 'tempered':
-        return t('production.status.tempered');
-      case 'on_cabin':
-        return t('production.status.on_cabin');
-      case 'laminating':
-        return t('production.status.laminating');
-      case 'laminated':
-        return t('production.status.laminated');
-      case 'waiting_for_packing':
-        return t('production.status.waiting_for_packing');
-      case 'packed':
-        return t('production.status.packed');
-      case 'ready_for_dispatch':
-        return t('production.status.ready_for_dispatch');
-      case 'delivered':
-        return t('production.status.delivered');
-      case 'completed':
-        return t('production.status.completed');
-      default:
-        return status;
+  const getDueInfo = (production: Production): { label: string; color: string; icon: 'alert-circle' | 'time-outline' | 'calendar-outline' } => {
+    const dateLabel = formatDateKey(production.dueDate);
+    const days = daysUntilDue(production);
+    if (isFinished(production.status) || days === null || days > 2) {
+      return { label: dateLabel, color: colors.textSecondary, icon: 'calendar-outline' };
     }
+    if (days < 0) {
+      return { label: t('production.dashboard.overdueBy', { count: -days }), color: colors.error, icon: 'alert-circle' };
+    }
+    if (days === 0) {
+      return { label: t('production.dashboard.dueToday'), color: colors.warning, icon: 'time-outline' };
+    }
+    if (days === 1) {
+      return { label: t('production.dashboard.dueTomorrow'), color: colors.warning, icon: 'time-outline' };
+    }
+    return { label: dateLabel, color: colors.warning, icon: 'time-outline' };
   };
 
-  const getOrderTypeLabel = (orderType: string): string => {
-    return orderType || '';
+  const getItemsSummary = (production: Production): string => {
+    if (!production.items || production.items.length === 0) return '';
+    const pieces = production.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+    const area = production.items.reduce((sum, item) => sum + (Number(item.areaM2) || 0), 0);
+    return `${t('production.dashboard.pieces', { count: pieces })} · ${area.toFixed(2)} m²`;
   };
 
-  const handleFilterSelect = (value: string) => {
-    setSelectedStatus(value as ProductionStatus | 'all');
-    setFilterModalVisible(false);
-  };
+  const renderChip = (label: string, selected: boolean, onPress: () => void, key: string, accent?: string) => (
+    <TouchableOpacity
+      key={key}
+      style={[
+        styles.chip,
+        { backgroundColor: colors.backgroundSecondary, borderColor: colors.border },
+        selected && { backgroundColor: (accent || colors.primary) + '20', borderColor: accent || colors.primary },
+      ]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <Text
+        style={[
+          styles.chipText,
+          { color: colors.text },
+          selected && { color: accent || colors.primary, fontWeight: theme.typography.fontWeight.semibold },
+        ]}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
 
   return (
     <ScreenWrapper>
-      <ScrollView style={styles.scrollView}>
-        <View style={styles.content}>
-          <View style={styles.topBar}>
+      <View style={styles.header}>
+        <View style={styles.topBar}>
+          <View style={[styles.searchBox, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+            <Ionicons name="search" size={18} color={colors.textSecondary} />
+            <TextInput
+              style={[styles.searchInput, { color: colors.text }]}
+              value={search}
+              onChangeText={setSearch}
+              placeholder={t('production.dashboard.searchPlaceholder')}
+              placeholderTextColor={colors.textTertiary}
+              returnKeyType="search"
+              autoCorrect={false}
+            />
+            {search.length > 0 && (
+              <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+              </TouchableOpacity>
+            )}
+          </View>
+          <TouchableOpacity
+            style={[styles.iconButton, { backgroundColor: colors.backgroundSecondary }]}
+            onPress={openFilters}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="options-outline" size={20} color={activeFilterCount > 0 ? colors.primary : colors.text} />
+            {activeFilterCount > 0 && (
+              <View style={[styles.badge, { backgroundColor: colors.primary }]}>
+                <Text style={[styles.badgeText, { color: colors.textInverse }]}>{activeFilterCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.iconButton, { backgroundColor: colors.backgroundSecondary }]}
+            onPress={() => router.push('/production-orders-history')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="checkbox-outline" size={20} color={colors.text} />
+          </TouchableOpacity>
+          <PermissionGuard permission="production.create">
             <TouchableOpacity
-              style={[styles.historyButton, { backgroundColor: colors.backgroundSecondary }]}
-              onPress={() => router.push('/production-orders-history')}
+              style={[styles.iconButton, { backgroundColor: colors.primary }]}
+              onPress={() => router.push('/production-create')}
               activeOpacity={0.7}
             >
-              <Ionicons name="checkbox-outline" size={20} color={colors.text} />
+              <Ionicons name="add" size={22} color={colors.textInverse} />
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterButton, { backgroundColor: colors.backgroundSecondary }]}
-              onPress={() => setFilterModalVisible(true)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="filter" size={20} color={colors.text} />
-            </TouchableOpacity>
-            
-            <PermissionGuard permission="production.create">
+          </PermissionGuard>
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.viewTabs}
+        >
+          {PRODUCTION_VIEWS.map((v) => {
+            const selected = view === v;
+            const accent = v === 'overdue' && viewCounts.overdue > 0 ? colors.error : colors.primary;
+            return (
               <TouchableOpacity
-                style={[styles.addButton, { backgroundColor: colors.primary }]}
-                onPress={handleCreateProduction}
+                key={v}
+                style={[
+                  styles.viewTab,
+                  { backgroundColor: colors.backgroundSecondary },
+                  selected && { backgroundColor: accent },
+                ]}
+                onPress={() => setView(v)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="add" size={20} color={colors.textInverse} />
+                <Text
+                  style={[
+                    styles.viewTabText,
+                    { color: v === 'overdue' && viewCounts.overdue > 0 ? colors.error : colors.text },
+                    selected && { color: colors.textInverse },
+                  ]}
+                >
+                  {t(`production.dashboard.views.${v}`)}
+                </Text>
+                <View
+                  style={[
+                    styles.viewTabCount,
+                    { backgroundColor: selected ? colors.textInverse + '30' : colors.border },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.viewTabCountText,
+                      { color: selected ? colors.textInverse : colors.textSecondary },
+                    ]}
+                  >
+                    {viewCounts[v]}
+                  </Text>
+                </View>
               </TouchableOpacity>
-            </PermissionGuard>
-          </View>
+            );
+          })}
+        </ScrollView>
 
-          <Modal
-            visible={filterModalVisible}
-            transparent
-            animationType="fade"
-            onRequestClose={() => setFilterModalVisible(false)}
-          >
-            <TouchableWithoutFeedback onPress={() => setFilterModalVisible(false)}>
-              <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
-                <TouchableWithoutFeedback>
-                  <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
-                    <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-                      <Text style={[styles.modalTitle, { color: colors.text }]}>
-                        {t('production.filterByStatus')}
-                      </Text>
-                      <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
-                        <Ionicons name="close" size={24} color={colors.text} />
-                      </TouchableOpacity>
-                    </View>
-                    <ScrollView style={styles.optionsList} nestedScrollEnabled>
-                      {statusOptions.map((option) => (
-                        <TouchableOpacity
-                          key={option.value}
-                          style={[
-                            styles.optionItem,
-                            { borderBottomColor: colors.borderLight },
-                            selectedStatus === option.value && { backgroundColor: colors.primary + '10' },
-                          ]}
-                          onPress={() => handleFilterSelect(option.value)}
-                          activeOpacity={0.7}
-                        >
-                          <Text
-                            style={[
-                              styles.optionText,
-                              { color: colors.text },
-                              selectedStatus === option.value && { 
-                                fontWeight: theme.typography.fontWeight.semibold, 
-                                color: colors.primary 
-                              },
-                            ]}
-                          >
-                            {option.label}
-                          </Text>
-                          {selectedStatus === option.value && (
-                            <Ionicons name="checkmark" size={20} color={colors.primary} />
-                          )}
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                </TouchableWithoutFeedback>
-              </View>
-            </TouchableWithoutFeedback>
-          </Modal>
-
-          {productions.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                {t('production.noOrders')}
+        {hasAnyFilter && (
+          <View style={styles.resultsRow}>
+            <Text style={[styles.resultsText, { color: colors.textSecondary }]}>
+              {t('production.dashboard.results', { count: visibleProductions.length })}
+            </Text>
+            <TouchableOpacity onPress={clearAllFilters} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={[styles.clearLink, { color: colors.primary }]}>
+                {t('production.dashboard.clearFilters')}
               </Text>
-            </View>
-          ) : (
-            <View style={styles.ordersList}>
-              {productions.map((production) => (
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />}
+      >
+        {isLoading ? (
+          <View style={styles.emptyState}>
+            <ActivityIndicator color={colors.primary} />
+          </View>
+        ) : visibleProductions.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="file-tray-outline" size={40} color={colors.textTertiary} />
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              {hasAnyFilter ? t('production.dashboard.noResults') : t('production.noOrders')}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.ordersList}>
+            {visibleProductions.map((production) => {
+              const statusColor = getStatusColor(production.status);
+              const due = getDueInfo(production);
+              const itemsSummary = getItemsSummary(production);
+              return (
                 <TouchableOpacity
                   key={production.id}
                   style={[styles.orderCard, { backgroundColor: colors.cardBackground }]}
@@ -257,193 +357,431 @@ export default function ProductionScreen() {
                     params: { productionId: production.id },
                   })}
                 >
-                  <View style={styles.cardContent}>
-                    <View style={styles.orderDetails}>
-                      <View style={styles.clientRow}>
-                        <Text style={[styles.clientName, { color: colors.text }]}>{production.clientName}</Text>
-                        <Text style={[styles.separator, { color: colors.textSecondary }]}>•</Text>
-                        <Text style={[styles.orderNumber, { color: colors.textSecondary }]}>{production.orderNumber}</Text>
-                      </View>
-                      <Text style={[styles.orderType, { color: colors.textSecondary }]}>
-                        {getOrderTypeLabel(production.orderType)}
+                  <View style={[styles.cardIndicator, { backgroundColor: statusColor }]} />
+                  <View style={styles.cardBody}>
+                    <View style={styles.cardRow}>
+                      <Text style={[styles.clientName, { color: colors.text }]} numberOfLines={1}>
+                        {production.clientName}
                       </Text>
-                    </View>
-                    <View style={styles.statusColumn}>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: getStatusColor(production.status) + '20' },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.statusText,
-                            { color: getStatusColor(production.status) },
-                          ]}
-                        >
-                          {getStatusLabel(production.status)}
+                      <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
+                        <Text style={[styles.statusText, { color: statusColor }]} numberOfLines={1}>
+                          {t(`production.status.${production.status}`)}
                         </Text>
                       </View>
-                      <Text style={[styles.dueDate, { color: colors.textSecondary }]}>
-                        {new Date(production.dueDate).toLocaleDateString()}
-                      </Text>
+                    </View>
+                    <Text style={[styles.orderMeta, { color: colors.textSecondary }]} numberOfLines={1}>
+                      #{production.orderNumber}
+                      {production.orderType ? ` · ${production.orderType}` : ''}
+                    </Text>
+                    <View style={styles.cardRow}>
+                      <View style={styles.dueRow}>
+                        <Ionicons name={due.icon} size={14} color={due.color} />
+                        <Text style={[styles.dueText, { color: due.color }]}>{due.label}</Text>
+                      </View>
+                      {itemsSummary ? (
+                        <Text style={[styles.itemsText, { color: colors.textSecondary }]}>{itemsSummary}</Text>
+                      ) : null}
                     </View>
                   </View>
                 </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
+
+      <Modal
+        visible={filterModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setFilterModalVisible(false)}
+      >
+        <View style={styles.sheetContainer}>
+          <TouchableWithoutFeedback onPress={() => setFilterModalVisible(false)}>
+            <View style={[styles.sheetBackdrop, { backgroundColor: colors.overlay }]} />
+          </TouchableWithoutFeedback>
+          <View style={[styles.sheet, { backgroundColor: colors.background }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+            <View style={[styles.sheetHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.sheetTitle, { color: colors.text }]}>{t('production.dashboard.filters')}</Text>
+              <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetContent}>
+              <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+                {t('production.dashboard.sortBy')}
+              </Text>
+              <View style={styles.chipWrap}>
+                {SORTS.map((s) =>
+                  renderChip(
+                    t(`production.dashboard.sorts.${s}`),
+                    draftFilters.sort === s,
+                    () => setDraftFilters((prev) => ({ ...prev, sort: s })),
+                    s
+                  )
+                )}
+              </View>
+
+              <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+                {t('production.dashboard.period')}
+              </Text>
+              <View style={styles.segment}>
+                {DATE_FIELDS.map((field) => {
+                  const selected = draftFilters.dateField === field;
+                  return (
+                    <TouchableOpacity
+                      key={field}
+                      style={[
+                        styles.segmentItem,
+                        { borderColor: colors.border },
+                        selected && { backgroundColor: colors.primary, borderColor: colors.primary },
+                      ]}
+                      onPress={() => setDraftFilters((prev) => ({ ...prev, dateField: field }))}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.segmentText, { color: selected ? colors.textInverse : colors.text }]}>
+                        {t(`production.dashboard.dateFields.${field}`)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <View style={styles.chipWrap}>
+                {PERIODS.map((p) =>
+                  renderChip(
+                    t(`production.dashboard.periods.${p}`),
+                    draftFilters.period === p,
+                    () => setDraftFilters((prev) => ({ ...prev, period: p })),
+                    p
+                  )
+                )}
+              </View>
+              {draftFilters.period === 'custom' && (
+                <View style={styles.customRange}>
+                  <View style={styles.customRangeItem}>
+                    <DatePicker
+                      label={t('production.dashboard.from')}
+                      value={draftFilters.customFrom}
+                      onSelect={(date) => setDraftFilters((prev) => ({ ...prev, customFrom: date }))}
+                    />
+                  </View>
+                  <View style={styles.customRangeItem}>
+                    <DatePicker
+                      label={t('production.dashboard.to')}
+                      value={draftFilters.customTo}
+                      onSelect={(date) => setDraftFilters((prev) => ({ ...prev, customTo: date }))}
+                    />
+                  </View>
+                </View>
+              )}
+
+              <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+                {t('production.dashboard.status')}
+              </Text>
+              <View style={styles.chipWrap}>
+                {PRODUCTION_STATUSES.map((status) =>
+                  renderChip(
+                    t(`production.status.${status}`),
+                    draftFilters.statuses.includes(status),
+                    () => toggleDraftStatus(status),
+                    status,
+                    getStatusColor(status)
+                  )
+                )}
+              </View>
+            </ScrollView>
+
+            <View style={[styles.sheetFooter, { borderTopColor: colors.border }]}>
+              <TouchableOpacity
+                style={[styles.footerButton, { backgroundColor: colors.backgroundSecondary }]}
+                onPress={() => setDraftFilters(DEFAULT_FILTERS)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.footerButtonText, { color: colors.text }]}>
+                  {t('production.dashboard.clear')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.footerButton, styles.footerButtonPrimary, { backgroundColor: colors.primary }]}
+                onPress={applyDraftFilters}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.footerButtonText, { color: colors.textInverse }]}>
+                  {t('production.dashboard.apply')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollView: {
-    flex: 1,
-  },
-  content: {
-    padding: theme.spacing.md,
+  header: {
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.md,
   },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
     gap: theme.spacing.sm,
-    marginBottom: theme.spacing.md,
   },
-  historyButton: {
-    width: 36,
-    height: 36,
-    borderRadius: theme.borderRadius.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...theme.shadows.sm,
-  },
-  filterButton: {
-    width: 36,
-    height: 36,
-    borderRadius: theme.borderRadius.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...theme.shadows.sm,
-  },
-  modalOverlay: {
+  searchBox: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 40,
+    paddingHorizontal: theme.spacing.sm,
+    borderRadius: theme.borderRadius.sm,
+    borderWidth: 1,
+    gap: theme.spacing.xs,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: theme.typography.fontSize.sm,
+    paddingVertical: 0,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: theme.borderRadius.sm,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: theme.spacing.lg,
+    ...theme.shadows.sm,
   },
-  modalContent: {
-    borderRadius: theme.borderRadius.lg,
-    width: '100%',
-    maxWidth: 400,
-    ...theme.shadows.lg,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    justifyContent: 'center',
     alignItems: 'center',
-    padding: theme.spacing.lg,
-    borderBottomWidth: 1,
   },
-  modalTitle: {
-    fontSize: theme.typography.fontSize.lg,
+  badgeText: {
+    fontSize: 11,
     fontWeight: theme.typography.fontWeight.bold,
   },
-  optionsList: {
-    maxHeight: 400,
+  viewTabs: {
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.md,
   },
-  optionItem: {
+  viewTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 36,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.borderRadius.full,
+    gap: theme.spacing.xs,
+  },
+  viewTabText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  viewTabCount: {
+    minWidth: 22,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  viewTabCountText: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.semibold,
+  },
+  resultsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.lg,
-    borderBottomWidth: 1,
+    paddingBottom: theme.spacing.sm,
   },
-  optionText: {
-    fontSize: theme.typography.fontSize.md,
+  resultsText: {
+    fontSize: theme.typography.fontSize.sm,
+  },
+  clearLink: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.semibold,
+  },
+  scrollView: {
     flex: 1,
   },
-  addButton: {
-    width: 36,
-    height: 36,
-    borderRadius: theme.borderRadius.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...theme.shadows.sm,
+  content: {
+    paddingHorizontal: theme.spacing.md,
+    paddingBottom: theme.spacing.xl,
   },
   emptyState: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     minHeight: 200,
     padding: theme.spacing.xl,
+    gap: theme.spacing.sm,
   },
   emptyText: {
     fontSize: theme.typography.fontSize.md,
     textAlign: 'center',
   },
   ordersList: {
-    gap: theme.spacing.md,
+    gap: theme.spacing.sm,
   },
   orderCard: {
-    padding: theme.spacing.md,
+    flexDirection: 'row',
     borderRadius: theme.borderRadius.md,
+    overflow: 'hidden',
     ...theme.shadows.sm,
   },
-  cardContent: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+  cardIndicator: {
+    width: 4,
   },
-  orderDetails: {
+  cardBody: {
     flex: 1,
-    marginRight: theme.spacing.md,
+    padding: theme.spacing.md,
+    gap: theme.spacing.xs,
   },
-  clientRow: {
+  cardRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: theme.spacing.xs,
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: theme.spacing.sm,
   },
   clientName: {
-    fontSize: theme.typography.fontSize.lg,
+    flex: 1,
+    fontSize: theme.typography.fontSize.md,
     fontWeight: theme.typography.fontWeight.semibold,
-    marginRight: theme.spacing.xs,
-  },
-  separator: {
-    fontSize: theme.typography.fontSize.lg,
-    marginHorizontal: theme.spacing.xs,
-  },
-  orderNumber: {
-    fontSize: theme.typography.fontSize.lg,
-    fontWeight: theme.typography.fontWeight.medium,
-  },
-  orderType: {
-    fontSize: theme.typography.fontSize.sm,
-    marginTop: theme.spacing.xs,
-  },
-  statusColumn: {
-    alignItems: 'flex-end',
-    justifyContent: 'flex-start',
-    minWidth: 100,
   },
   statusBadge: {
     paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs,
+    paddingVertical: 2,
     borderRadius: theme.borderRadius.sm,
-    marginBottom: theme.spacing.xs,
-    alignSelf: 'flex-end',
+    maxWidth: '50%',
   },
   statusText: {
     fontSize: theme.typography.fontSize.xs,
     fontWeight: theme.typography.fontWeight.semibold,
   },
-  dueDate: {
+  orderMeta: {
+    fontSize: theme.typography.fontSize.sm,
+  },
+  dueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  dueText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  itemsText: {
     fontSize: theme.typography.fontSize.xs,
-    textAlign: 'right',
+  },
+  sheetContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  sheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  sheet: {
+    maxHeight: '85%',
+    borderTopLeftRadius: theme.borderRadius.lg,
+    borderTopRightRadius: theme.borderRadius.lg,
+    ...theme.shadows.lg,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    marginTop: theme.spacing.sm,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+    borderBottomWidth: 1,
+  },
+  sheetTitle: {
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  sheetScroll: {
+    flexGrow: 0,
+  },
+  sheetContent: {
+    padding: theme.spacing.lg,
+    paddingTop: theme.spacing.sm,
+  },
+  sectionTitle: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+  },
+  chipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+  },
+  chip: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+  },
+  chipText: {
+    fontSize: theme.typography.fontSize.sm,
+  },
+  segment: {
+    flexDirection: 'row',
+    marginBottom: theme.spacing.sm,
+  },
+  segmentItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: theme.spacing.sm,
+    borderWidth: 1,
+  },
+  segmentText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  customRange: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
+  },
+  customRangeItem: {
+    flex: 1,
+  },
+  sheetFooter: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    padding: theme.spacing.md,
+    paddingBottom: theme.spacing.lg,
+    borderTopWidth: 1,
+  },
+  footerButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: theme.borderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  footerButtonPrimary: {
+    flex: 2,
+  },
+  footerButtonText: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
 });
