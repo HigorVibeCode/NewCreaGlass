@@ -7,158 +7,45 @@
 -- (8h30 fixas) e os botões de ponto ficavam bloqueados.
 --
 -- Correção:
--- 1. A função só age quando são 23:xx em Zurique.
--- 2. O job roda às 21:59 e 22:59 UTC (uma das duas é 23:59 local, no verão
---    e no inverno).
--- 3. Remove os registros automáticos criados ANTES do horário que eles dizem
---    ter acontecido (pré-preenchimentos indevidos) para o dia de hoje,
---    liberando o ponto normal hoje. Registros ajustados não são tocados.
+-- 1. Nova função que só chama fn_auto_fill_time_entries() às 23:xx de Zurique.
+-- 2. O job roda às 21:59 e 22:59 UTC:
+--    verão (CEST): 21:59 UTC = 23:59 local (preenche), 22:59 UTC = 00:59 (ignora)
+--    inverno (CET): 21:59 UTC = 22:59 local (ignora), 22:59 UTC = 23:59 (preenche)
+-- 3. Remove os registros automáticos de HOJE criados antes do horário que dizem
+--    ter acontecido (pré-preenchimento indevido). Registros ajustados não mudam.
 -- ============================================================================
 
-CREATE OR REPLACE FUNCTION fn_auto_fill_time_entries()
+CREATE OR REPLACE FUNCTION fn_auto_fill_time_entries_end_of_day()
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
-DECLARE
-  r RECORD;
-  today_date DATE;
-  has_clock_in BOOLEAN;
-  has_coffee_start BOOLEAN;
-  has_coffee_end BOOLEAN;
-  has_lunch_start BOOLEAN;
-  has_lunch_end BOOLEAN;
-  has_clock_out BOOLEAN;
-  clock_in_ts TIMESTAMPTZ;
-  coffee_start_ts TIMESTAMPTZ;
-  coffee_end_ts TIMESTAMPTZ;
-  lunch_start_ts TIMESTAMPTZ;
-  lunch_end_ts TIMESTAMPTZ;
-  clock_out_ts TIMESTAMPTZ;
 BEGIN
-  today_date := (NOW() AT TIME ZONE 'Europe/Zurich')::date;
-
-  -- Only close the day at 23:xx Zurich time. The job runs at 21:59 and 22:59 UTC:
-  -- summer (CEST): 21:59 UTC = 23:59 local (fills), 22:59 UTC = 00:59 (skips)
-  -- winter (CET):  21:59 UTC = 22:59 local (skips), 22:59 UTC = 23:59 (fills)
-  IF EXTRACT(HOUR FROM (NOW() AT TIME ZONE 'Europe/Zurich')) <> 23 THEN
-    RETURN;
+  IF EXTRACT(HOUR FROM (NOW() AT TIME ZONE 'Europe/Zurich')) = 23 THEN
+    PERFORM fn_auto_fill_time_entries();
   END IF;
-
-  IF EXTRACT(ISODOW FROM today_date) > 5 THEN
-    RETURN;
-  END IF;
-
-  clock_in_ts     := (today_date || ' 07:30:00')::timestamp AT TIME ZONE 'Europe/Zurich';
-  coffee_start_ts := (today_date || ' 09:00:00')::timestamp AT TIME ZONE 'Europe/Zurich';
-  coffee_end_ts   := (today_date || ' 09:15:00')::timestamp AT TIME ZONE 'Europe/Zurich';
-  lunch_start_ts  := (today_date || ' 12:15:00')::timestamp AT TIME ZONE 'Europe/Zurich';
-  lunch_end_ts    := (today_date || ' 13:00:00')::timestamp AT TIME ZONE 'Europe/Zurich';
-  clock_out_ts    := (today_date || ' 17:00:00')::timestamp AT TIME ZONE 'Europe/Zurich';
-
-  FOR r IN
-    SELECT id, username FROM users WHERE is_active = true
-  LOOP
-    SELECT EXISTS (
-      SELECT 1 FROM time_entries
-      WHERE user_id = r.id
-        AND entry_type = 'clock_in'
-        AND (recorded_at AT TIME ZONE 'Europe/Zurich')::date = today_date
-    ) INTO has_clock_in;
-
-    SELECT EXISTS (
-      SELECT 1 FROM time_entries
-      WHERE user_id = r.id
-        AND entry_type = 'coffee_start'
-        AND (recorded_at AT TIME ZONE 'Europe/Zurich')::date = today_date
-    ) INTO has_coffee_start;
-
-    SELECT EXISTS (
-      SELECT 1 FROM time_entries
-      WHERE user_id = r.id
-        AND entry_type = 'coffee_end'
-        AND (recorded_at AT TIME ZONE 'Europe/Zurich')::date = today_date
-    ) INTO has_coffee_end;
-
-    SELECT EXISTS (
-      SELECT 1 FROM time_entries
-      WHERE user_id = r.id
-        AND entry_type = 'lunch_start'
-        AND (recorded_at AT TIME ZONE 'Europe/Zurich')::date = today_date
-    ) INTO has_lunch_start;
-
-    SELECT EXISTS (
-      SELECT 1 FROM time_entries
-      WHERE user_id = r.id
-        AND entry_type = 'lunch_end'
-        AND (recorded_at AT TIME ZONE 'Europe/Zurich')::date = today_date
-    ) INTO has_lunch_end;
-
-    SELECT EXISTS (
-      SELECT 1 FROM time_entries
-      WHERE user_id = r.id
-        AND entry_type = 'clock_out'
-        AND (recorded_at AT TIME ZONE 'Europe/Zurich')::date = today_date
-    ) INTO has_clock_out;
-
-    IF NOT has_clock_in THEN
-      INSERT INTO time_entries (user_id, user_name, recorded_at, entry_type, location_address)
-      VALUES (r.id, r.username, clock_in_ts, 'clock_in', 'Automático');
-    END IF;
-
-    IF NOT has_coffee_start THEN
-      INSERT INTO time_entries (user_id, user_name, recorded_at, entry_type, location_address)
-      VALUES (r.id, r.username, coffee_start_ts, 'coffee_start', 'Automático');
-    END IF;
-
-    IF NOT has_coffee_end THEN
-      INSERT INTO time_entries (user_id, user_name, recorded_at, entry_type, location_address)
-      VALUES (r.id, r.username, coffee_end_ts, 'coffee_end', 'Automático');
-    END IF;
-
-    IF NOT has_lunch_start THEN
-      INSERT INTO time_entries (user_id, user_name, recorded_at, entry_type, location_address)
-      VALUES (r.id, r.username, lunch_start_ts, 'lunch_start', 'Automático');
-    END IF;
-
-    IF NOT has_lunch_end THEN
-      INSERT INTO time_entries (user_id, user_name, recorded_at, entry_type, location_address)
-      VALUES (r.id, r.username, lunch_end_ts, 'lunch_end', 'Automático');
-    END IF;
-
-    IF NOT has_clock_out THEN
-      INSERT INTO time_entries (user_id, user_name, recorded_at, entry_type, location_address)
-      VALUES (r.id, r.username, clock_out_ts, 'clock_out', 'Automático');
-    END IF;
-  END LOOP;
 END;
 $$;
 
--- Reagendar o job
 DO $$
 DECLARE
   job_record RECORD;
 BEGIN
   FOR job_record IN
-    SELECT jobid
-    FROM cron.job
+    SELECT jobid FROM cron.job
     WHERE jobname = 'auto-fill-time-entries'
        OR command ILIKE '%fn_auto_fill_time_entries%'
   LOOP
     PERFORM cron.unschedule(job_record.jobid);
   END LOOP;
-EXCEPTION
-  WHEN undefined_table THEN
-    NULL;
 END $$;
 
 SELECT cron.schedule(
   'auto-fill-time-entries',
   '59 21,22 * * 1-5',
-  $$SELECT fn_auto_fill_time_entries()$$
+  $$SELECT fn_auto_fill_time_entries_end_of_day()$$
 );
 
--- Limpar os pré-preenchimentos indevidos de hoje (criados antes do horário registrado)
 DELETE FROM time_entries
 WHERE location_address = 'Automático'
   AND (recorded_at AT TIME ZONE 'Europe/Zurich')::date = (NOW() AT TIME ZONE 'Europe/Zurich')::date
