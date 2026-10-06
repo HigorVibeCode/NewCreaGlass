@@ -14,7 +14,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../src/hooks/use-i18n';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { repos } from '../src/services/container';
-import { Production, ProductionStatus } from '../src/types';
+import { Production } from '../src/types';
+import { ProductionStatusBadge } from '../src/components/shared/ProductionStatusBadge';
+import { getStatusAppearance } from '../src/utils/production-status';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 
@@ -58,24 +60,6 @@ export default function ProductionOrdersHistoryScreen() {
       loadHistory();
     }, [loadHistory])
   );
-
-  const getStatusColor = (status: ProductionStatus): string => {
-    switch (status) {
-      case 'completed':
-        return colors.success;
-      default:
-        return colors.textSecondary;
-    }
-  };
-
-  const getStatusLabel = (status: ProductionStatus): string => {
-    switch (status) {
-      case 'completed':
-        return t('production.status.completed');
-      default:
-        return status;
-    }
-  };
 
   const getOrderTypeLabel = (orderType: string): string => {
     return orderType || '';
@@ -136,7 +120,7 @@ export default function ProductionOrdersHistoryScreen() {
         ) : (
           <View style={styles.list}>
             {completedProductions.map((production) => {
-              const statusColor = getStatusColor(production.status);
+              const statusColor = getStatusAppearance(production.status, colors).color;
 
               return (
                 <TouchableOpacity
@@ -167,11 +151,7 @@ export default function ProductionOrdersHistoryScreen() {
                           {getOrderTypeLabel(production.orderType)}
                         </Text>
                       </View>
-                      <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
-                        <Text style={[styles.statusText, { color: statusColor }]}>
-                          {getStatusLabel(production.status)}
-                        </Text>
-                      </View>
+                      <ProductionStatusBadge status={production.status} />
                     </View>
 
                     <View style={styles.cardMeta}>
@@ -288,16 +268,6 @@ const styles = StyleSheet.create({
   orderType: {
     fontSize: theme.typography.fontSize.sm,
     marginTop: theme.spacing.xs,
-  },
-  statusBadge: {
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs,
-    borderRadius: theme.borderRadius.sm,
-    alignSelf: 'flex-start',
-  },
-  statusText: {
-    fontSize: theme.typography.fontSize.xs,
-    fontWeight: theme.typography.fontWeight.semibold,
   },
   cardMeta: {
     marginTop: theme.spacing.xs,

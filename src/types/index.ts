@@ -112,17 +112,29 @@ export interface Event {
 }
 
 // Production types
-export type ProductionStatus = 
+export type ProductionStatus =
   | 'not_authorized'
   | 'authorized'
   | 'cutting'
   | 'polishing'
+  | 'awaiting_film'
+  | 'awaiting_workart'
+  | 'burn_paper'
+  | 'waiting_for_sandblasting'
+  | 'sandblasting'
+  | 'awaiting_oil_application'
+  | 'awaiting_oil_drying'
   | 'waiting_for_tempering'
   | 'on_oven'
   | 'tempered'
   | 'on_cabin'
   | 'laminating'
   | 'laminated'
+  | 'awaiting_inspection'
+  | 'inspected'
+  | 'pack_glass_box'
+  | 'pack_pallet'
+  | 'pack_paper'
   | 'waiting_for_packing'
   | 'packed'
   | 'ready_for_dispatch'

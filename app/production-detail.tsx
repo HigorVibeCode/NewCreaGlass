@@ -23,6 +23,8 @@ import { useAuth } from '../src/store/auth-store';
 import { theme } from '../src/theme';
 import { downloadAndOpenAttachment } from '../src/utils/attachments';
 import { GlassType, InventoryItem, PaintType, Production, ProductionStatus, ProductionStatusHistory, StructureType, User } from '../src/types';
+import { ProductionStatusBadge } from '../src/components/shared/ProductionStatusBadge';
+import { PRODUCTION_STATUSES, getStatusAppearance, getStatusLabel as getStatusLabelFor } from '../src/utils/production-status';
 
 export default function ProductionDetailScreen() {
   const { t } = useI18n();
@@ -80,106 +82,17 @@ export default function ProductionDetailScreen() {
     }
   };
 
-  const getStatusLabel = (status: ProductionStatus): string => {
-    switch (status) {
-      case 'not_authorized':
-        return t('production.status.not_authorized');
-      case 'authorized':
-        return t('production.status.authorized');
-      case 'cutting':
-        return t('production.status.cutting');
-      case 'polishing':
-        return t('production.status.polishing');
-      case 'waiting_for_tempering':
-        return t('production.status.waiting_for_tempering');
-      case 'on_oven':
-        return t('production.status.on_oven');
-      case 'tempered':
-        return t('production.status.tempered');
-      case 'on_cabin':
-        return t('production.status.on_cabin');
-      case 'laminating':
-        return t('production.status.laminating');
-      case 'laminated':
-        return t('production.status.laminated');
-      case 'waiting_for_packing':
-        return t('production.status.waiting_for_packing');
-      case 'packed':
-        return t('production.status.packed');
-      case 'ready_for_dispatch':
-        return t('production.status.ready_for_dispatch');
-      case 'delivered':
-        return t('production.status.delivered');
-      case 'completed':
-        return t('production.status.completed');
-      case 'cancelled':
-        return t('production.status.cancelled');
-      default:
-        return status;
-    }
-  };
-
-  const getStatusColor = (status: ProductionStatus): string => {
-    switch (status) {
-      case 'not_authorized':
-        return colors.error;
-      case 'authorized':
-        return colors.success; // Green (most important phase)
-      case 'cutting':
-        return colors.info;
-      case 'polishing':
-        return '#06b6d4'; // Cyan
-      case 'waiting_for_tempering':
-        return colors.warning;
-      case 'on_oven':
-        return '#f59e0b'; // Amber
-      case 'tempered':
-        return '#8b5cf6'; // Purple
-      case 'on_cabin':
-        return colors.info;
-      case 'laminating':
-        return '#06b6d4'; // Cyan
-      case 'laminated':
-        return '#3b82f6'; // Blue
-      case 'waiting_for_packing':
-        return colors.warning;
-      case 'packed':
-        return '#06b6d4'; // Cyan
-      case 'ready_for_dispatch':
-        return '#f59e0b'; // Amber
-      case 'delivered':
-        return colors.success;
-      case 'completed':
-        return colors.success;
-      case 'cancelled':
-        return colors.textTertiary;
-      default:
-        return colors.textSecondary;
-    }
-  };
+  const getStatusLabel = (status: ProductionStatus) => getStatusLabelFor(t, status);
+  const getStatusColor = (status: ProductionStatus) => getStatusAppearance(status, colors).color;
 
   const getOrderTypeLabel = (orderType: string): string => {
     return orderType || '';
   };
 
-  const statusOptions: DropdownOption[] = [
-    { label: t('production.status.not_authorized'), value: 'not_authorized' },
-    { label: t('production.status.authorized'), value: 'authorized' },
-    { label: t('production.status.cutting'), value: 'cutting' },
-    { label: t('production.status.polishing'), value: 'polishing' },
-    { label: t('production.status.waiting_for_tempering'), value: 'waiting_for_tempering' },
-    { label: t('production.status.on_oven'), value: 'on_oven' },
-    { label: t('production.status.tempered'), value: 'tempered' },
-    { label: t('production.status.on_cabin'), value: 'on_cabin' },
-    { label: t('production.status.laminating'), value: 'laminating' },
-    { label: t('production.status.laminated'), value: 'laminated' },
-    { label: t('production.status.waiting_for_packing'), value: 'waiting_for_packing' },
-    { label: t('production.status.packed'), value: 'packed' },
-    { label: t('production.status.ready_for_dispatch'), value: 'ready_for_dispatch' },
-    { label: t('production.status.delivered'), value: 'delivered' },
-    { label: t('production.status.completed'), value: 'completed' },
-    { label: t('production.status.cancelled'), value: 'cancelled' },
-  ];
+  const statusOptions: DropdownOption[] = PRODUCTION_STATUSES.map((status) => ({
+    label: getStatusLabel(status),
+    value: status,
+  }));
 
   const handleStatusSelect = async (newStatus: ProductionStatus) => {
     if (!productionId || !production || !user) return;
@@ -371,6 +284,12 @@ export default function ProductionDetailScreen() {
               onPress={() => setStatusModalVisible(true)}
               activeOpacity={0.7}
             >
+              <Ionicons
+                name={getStatusAppearance(production.status, colors).icon}
+                size={16}
+                color={getStatusColor(production.status)}
+                style={{ marginRight: theme.spacing.xs }}
+              />
               <Text
                 style={[
                   styles.statusText,
@@ -549,11 +468,10 @@ export default function ProductionDetailScreen() {
                     activeOpacity={0.7}
                   >
                     <View style={styles.optionLeft}>
-                      <View
-                        style={[
-                          styles.statusColorIndicator,
-                          { backgroundColor: getStatusColor(option.value as ProductionStatus) },
-                        ]}
+                      <Ionicons
+                        name={getStatusAppearance(option.value, colors).icon}
+                        size={20}
+                        color={getStatusColor(option.value as ProductionStatus)}
                       />
                       <Text
                         style={[
@@ -617,11 +535,7 @@ export default function ProductionDetailScreen() {
                           <Text style={[styles.historyLabel, { color: colors.textSecondary }]}>
                             {t('production.previousStatus')}:
                           </Text>
-                          <View style={[styles.statusBadgeSmall, { backgroundColor: getStatusColor(historyEntry.previousStatus) + '20' }]}>
-                            <Text style={[styles.statusTextSmall, { color: getStatusColor(historyEntry.previousStatus) }]}>
-                              {getStatusLabel(historyEntry.previousStatus)}
-                            </Text>
-                          </View>
+                          <ProductionStatusBadge status={historyEntry.previousStatus} />
                         </View>
                         <View style={styles.historyArrowContainer}>
                           <Ionicons name="arrow-down" size={16} color={colors.textSecondary} />
@@ -630,11 +544,7 @@ export default function ProductionDetailScreen() {
                           <Text style={[styles.historyLabel, { color: colors.textSecondary }]}>
                             {t('production.newStatus')}:
                           </Text>
-                          <View style={[styles.statusBadgeSmall, { backgroundColor: getStatusColor(historyEntry.newStatus) + '20' }]}>
-                            <Text style={[styles.statusTextSmall, { color: getStatusColor(historyEntry.newStatus) }]}>
-                              {getStatusLabel(historyEntry.newStatus)}
-                            </Text>
-                          </View>
+                          <ProductionStatusBadge status={historyEntry.newStatus} />
                         </View>
                       </View>
                       <View style={styles.historyMeta}>
@@ -681,27 +591,27 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.lg,
     ...theme.shadows.sm,
   },
+  // Stacked so long phase names never push the badge off screen
   headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: theme.spacing.sm,
     marginBottom: theme.spacing.sm,
   },
   clientName: {
     fontSize: theme.typography.fontSize.xl,
     fontWeight: theme.typography.fontWeight.bold,
-    flex: 1,
-    marginRight: theme.spacing.md,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    maxWidth: '100%',
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
     borderRadius: theme.borderRadius.md,
     minHeight: 36,
   },
   statusText: {
+    flexShrink: 1,
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.semibold,
   },
@@ -823,12 +733,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-  },
-  statusColorIndicator: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: theme.spacing.md,
+    gap: theme.spacing.md,
   },
   optionText: {
     fontSize: theme.typography.fontSize.md,
@@ -872,16 +777,6 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,
     minWidth: 100,
-  },
-  statusBadgeSmall: {
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs,
-    borderRadius: theme.borderRadius.sm,
-    flexShrink: 0,
-  },
-  statusTextSmall: {
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.semibold,
   },
   historyArrowContainer: {
     alignItems: 'center',
