@@ -16,9 +16,12 @@ import {
   getInventoryGroupColor,
   getInventoryGroupIcon,
   INVENTORY_GROUP_NAMES,
+  isGlassInventoryGroup,
 } from '../../src/constants/inventory-groups';
+import { getLogoBase64 } from '../../src/utils/logo-base64';
+import { generateInventoryReportHTML } from '../../src/utils/inventory-report-pdf';
 import { repos } from '../../src/services/container';
-import { InventoryGroup, InventoryItem } from '../../src/types';
+import { InventoryGroup } from '../../src/types';
 import { theme } from '../../src/theme';
 import { useThemeColors } from '../../src/hooks/use-theme-colors';
 import { formatDate as formatDateUtil, formatTime as formatTimeUtil } from '../../src/utils/date-format';
@@ -117,14 +120,22 @@ export default function InventoryScreen() {
       // Generate HTML for PDF
       let html: string;
       try {
-        html = await generateReportHTML(
-          selectedClient,
+        const groupNames = new Map(groups.map((group) => [group.id, group.name]));
+        const logoDataUrl = await Promise.race([
+          getLogoBase64().catch(() => ''),
+          new Promise<string>((resolve) => setTimeout(() => resolve(''), 3000)),
+        ]);
+        html = generateInventoryReportHTML({
+          supplier: selectedClient,
           reportId,
-          dateStr,
-          timeStr,
-          filteredItems,
-          t
-        );
+          date: dateStr,
+          time: timeStr,
+          items: filteredItems,
+          isGlassItem: (item) =>
+            isGlassInventoryGroup(groupNames.get(item.groupId)) || (!!item.width && !!item.height),
+          logoDataUrl: logoDataUrl.startsWith('data:image') ? logoDataUrl : undefined,
+          t,
+        });
         console.log('HTML generated, length:', html.length);
         console.log('HTML starts with:', html.substring(0, 200));
         
@@ -261,348 +272,6 @@ export default function InventoryScreen() {
     } finally {
       setIsGenerating(false);
     }
-  };
-
-  const getLogoBase64 = async (): Promise<string> => {
-    try {
-      const logoModule = require('../../assets/images/login-logo.png');
-      console.log('Logo module loaded:', typeof logoModule, logoModule);
-      
-      if (Platform.OS === 'web') {
-        // On web, try to get the URL from the module
-        let logoUrl: string = '';
-        
-        if (typeof logoModule === 'string') {
-          logoUrl = logoModule;
-        } else if (typeof logoModule === 'object') {
-          // Try different possible properties
-          logoUrl = logoModule.default || logoModule.uri || logoModule.src || logoModule.toString() || '';
-        }
-        
-        console.log('Logo URL extracted:', logoUrl);
-        
-        if (logoUrl && typeof logoUrl === 'string' && logoUrl.length > 0) {
-          try {
-            // Fetch the image and convert to base64
-            const response = await fetch(logoUrl);
-            console.log('Fetch response status:', response.status, response.ok);
-            
-            if (response.ok) {
-              const blob = await response.blob();
-              console.log('Blob created, size:', blob.size);
-              
-              return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                  const result = reader.result as string;
-                  console.log('Logo converted to base64, length:', result.length);
-                  resolve(result);
-                };
-                reader.onerror = (error) => {
-                  console.warn('FileReader error:', error);
-                  resolve('');
-                };
-                reader.readAsDataURL(blob);
-              });
-            } else {
-              console.warn('Fetch failed with status:', response.status);
-            }
-          } catch (fetchError) {
-            console.warn('Error fetching logo:', fetchError);
-          }
-        }
-        
-        // Fallback: try common Expo/Metro paths and public folder
-        const fallbackPaths = [
-          '/assets/images/login-logo.png',
-          '/public/assets/images/login-logo.png',
-          './assets/images/login-logo.png',
-          './public/assets/images/login-logo.png',
-          '/_expo/static/assets/images/login-logo.png',
-          '/static/assets/images/login-logo.png',
-        ];
-        
-        for (const path of fallbackPaths) {
-          try {
-            const response = await fetch(path);
-            if (response.ok) {
-              const blob = await response.blob();
-              return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.onerror = () => resolve('');
-                reader.readAsDataURL(blob);
-              });
-            }
-          } catch (e) {
-            continue;
-          }
-        }
-        
-        console.warn('Could not load logo from any path');
-        return '';
-      } else {
-        // On mobile, load from asset bundle using FileSystem
-        let uri: string = '';
-        
-        if (typeof logoModule === 'object') {
-          uri = logoModule.uri || logoModule.default || '';
-        } else if (typeof logoModule === 'string') {
-          uri = logoModule;
-        }
-        
-        if (!uri) {
-          console.warn('Logo URI is empty');
-          return '';
-        }
-        
-        console.log('Loading logo from URI:', uri);
-        
-        // Read the file as base64
-        const base64 = await FileSystemLegacy.readAsStringAsync(uri, {
-          encoding: FileSystemLegacy.EncodingType.Base64,
-        });
-        
-        console.log('Logo loaded successfully, base64 length:', base64.length);
-        return `data:image/png;base64,${base64}`;
-      }
-    } catch (error) {
-      console.warn('Could not load logo:', error);
-      return '';
-    }
-  };
-
-  const generateReportHTML = async (
-    clientName: string,
-    reportId: string,
-    date: string,
-    time: string,
-    items: InventoryItem[],
-    t: any
-  ): Promise<string> => {
-    // Try to load logo, but don't block if it fails (timeout after 3 seconds)
-    let logoImg = '';
-    try {
-      console.log('Starting logo load...');
-      const logoBase64 = await Promise.race([
-        getLogoBase64(),
-        new Promise<string>((resolve) => {
-          setTimeout(() => {
-            console.log('Logo load timeout after 3 seconds');
-            resolve('');
-          }, 3000);
-        })
-      ]);
-      
-      if (logoBase64 && logoBase64.length > 0) {
-        // Verify it's a valid data URL
-        if (logoBase64.startsWith('data:image')) {
-          logoImg = `<img src="${logoBase64}" alt="Crea Glass Logo" class="logo" style="display: block;" />`;
-          console.log('Logo loaded successfully, length:', logoBase64.length, 'starts with:', logoBase64.substring(0, 50));
-        } else {
-          console.warn('Logo base64 does not start with data:image, got:', logoBase64.substring(0, 50));
-        }
-      } else {
-        console.log('Logo not loaded or empty');
-      }
-    } catch (logoError) {
-      console.warn('Logo loading failed, continuing without logo:', logoError);
-    }
-    const itemsRows = items.map((item, index) => {
-      const reference = item.referenceNumber || item.id.substring(0, 8).toUpperCase();
-      const description = item.name;
-      const stock = item.stock || 0;
-      const unit = item.unit || '';
-      const location = item.location || '-';
-      
-      // Glass-specific dimensions
-      const dimensions = item.height && item.width && item.thickness
-        ? `${item.width}mm × ${item.height}mm × ${item.thickness}mm`
-        : '-';
-      
-      // Calculate total m² (totalM2 * stock)
-      const totalM2 = item.totalM2 && stock ? (item.totalM2 * stock).toFixed(2) : '-';
-
-      return `
-        <tr style="border-bottom: 1px solid #e0e0e0;">
-          <td style="padding: 8px; text-align: center;">${index + 1}</td>
-          <td style="padding: 8px;">${reference}</td>
-          <td style="padding: 8px;">${description}</td>
-          <td style="padding: 8px;">${dimensions}</td>
-          <td style="padding: 8px; text-align: right;">${stock}</td>
-          <td style="padding: 8px;">${unit}</td>
-          <td style="padding: 8px; text-align: right;">${totalM2}</td>
-          <td style="padding: 8px;">${location}</td>
-        </tr>
-      `;
-    }).join('');
-
-    console.log('Items rows generated, count:', items.length);
-    console.log('Logo image:', logoImg ? 'present' : 'not present');
-
-    return `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <title>Relatório de Inventário - ${clientName}</title>
-          <style>
-            @page {
-              size: A4 landscape;
-              margin: 14mm;
-            }
-            body {
-              font-family: Arial, sans-serif;
-              margin: 0;
-              color: #333;
-            }
-            .page {
-              padding: 0 4mm;
-            }
-            .header {
-              border-bottom: 3px solid #0066cc;
-              padding-bottom: 20px;
-              margin-bottom: 30px;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-            }
-            .header-left {
-              flex: 1;
-            }
-            .header h1 {
-              margin: 0;
-              color: #0066cc;
-              font-size: 24px;
-            }
-            .header-info {
-              margin-top: 10px;
-              font-size: 12px;
-              color: #666;
-            }
-            .logo-container {
-              margin-left: 20px;
-              display: flex;
-              align-items: center;
-              justify-content: flex-end;
-            }
-            .logo {
-              max-width: 200px;
-              max-height: 100px;
-              height: auto;
-              width: auto;
-              object-fit: contain;
-            }
-            .info-section {
-              margin-bottom: 20px;
-            }
-            .info-row {
-              display: flex;
-              justify-content: flex-start;
-              align-items: baseline;
-              gap: 8px;
-              margin-bottom: 8px;
-              font-size: 12px;
-            }
-            .info-label {
-              font-weight: bold;
-              color: #555;
-              min-width: 120px;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-top: 12px;
-              font-size: 10px;
-              table-layout: fixed;
-            }
-            thead {
-              background-color: #f5f5f5;
-            }
-            th {
-              padding: 10px 8px;
-              text-align: left;
-              font-weight: bold;
-              border-bottom: 2px solid #0066cc;
-              color: #333;
-            }
-            td {
-              padding: 8px;
-              word-break: break-word;
-            }
-            .footer {
-              margin-top: 30px;
-              padding-top: 20px;
-              border-top: 1px solid #e0e0e0;
-              font-size: 10px;
-              color: #666;
-              text-align: center;
-            }
-            @media print {
-              body {
-                margin: 0;
-              }
-              .no-print {
-                display: none;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="page">
-          <div class="header">
-            <div class="header-left">
-              <h1>${t('inventory.inventoryReport')}</h1>
-              <div class="header-info">
-                ${t('inventory.reportId')}: ${reportId} | ${date} ${time}
-              </div>
-            </div>
-            <div class="logo-container">
-              ${logoImg}
-            </div>
-          </div>
-          
-          <div class="info-section">
-            <div class="info-row">
-              <span class="info-label">${t('inventory.client')}:</span>
-              <span>${clientName}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">${t('inventory.reportDate')}:</span>
-              <span>${date} ${time}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">${t('inventory.totalItems')}:</span>
-              <span>${items.length}</span>
-            </div>
-          </div>
-
-          <table>
-            <thead>
-              <tr>
-                <th style="width: 5%;">#</th>
-                <th style="width: 12%;">${t('inventory.referenceCode')}</th>
-                <th style="width: 20%;">${t('inventory.description')}</th>
-                <th style="width: 15%;">${t('inventory.dimensions')}</th>
-                <th style="width: 10%; text-align: right;">${t('inventory.stock')}</th>
-                <th style="width: 8%;">${t('inventory.unit')}</th>
-                <th style="width: 10%; text-align: right;">${t('inventory.totalM2')}</th>
-                <th style="width: 12%;">${t('inventory.location')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${itemsRows}
-            </tbody>
-          </table>
-
-          <div class="footer">
-            <p>${t('inventory.reportGeneratedBy')} Crea Glass System</p>
-            <p>${t('inventory.reportId')}: ${reportId}</p>
-          </div>
-          </div>
-        </body>
-      </html>
-    `;
   };
 
   return (
