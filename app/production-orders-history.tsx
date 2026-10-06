@@ -16,7 +16,9 @@ import { useGoBack, safeBack } from '../src/hooks/use-go-back';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
 import { formatDate } from '../src/utils/date-format';
 import { repos } from '../src/services/container';
-import { Production, ProductionStatus } from '../src/types';
+import { Production } from '../src/types';
+import { ProductionStatusBadge } from '../src/components/shared/ProductionStatusBadge';
+import { getStatusAppearance } from '../src/utils/production-status';
 import { theme } from '../src/theme';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { pushWithParams } from '../src/utils/navigation';
@@ -61,102 +63,6 @@ export default function ProductionOrdersHistoryScreen() {
       loadHistory();
     }, [loadHistory])
   );
-
-  const getStatusColor = (status: ProductionStatus): string => {
-    switch (status) {
-      case 'not_authorized':
-        return colors.error; // vermelho
-      case 'authorized':
-        return colors.success; // verde
-      case 'cutting':
-        return colors.info; // azul
-      case 'polishing':
-        return colors.info; // azul
-      case 'on_paint_cabin':
-        return '#f97316'; // laranja
-      case 'on_laminating_machine':
-        return '#f97316'; // laranja
-      case 'on_schmelz_oven':
-        return '#f97316'; // laranja
-      case 'waiting_for_tempering':
-        return colors.warning; // Amarelo
-      case 'waiting_for_schmelz':
-        return colors.warning; // Amarelo
-      case 'tempering_in_progress':
-        return '#8b5cf6'; // Roxo
-      case 'tempered':
-        return '#8b5cf6'; // Roxo
-      case 'waiting_for_packing':
-        return colors.warning; // Amarelo
-      case 'packed':
-        return colors.info; // azul
-      case 'ready_for_dispatch':
-        return '#34d399'; // verde claro
-      case 'delivered':
-        return '#059669'; // verde escuro
-      case 'completed':
-        return '#059669'; // verde escuro
-      // Compatibilidade com status antigos
-      case 'on_cabin':
-        return '#f97316'; // laranja
-      case 'laminating':
-        return '#f97316'; // laranja
-      case 'laminated':
-        return colors.info; // azul
-      case 'on_oven':
-        return '#f97316'; // laranja
-      default:
-        return colors.textSecondary;
-    }
-  };
-
-  const getStatusLabel = (status: ProductionStatus): string => {
-    switch (status) {
-      case 'not_authorized':
-        return t('production.status.not_authorized');
-      case 'authorized':
-        return t('production.status.authorized');
-      case 'cutting':
-        return t('production.status.cutting');
-      case 'polishing':
-        return t('production.status.polishing');
-      case 'on_paint_cabin':
-        return t('production.status.on_paint_cabin');
-      case 'on_laminating_machine':
-        return t('production.status.on_laminating_machine');
-      case 'on_schmelz_oven':
-        return t('production.status.on_schmelz_oven');
-      case 'waiting_for_tempering':
-        return t('production.status.waiting_for_tempering');
-      case 'waiting_for_schmelz':
-        return t('production.status.waiting_for_schmelz');
-      case 'tempering_in_progress':
-        return t('production.status.tempering_in_progress');
-      case 'tempered':
-        return t('production.status.tempered');
-      case 'waiting_for_packing':
-        return t('production.status.waiting_for_packing');
-      case 'packed':
-        return t('production.status.packed');
-      case 'ready_for_dispatch':
-        return t('production.status.ready_for_dispatch');
-      case 'delivered':
-        return t('production.status.delivered');
-      case 'completed':
-        return t('production.status.completed');
-      // Compatibilidade com status antigos
-      case 'on_cabin':
-        return t('production.status.on_paint_cabin');
-      case 'laminating':
-        return t('production.status.on_laminating_machine');
-      case 'laminated':
-        return t('production.status.laminated') || 'Laminated';
-      case 'on_oven':
-        return t('production.status.on_schmelz_oven');
-      default:
-        return status;
-    }
-  };
 
   const getOrderTypeLabel = (orderType: string): string => {
     return orderType || '';
@@ -218,7 +124,7 @@ export default function ProductionOrdersHistoryScreen() {
         ) : (
           <View style={styles.list}>
             {completedProductions.map((production) => {
-              const statusColor = getStatusColor(production.status);
+              const statusColor = getStatusAppearance(production.status, colors).color;
 
               return (
                 <TouchableOpacity
@@ -246,11 +152,7 @@ export default function ProductionOrdersHistoryScreen() {
                           {getOrderTypeLabel(production.orderType)}
                         </Text>
                       </View>
-                      <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
-                        <Text style={[styles.statusText, { color: statusColor }]}>
-                          {getStatusLabel(production.status)}
-                        </Text>
-                      </View>
+                      <ProductionStatusBadge status={production.status} />
                     </View>
 
                     <View style={styles.cardMeta}>
@@ -372,16 +274,6 @@ const styles = StyleSheet.create({
   orderType: {
     fontSize: theme.typography.fontSize.sm,
     marginTop: theme.spacing.xs,
-  },
-  statusBadge: {
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs,
-    borderRadius: theme.borderRadius.sm,
-    alignSelf: 'flex-start',
-  },
-  statusText: {
-    fontSize: theme.typography.fontSize.xs,
-    fontWeight: theme.typography.fontWeight.semibold,
   },
   cardMeta: {
     marginTop: theme.spacing.xs,

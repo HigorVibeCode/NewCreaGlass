@@ -471,7 +471,19 @@
       "cutting": "Cutting",
       "polishing": "Polishing",
       "tempered": "Tempered",
-      "laminated": "Laminated"
+      "laminated": "Laminated",
+      "awaiting_film": "Awaiting Film Application",
+      "awaiting_workart": "Awaiting Work Art",
+      "burn_paper": "Burn Paper",
+      "waiting_for_sandblasting": "Waiting for Sandblasting",
+      "sandblasting": "Sandblasting in Progress",
+      "awaiting_oil_application": "Awaiting Oil Application",
+      "awaiting_oil_drying": "Awaiting Oil Drying",
+      "awaiting_inspection": "Awaiting Inspection",
+      "inspected": "Inspected",
+      "pack_glass_box": "Pack in Glass Box",
+      "pack_pallet": "Pack on Pallet",
+      "pack_paper": "Pack with Paper"
     },
     "orderType": {
       "standard": "Standard",
@@ -510,6 +522,68 @@
       "printed": "Printed",
       "satiniert": "Satiniert",
       "check_project": "Check Project"
+    },
+    "dashboard": {
+      "views": {
+        "active": "Active",
+        "overdue": "Overdue",
+        "dueSoon": "Next 7 days",
+        "shipping": "Shipping",
+        "finished": "Finished",
+        "all": "All"
+      },
+      "searchPlaceholder": "Client, order or glass",
+      "filters": "Filters",
+      "status": "Status",
+      "period": "Period",
+      "dateField": "Date based on",
+      "dateFields": {
+        "dueDate": "Due date",
+        "createdAt": "Created"
+      },
+      "periods": {
+        "last7": "Last 7 days",
+        "last30": "Last 30 days",
+        "last90": "Last 90 days",
+        "thisWeek": "This week",
+        "thisMonth": "This month",
+        "custom": "Custom",
+        "any": "All time"
+      },
+      "from": "From",
+      "to": "To",
+      "sortBy": "Sort by",
+      "sorts": {
+        "dueDate": "Due date",
+        "newest": "Newest",
+        "client": "Client (A–Z)"
+      },
+      "clear": "Clear",
+      "apply": "Apply",
+      "clearFilters": "Clear filters",
+      "results": "{{count}} order(s)",
+      "noResults": "No orders match these filters",
+      "overdueBy": "Overdue {{count}}d",
+      "dueToday": "Due today",
+      "dueTomorrow": "Due tomorrow",
+      "pieces": "{{count}} pcs",
+      "moreGlass": "+{{count}} more glass",
+      "periodsShort": {
+        "last7": "7 days",
+        "last30": "30 days",
+        "last90": "90 days",
+        "thisWeek": "This week",
+        "thisMonth": "This month",
+        "any": "All"
+      },
+      "sortsShort": {
+        "newest": "Newest",
+        "dueDate": "Due date",
+        "client": "A–Z"
+      },
+      "glass": "Glass",
+      "company": "Company",
+      "allGlass": "All glass"
     }
   },
   "events": {
@@ -993,6 +1067,62 @@
       "reworkRate": {
         "title": "Rework Rate",
         "subtitle": "Rework and cancellation tracking"
+      },
+      "eventsCalendar": {
+        "title": "Event Calendar",
+        "subtitle": "Timeline and upcoming events"
+      },
+      "eventsByType": {
+        "title": "Events by Type",
+        "subtitle": "Distribution of events by category"
+      },
+      "eventsFrequency": {
+        "title": "Event Frequency",
+        "subtitle": "Monthly trend of events created"
+      },
+      "woStatus": {
+        "title": "Work Order Status",
+        "subtitle": "Pipeline of active work orders"
+      },
+      "woTeam": {
+        "title": "Team Performance",
+        "subtitle": "Ranking by completed work orders"
+      },
+      "woServiceTime": {
+        "title": "Service Time & Checklist",
+        "subtitle": "Average service time and compliance"
+      },
+      "woClients": {
+        "title": "WO by Client",
+        "subtitle": "Top clients by work order count"
+      },
+      "woByDay": {
+        "title": "Work Orders by Day",
+        "subtitle": "Starts, finishes and duration per day"
+      },
+      "invLowStock": {
+        "title": "Low Stock Alerts",
+        "subtitle": "Items below minimum threshold"
+      },
+      "invByGroup": {
+        "title": "Stock by Group",
+        "subtitle": "Inventory totals per group"
+      },
+      "invSupplier": {
+        "title": "Supplier Breakdown",
+        "subtitle": "Items distribution by supplier"
+      },
+      "clientsOverview": {
+        "title": "Clients Overview",
+        "subtitle": "Total base, activity and profile completeness"
+      },
+      "clientsEngagement": {
+        "title": "Client Engagement",
+        "subtitle": "Ranking by production orders and work orders"
+      },
+      "clientsInactive": {
+        "title": "Inactive Clients",
+        "subtitle": "Clients with no recent activity or no history"
       }
     },
     "metrics": {
@@ -1005,7 +1135,8 @@
       "ordersPerWeek": "Orders per Week",
       "distributionByM2": "Distribution by m²",
       "ordersByCompany": "Orders by Company",
-      "monthlyTrend": "Monthly Trend"
+      "monthlyTrend": "Monthly Trend",
+      "eventsPerMonth": "Events per Month"
     },
     "onTimeRate": "On-time Rate",
     "onTime": "On Time",
@@ -1054,37 +1185,6 @@
       "workOrders": "Work Orders",
       "inventory": "Inventory",
       "clients": "Clients"
-    },
-    "charts": {
-      "ordersPerWeek": "Orders per Week",
-      "distributionByM2": "Distribution by m²",
-      "ordersByCompany": "Orders by Company",
-      "monthlyTrend": "Monthly Trend",
-      "eventsPerMonth": "Events per Month"
-    },
-    "reports": {
-      "productionSummary": { "title": "Production Summary", "subtitle": "Overview of orders, m² and pieces" },
-      "statusPipeline": { "title": "Status Pipeline", "subtitle": "Active orders by current status" },
-      "deliveryPerformance": { "title": "Delivery Performance", "subtitle": "On-time delivery rate and delays" },
-      "topClients": { "title": "Top Clients", "subtitle": "Ranking by number of orders" },
-      "glassTypes": { "title": "Glass Type Mix", "subtitle": "Distribution by glass type in m²" },
-      "bottleneck": { "title": "Bottleneck Analysis", "subtitle": "Average time spent per production stage" },
-      "companyComparison": { "title": "Company Comparison", "subtitle": "3S vs Crea Glass side by side" },
-      "reworkRate": { "title": "Rework Rate", "subtitle": "Rework and cancellation tracking" },
-      "eventsCalendar": { "title": "Event Calendar", "subtitle": "Timeline and upcoming events" },
-      "eventsByType": { "title": "Events by Type", "subtitle": "Distribution of events by category" },
-      "eventsFrequency": { "title": "Event Frequency", "subtitle": "Monthly trend of events created" },
-      "woStatus": { "title": "Work Order Status", "subtitle": "Pipeline of active work orders" },
-      "woTeam": { "title": "Team Performance", "subtitle": "Ranking by completed work orders" },
-      "woServiceTime": { "title": "Service Time & Checklist", "subtitle": "Average service time and compliance" },
-      "woClients": { "title": "WO by Client", "subtitle": "Top clients by work order count" },
-      "woByDay": { "title": "Work Orders by Day", "subtitle": "Starts, finishes and duration per day" },
-      "invLowStock": { "title": "Low Stock Alerts", "subtitle": "Items below minimum threshold" },
-      "invByGroup": { "title": "Stock by Group", "subtitle": "Inventory totals per group" },
-      "invSupplier": { "title": "Supplier Breakdown", "subtitle": "Items distribution by supplier" },
-      "clientsOverview": { "title": "Clients Overview", "subtitle": "Total base, activity and profile completeness" },
-      "clientsEngagement": { "title": "Client Engagement", "subtitle": "Ranking by production orders and work orders" },
-      "clientsInactive": { "title": "Inactive Clients", "subtitle": "Clients with no recent activity or no history" }
     },
     "clientsMetrics": {
       "total": "Total clients",

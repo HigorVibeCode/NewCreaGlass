@@ -46,6 +46,8 @@ import { pushWithParams } from '../src/utils/navigation';
 import { generateHybridLinks, shareViaWhatsApp } from '../src/utils/share-links';
 import { useRouteParams } from '../src/hooks/use-route-params';
 import { GlassType, InventoryItem, PaintType, Production, ProductionStatus, ProductionStatusHistory, StructureType, User } from '../src/types';
+import { ProductionStatusBadge } from '../src/components/shared/ProductionStatusBadge';
+import { PRODUCTION_STATUSES, getStatusAppearance, getStatusLabel as getStatusLabelFor } from '../src/utils/production-status';
 
 /** Resolve signed URL for a thumbnail — uses same robust logic as downloadAndOpenAttachment */
 function AttachmentThumbnail({
@@ -219,110 +221,18 @@ export default function ProductionDetailScreen() {
     }
   };
 
-  const getStatusLabel = (status: ProductionStatus): string => {
-    const key = `production.status.${status}`;
-    const translated = t(key);
-    if (translated && translated !== key) {
-      return translated;
-    }
-    // Compatibility fallback for old statuses
-    switch (status) {
-      case 'on_cabin':
-        return t('production.status.on_paint_cabin');
-      case 'laminating':
-        return t('production.status.on_laminating_machine');
-      case 'on_oven':
-        return t('production.status.on_schmelz_oven');
-      default:
-        return status;
-    }
-  };
-
-  const getStatusColor = (status: ProductionStatus): string => {
-    switch (status) {
-      // Red group
-      case 'not_authorized':
-      case 'cancelled':
-      case 'rework_needed':
-        return colors.error;
-      // Green (entry)
-      case 'authorized':
-        return colors.success;
-      // Orange group (active processes)
-      case 'on_cutting_process':
-      case 'on_polishing_process':
-      case 'on_paint_cabin':
-      case 'on_laminating_machine':
-      case 'on_schmelz_oven':
-      case 'on_banding_oven':
-      case 'tempering_in_progress':
-        return '#f97316';
-      // Yellow group (waiting)
-      case 'waiting_to_cnc_wjet':
-      case 'waiting_to_drill':
-      case 'waiting_to_paint_cabin':
-      case 'waiting_for_schmelz':
-      case 'waiting_for_tempering':
-      case 'waiting_for_packing':
-        return '#eab308';
-      // Blue group
-      case 'packed':
-      case 'ready_for_dispatch':
-        return colors.info;
-      // Green (exit)
-      case 'delivered':
-      case 'completed':
-        return '#059669';
-      // Compatibilidade com status antigos
-      case 'cutting':
-      case 'polishing':
-        return '#f97316';
-      case 'tempered':
-        return '#059669';
-      case 'on_cabin':
-      case 'laminating':
-      case 'on_oven':
-        return '#f97316';
-      case 'laminated':
-        return colors.info;
-      default:
-        return colors.textSecondary;
-    }
-  };
+  const getStatusLabel = (status: ProductionStatus) => getStatusLabelFor(t, status);
+  const getStatusColor = (status: ProductionStatus) => getStatusAppearance(status, colors).color;
 
   const getOrderTypeLabel = (orderType: string): string => {
     return orderType || '';
   };
 
-  const statusOptions: DropdownOption[] = [
-    // Red group
-    { label: t('production.status.not_authorized'), value: 'not_authorized' },
-    { label: t('production.status.cancelled'), value: 'cancelled' },
-    { label: t('production.status.rework_needed'), value: 'rework_needed' },
-    // Green (entry)
-    { label: `${t('production.status.authorized')} 🔔`, value: 'authorized' },
-    // Orange group (active processes)
-    { label: t('production.status.on_cutting_process'), value: 'on_cutting_process' },
-    { label: t('production.status.on_polishing_process'), value: 'on_polishing_process' },
-    { label: t('production.status.on_paint_cabin'), value: 'on_paint_cabin' },
-    { label: t('production.status.on_laminating_machine'), value: 'on_laminating_machine' },
-    { label: t('production.status.on_schmelz_oven'), value: 'on_schmelz_oven' },
-    { label: t('production.status.on_banding_oven'), value: 'on_banding_oven' },
-    { label: t('production.status.tempering_in_progress'), value: 'tempering_in_progress' },
-    // Yellow group (waiting)
-    { label: t('production.status.waiting_to_cnc_wjet'), value: 'waiting_to_cnc_wjet' },
-    { label: t('production.status.waiting_to_drill'), value: 'waiting_to_drill' },
-    { label: t('production.status.waiting_to_paint_cabin'), value: 'waiting_to_paint_cabin' },
-    { label: t('production.status.waiting_for_schmelz'), value: 'waiting_for_schmelz' },
-    { label: t('production.status.waiting_for_tempering'), value: 'waiting_for_tempering' },
-    { label: t('production.status.waiting_for_packing'), value: 'waiting_for_packing' },
-    // Blue group
-    { label: t('production.status.packed'), value: 'packed' },
-    { label: t('production.status.ready_for_dispatch'), value: 'ready_for_dispatch' },
-    // Green (exit)
-    { label: t('production.status.delivered'), value: 'delivered' },
-    { label: t('production.status.completed'), value: 'completed' },
-  ];
+  // Bell: moving to "authorized" notifies the team
+  const statusOptions: DropdownOption[] = PRODUCTION_STATUSES.map((status) => ({
+    label: status === 'authorized' ? `${getStatusLabel(status)} 🔔` : getStatusLabel(status),
+    value: status,
+  }));
 
   const handleStatusSelect = async (newStatus: ProductionStatus) => {
     if (!productionId || !production || !user) {
@@ -894,6 +804,12 @@ export default function ProductionDetailScreen() {
               onPress={() => setStatusModalVisible(true)}
               activeOpacity={0.7}
             >
+              <Ionicons
+                name={getStatusAppearance(production.status, colors).icon}
+                size={16}
+                color={getStatusColor(production.status)}
+                style={{ marginRight: theme.spacing.xs }}
+              />
               <Text
                 style={[
                   styles.statusText,
@@ -1202,11 +1118,10 @@ export default function ProductionDetailScreen() {
                   activeOpacity={0.7}
                 >
                   <View style={styles.optionLeft}>
-                    <View
-                      style={[
-                        styles.statusColorIndicator,
-                        { backgroundColor: getStatusColor(option.value as ProductionStatus) },
-                      ]}
+                    <Ionicons
+                      name={getStatusAppearance(option.value, colors).icon}
+                      size={20}
+                      color={getStatusColor(option.value as ProductionStatus)}
                     />
                     <Text
                       style={[
@@ -1271,11 +1186,7 @@ export default function ProductionDetailScreen() {
                           <Text style={[styles.historyLabel, { color: colors.textSecondary }]}>
                             {t('production.previousStatus')}:
                           </Text>
-                          <View style={[styles.statusBadgeSmall, { backgroundColor: getStatusColor(historyEntry.previousStatus) + '20' }]}>
-                            <Text style={[styles.statusTextSmall, { color: getStatusColor(historyEntry.previousStatus) }]}>
-                              {getStatusLabel(historyEntry.previousStatus)}
-                            </Text>
-                          </View>
+                          <ProductionStatusBadge status={historyEntry.previousStatus} />
                         </View>
                         <View style={styles.historyArrowContainer}>
                           <Ionicons name="arrow-down" size={16} color={colors.textSecondary} />
@@ -1284,11 +1195,7 @@ export default function ProductionDetailScreen() {
                           <Text style={[styles.historyLabel, { color: colors.textSecondary }]}>
                             {t('production.newStatus')}:
                           </Text>
-                          <View style={[styles.statusBadgeSmall, { backgroundColor: getStatusColor(historyEntry.newStatus) + '20' }]}>
-                            <Text style={[styles.statusTextSmall, { color: getStatusColor(historyEntry.newStatus) }]}>
-                              {getStatusLabel(historyEntry.newStatus)}
-                            </Text>
-                          </View>
+                          <ProductionStatusBadge status={historyEntry.newStatus} />
                         </View>
                       </View>
                       <View style={styles.historyMeta}>
@@ -1337,27 +1244,27 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.lg,
     ...theme.shadows.sm,
   },
+  // Stacked so long phase names never push the badge off screen
   headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: theme.spacing.sm,
     marginBottom: theme.spacing.sm,
   },
   clientName: {
     fontSize: theme.typography.fontSize.xl,
     fontWeight: theme.typography.fontWeight.bold,
-    flex: 1,
-    marginRight: theme.spacing.md,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    maxWidth: '100%',
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
     borderRadius: theme.borderRadius.md,
     minHeight: 36,
   },
   statusText: {
+    flexShrink: 1,
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.semibold,
   },
@@ -1545,12 +1452,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-  },
-  statusColorIndicator: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: theme.spacing.md,
+    gap: theme.spacing.md,
   },
   optionText: {
     fontSize: theme.typography.fontSize.md,
@@ -1594,16 +1496,6 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,
     minWidth: 100,
-  },
-  statusBadgeSmall: {
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs,
-    borderRadius: theme.borderRadius.sm,
-    flexShrink: 0,
-  },
-  statusTextSmall: {
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.semibold,
   },
   historyArrowContainer: {
     alignItems: 'center',

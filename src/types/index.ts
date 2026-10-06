@@ -265,6 +265,21 @@ export type ProductionStatus =
   | 'waiting_for_schmelz'
   | 'waiting_for_tempering'
   | 'waiting_for_packing'
+  // Sandblasting (Sandstrahl)
+  | 'awaiting_film'
+  | 'awaiting_workart'
+  | 'burn_paper'
+  | 'waiting_for_sandblasting'
+  | 'sandblasting'
+  | 'awaiting_oil_application'
+  | 'awaiting_oil_drying'
+  // Inspection
+  | 'awaiting_inspection'
+  | 'inspected'
+  // Packing instructions
+  | 'pack_glass_box'
+  | 'pack_pallet'
+  | 'pack_paper'
   // Blue group
   | 'packed'
   | 'ready_for_dispatch'
@@ -278,7 +293,6 @@ export type ProductionStatus =
   | 'on_cabin'
   | 'laminating'
   | 'laminated'
-  | 'on_oven'
   | 'on_oven';
 export type OrderType = 'standard' | 'urgent' | 'custom';
 export type GlassType = 'tempered' | 'strengthened' | 'float' | 'laminated' | 'textured' | 'sandblasted' | 'cuted' | 'insulated' | 'lavabo' | 'client_service' | 'polish_only' | 'cutting_only' | 'schmelzglas_only' | 'float_esg' | 'schmelzglas_tvg' | 'float_tvg';

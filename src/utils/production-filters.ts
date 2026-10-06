@@ -1,4 +1,4 @@
-import { Production, ProductionStatus } from '../types';
+import { Production, ProductionCompany, ProductionStatus } from '../types';
 
 export { PRODUCTION_STATUSES } from './production-status';
 
@@ -23,6 +23,8 @@ export type SortOption = 'dueDate' | 'newest' | 'client';
 
 export interface ProductionFilters {
   statuses: ProductionStatus[]; // empty = any status
+  company: ProductionCompany | 'all';
+  glassId: string; // 'all' = any glass
   dateField: DateField;
   period: PeriodPreset;
   customFrom: string; // YYYY-MM-DD
@@ -33,6 +35,8 @@ export interface ProductionFilters {
 // Always-on default: orders created in the last 30 days, newest first
 export const DEFAULT_FILTERS: ProductionFilters = {
   statuses: [],
+  company: 'all',
+  glassId: 'all',
   dateField: 'createdAt',
   period: 'last30',
   customFrom: '',
@@ -135,6 +139,7 @@ export const applyFilters = (
   productions: Production[],
   search: string,
   filters: ProductionFilters,
+  getGlassName: (glassId: string) => string | undefined = () => undefined,
   today = new Date()
 ): Production[] => {
   const term = search.trim().toLowerCase();
@@ -142,11 +147,13 @@ export const applyFilters = (
 
   return productions.filter((p) => {
     if (term) {
-      const glassNames = (p.items || []).map((item) => item.glassName || '').join(' ');
+      const glassNames = (p.items || []).map((item) => getGlassName(item.glassId) || '').join(' ');
       const haystack = `${p.clientName} ${p.orderNumber} ${p.orderType} ${glassNames}`.toLowerCase();
       if (!haystack.includes(term)) return false;
     }
     if (filters.statuses.length > 0 && !filters.statuses.includes(p.status)) return false;
+    if (filters.company !== 'all' && p.company !== filters.company) return false;
+    if (filters.glassId !== 'all' && !(p.items || []).some((item) => item.glassId === filters.glassId)) return false;
     if (from || to) {
       const key = parseDateKey(filters.dateField === 'dueDate' ? p.dueDate : p.createdAt);
       if (!key) return false;
@@ -172,8 +179,12 @@ export const sortProductions = (productions: Production[], sort: SortOption): Pr
   }
 };
 
+// Filters inside the filter sheet (status, company, glass)
+export const countSheetFilters = (filters: ProductionFilters): number =>
+  (filters.statuses.length > 0 ? 1 : 0) + (filters.company !== 'all' ? 1 : 0) + (filters.glassId !== 'all' ? 1 : 0);
+
 export const isDefaultFilters = (filters: ProductionFilters): boolean =>
-  filters.statuses.length === 0 &&
+  countSheetFilters(filters) === 0 &&
   filters.dateField === DEFAULT_FILTERS.dateField &&
   filters.period === DEFAULT_FILTERS.period &&
   filters.sort === DEFAULT_FILTERS.sort;

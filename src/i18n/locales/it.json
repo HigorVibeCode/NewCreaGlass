@@ -417,7 +417,19 @@
       "cutting": "Taglio",
       "polishing": "Lucidatura",
       "tempered": "Temprato",
-      "laminated": "Laminato"
+      "laminated": "Laminato",
+      "awaiting_film": "In attesa della pellicola",
+      "awaiting_workart": "In attesa del Work Art",
+      "burn_paper": "Bruciare la carta",
+      "waiting_for_sandblasting": "In attesa di sabbiatura",
+      "sandblasting": "Sabbiatura in corso",
+      "awaiting_oil_application": "In attesa dell'applicazione dell'olio",
+      "awaiting_oil_drying": "In attesa dell'asciugatura dell'olio",
+      "awaiting_inspection": "In attesa di controllo",
+      "inspected": "Controllato",
+      "pack_glass_box": "Imballare in Glass Box",
+      "pack_pallet": "Imballare su pallet",
+      "pack_paper": "Imballare con carta"
     },
     "orderType": {
       "standard": "Standard",
@@ -456,6 +468,68 @@
       "printed": "Stampata",
       "satiniert": "Satiniert",
       "check_project": "Check Project"
+    },
+    "dashboard": {
+      "views": {
+        "active": "Attivi",
+        "overdue": "In ritardo",
+        "dueSoon": "Prossimi 7 giorni",
+        "shipping": "Spedizione",
+        "finished": "Completati",
+        "all": "Tutti"
+      },
+      "searchPlaceholder": "Cliente, ordine o vetro",
+      "filters": "Filtri",
+      "status": "Stato",
+      "period": "Periodo",
+      "dateField": "Data di riferimento",
+      "dateFields": {
+        "dueDate": "Consegna",
+        "createdAt": "Creazione"
+      },
+      "periods": {
+        "last7": "Ultimi 7 giorni",
+        "last30": "Ultimi 30 giorni",
+        "last90": "Ultimi 90 giorni",
+        "thisWeek": "Questa settimana",
+        "thisMonth": "Questo mese",
+        "custom": "Personalizzato",
+        "any": "Tutto il periodo"
+      },
+      "from": "Dal",
+      "to": "Al",
+      "sortBy": "Ordina per",
+      "sorts": {
+        "dueDate": "Data di consegna",
+        "newest": "Più recenti",
+        "client": "Cliente (A–Z)"
+      },
+      "clear": "Cancella",
+      "apply": "Applica",
+      "clearFilters": "Cancella filtri",
+      "results": "{{count}} ordine/i",
+      "noResults": "Nessun ordine corrisponde a questi filtri",
+      "overdueBy": "Ritardo {{count}}g",
+      "dueToday": "Scade oggi",
+      "dueTomorrow": "Scade domani",
+      "pieces": "{{count}} pz",
+      "moreGlass": "+{{count}} altro/i vetro/i",
+      "periodsShort": {
+        "last7": "7 giorni",
+        "last30": "30 giorni",
+        "last90": "90 giorni",
+        "thisWeek": "Questa sett.",
+        "thisMonth": "Questo mese",
+        "any": "Tutto"
+      },
+      "sortsShort": {
+        "newest": "Recenti",
+        "dueDate": "Consegna",
+        "client": "A–Z"
+      },
+      "glass": "Vetro",
+      "company": "Azienda",
+      "allGlass": "Tutti i vetri"
     }
   },
   "events": {
@@ -867,29 +941,102 @@
     "title": "Analytics",
     "subtitle": "Report di produzione e approfondimenti",
     "reports": {
-      "productionSummary": { "title": "Riepilogo Produzione", "subtitle": "Panoramica ordini, m² e pezzi" },
-      "statusPipeline": { "title": "Pipeline di Stato", "subtitle": "Ordini attivi per stato corrente" },
-      "deliveryPerformance": { "title": "Performance Consegne", "subtitle": "Tasso di consegna puntuale e ritardi" },
-      "topClients": { "title": "Top Clienti", "subtitle": "Classifica per numero di ordini" },
-      "glassTypes": { "title": "Mix di Vetri", "subtitle": "Distribuzione per tipo di vetro in m²" },
-      "bottleneck": { "title": "Analisi Colli di Bottiglia", "subtitle": "Tempo medio per fase di produzione" },
-      "companyComparison": { "title": "Confronto Aziende", "subtitle": "3S vs Crea Glass affiancati" },
-      "reworkRate": { "title": "Tasso di Rilavorazione", "subtitle": "Monitoraggio rilavorazioni e cancellazioni" },
-      "eventsCalendar": { "title": "Calendario Eventi", "subtitle": "Timeline e prossimi eventi" },
-      "eventsByType": { "title": "Eventi per Tipo", "subtitle": "Distribuzione eventi per categoria" },
-      "eventsFrequency": { "title": "Frequenza Eventi", "subtitle": "Trend mensile degli eventi creati" },
-      "woStatus": { "title": "Stato Ordini Lavoro", "subtitle": "Pipeline degli ordini di lavoro attivi" },
-      "woTeam": { "title": "Performance Team", "subtitle": "Classifica per ordini completati" },
-      "woServiceTime": { "title": "Tempo di Servizio", "subtitle": "Tempo medio e conformità checklist" },
-      "woClients": { "title": "OL per Cliente", "subtitle": "Top clienti per numero di OL" },
-      "woByDay": { "title": "Work Orders per Giorno", "subtitle": "Inizio, fine e durata per giorno" },
-      "invLowStock": { "title": "Avvisi Scorte", "subtitle": "Articoli sotto la soglia minima" },
-      "invByGroup": { "title": "Scorte per Gruppo", "subtitle": "Totali inventario per gruppo" },
-      "invSupplier": { "title": "Per Fornitore", "subtitle": "Distribuzione articoli per fornitore" }
+      "productionSummary": {
+        "title": "Riepilogo Produzione",
+        "subtitle": "Panoramica ordini, m² e pezzi"
+      },
+      "statusPipeline": {
+        "title": "Pipeline di Stato",
+        "subtitle": "Ordini attivi per stato corrente"
+      },
+      "deliveryPerformance": {
+        "title": "Performance Consegne",
+        "subtitle": "Tasso di consegna puntuale e ritardi"
+      },
+      "topClients": {
+        "title": "Top Clienti",
+        "subtitle": "Classifica per numero di ordini"
+      },
+      "glassTypes": {
+        "title": "Mix di Vetri",
+        "subtitle": "Distribuzione per tipo di vetro in m²"
+      },
+      "bottleneck": {
+        "title": "Analisi Colli di Bottiglia",
+        "subtitle": "Tempo medio per fase di produzione"
+      },
+      "companyComparison": {
+        "title": "Confronto Aziende",
+        "subtitle": "3S vs Crea Glass affiancati"
+      },
+      "reworkRate": {
+        "title": "Tasso di Rilavorazione",
+        "subtitle": "Monitoraggio rilavorazioni e cancellazioni"
+      },
+      "eventsCalendar": {
+        "title": "Calendario Eventi",
+        "subtitle": "Timeline e prossimi eventi"
+      },
+      "eventsByType": {
+        "title": "Eventi per Tipo",
+        "subtitle": "Distribuzione eventi per categoria"
+      },
+      "eventsFrequency": {
+        "title": "Frequenza Eventi",
+        "subtitle": "Trend mensile degli eventi creati"
+      },
+      "woStatus": {
+        "title": "Stato Ordini Lavoro",
+        "subtitle": "Pipeline degli ordini di lavoro attivi"
+      },
+      "woTeam": {
+        "title": "Performance Team",
+        "subtitle": "Classifica per ordini completati"
+      },
+      "woServiceTime": {
+        "title": "Tempo di Servizio",
+        "subtitle": "Tempo medio e conformità checklist"
+      },
+      "woClients": {
+        "title": "OL per Cliente",
+        "subtitle": "Top clienti per numero di OL"
+      },
+      "woByDay": {
+        "title": "Work Orders per Giorno",
+        "subtitle": "Inizio, fine e durata per giorno"
+      },
+      "invLowStock": {
+        "title": "Avvisi Scorte",
+        "subtitle": "Articoli sotto la soglia minima"
+      },
+      "invByGroup": {
+        "title": "Scorte per Gruppo",
+        "subtitle": "Totali inventario per gruppo"
+      },
+      "invSupplier": {
+        "title": "Per Fornitore",
+        "subtitle": "Distribuzione articoli per fornitore"
+      }
     },
-    "metrics": { "totalOrders": "Totale Ordini", "totalM2": "Totale m²", "totalPieces": "Totale Pezzi", "inProgress": "In Corso" },
-    "charts": { "ordersPerWeek": "Ordini per Settimana", "distributionByM2": "Distribuzione per m²", "ordersByCompany": "Ordini per Azienda", "monthlyTrend": "Tendenza Mensile", "eventsPerMonth": "Eventi per Mese" },
-    "sections": { "production": "Produzione", "events": "Eventi", "workOrders": "Ordini di Lavoro", "inventory": "Inventario" },
+    "metrics": {
+      "totalOrders": "Totale Ordini",
+      "totalM2": "Totale m²",
+      "totalPieces": "Totale Pezzi",
+      "inProgress": "In Corso"
+    },
+    "charts": {
+      "ordersPerWeek": "Ordini per Settimana",
+      "distributionByM2": "Distribuzione per m²",
+      "ordersByCompany": "Ordini per Azienda",
+      "monthlyTrend": "Tendenza Mensile",
+      "eventsPerMonth": "Eventi per Mese"
+    },
+    "sections": {
+      "production": "Produzione",
+      "events": "Eventi",
+      "workOrders": "Ordini di Lavoro",
+      "inventory": "Inventario"
+    },
     "onTimeRate": "Tasso di Puntualità",
     "onTime": "In Tempo",
     "late": "In Ritardo",
