@@ -305,6 +305,49 @@
       "printed": "Stampata",
       "satiniert": "Satiniert",
       "check_project": "Check Project"
+    },
+    "dashboard": {
+      "views": {
+        "active": "Attivi",
+        "overdue": "In ritardo",
+        "dueSoon": "Prossimi 7 giorni",
+        "shipping": "Spedizione",
+        "finished": "Completati",
+        "all": "Tutti"
+      },
+      "searchPlaceholder": "Cerca cliente o ordine",
+      "filters": "Filtri",
+      "status": "Stato",
+      "period": "Periodo",
+      "dateField": "Data di riferimento",
+      "dateFields": {
+        "dueDate": "Consegna",
+        "createdAt": "Creazione"
+      },
+      "periods": {
+        "any": "Qualsiasi",
+        "today": "Oggi",
+        "thisWeek": "Questa settimana",
+        "thisMonth": "Questo mese",
+        "custom": "Personalizzato"
+      },
+      "from": "Dal",
+      "to": "Al",
+      "sortBy": "Ordina per",
+      "sorts": {
+        "dueDate": "Data di consegna",
+        "newest": "Più recenti",
+        "client": "Cliente (A–Z)"
+      },
+      "clear": "Cancella",
+      "apply": "Applica",
+      "clearFilters": "Cancella filtri",
+      "results": "{{count}} ordine/i",
+      "noResults": "Nessun ordine corrisponde a questi filtri",
+      "overdueBy": "Ritardo {{count}}g",
+      "dueToday": "Scade oggi",
+      "dueTomorrow": "Scade domani",
+      "pieces": "{{count}} pz"
     }
   },
   "events": {
