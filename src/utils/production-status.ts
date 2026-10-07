@@ -1,12 +1,20 @@
 import { ComponentProps } from 'react';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ProductionStatus } from '../types';
 import type { PackagingIconName } from '../components/shared/PackagingIcon';
+import type { ProcessIconName } from '../components/shared/ProcessIcon';
 
-// Visual meaning of a phase: the icon tells the kind, the label tells the phase
+// Visual meaning of a phase: the icon shows the activity, the color shows the kind
+// (waiting / working / instruction / done...), waiting phases add a small clock
 export type StatusKind = 'blocked' | 'problem' | 'waiting' | 'working' | 'instruction' | 'done' | 'final' | 'cancelled';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
+type MdiName = ComponentProps<typeof MaterialCommunityIcons>['name'];
+
+export type PhaseGlyph =
+  | { type: 'mdi'; name: MdiName }
+  | { type: 'packaging'; name: PackagingIconName }
+  | { type: 'process'; name: ProcessIconName };
 
 // Selectable phases, in workflow order (status dropdown and filters)
 const SELECTABLE_STATUS_KINDS: [ProductionStatus, StatusKind][] = [
@@ -87,16 +95,58 @@ interface KindColors {
   textTertiary: string;
 }
 
-// Packing statuses show what they are packed in; the color still tells the kind
-const PACKAGING_ICONS: Partial<Record<ProductionStatus, PackagingIconName>> = {
-  pack_glass_box: 'cardboard-box',
-  packed_glass_box: 'cardboard-box',
-  pack_glass_rack: 'glass-rack',
-  packed_glass_rack: 'glass-rack',
-  pack_pallet: 'pallet',
-  packed_pallet: 'pallet',
-  pack_paper: 'paper-roll',
-  packed_paper: 'paper-roll',
+const mdi = (name: MdiName): PhaseGlyph => ({ type: 'mdi', name });
+const packaging = (name: PackagingIconName): PhaseGlyph => ({ type: 'packaging', name });
+const processGlyph = (name: ProcessIconName): PhaseGlyph => ({ type: 'process', name });
+
+// One icon per activity; waiting phases reuse the icon of the process they wait for
+const PHASE_GLYPHS: Partial<Record<ProductionStatus, PhaseGlyph>> = {
+  not_authorized: mdi('lock-outline'),
+  authorized: mdi('check-decagram-outline'),
+  waiting_to_cnc_wjet: processGlyph('waterjet'),
+  on_cutting_process: mdi('saw-blade'),
+  on_polishing_process: processGlyph('polish'),
+  waiting_to_drill: processGlyph('drill'),
+  awaiting_film: mdi('sticker-outline'),
+  awaiting_workart: mdi('pencil-ruler'),
+  burn_paper: mdi('fire'),
+  waiting_for_sandblasting: processGlyph('sandblast'),
+  sandblasting: processGlyph('sandblast'),
+  awaiting_oil_application: mdi('oil'),
+  awaiting_oil_drying: mdi('fan'),
+  waiting_to_paint_cabin: mdi('format-paint'),
+  on_paint_cabin: mdi('format-paint'),
+  waiting_for_schmelz: mdi('toaster-oven'),
+  on_schmelz_oven: mdi('toaster-oven'),
+  on_banding_oven: mdi('stove'),
+  waiting_for_tempering: mdi('thermometer-high'),
+  tempering_in_progress: mdi('thermometer-high'),
+  on_laminating_machine: mdi('layers-triple-outline'),
+  awaiting_inspection: mdi('clipboard-search-outline'),
+  inspected: mdi('clipboard-check-outline'),
+  waiting_for_packing: mdi('package-variant'),
+  pack_glass_box: packaging('cardboard-box'),
+  pack_glass_rack: packaging('glass-rack'),
+  pack_pallet: packaging('pallet'),
+  pack_paper: packaging('paper-roll'),
+  packed: mdi('package-variant-closed-check'),
+  packed_glass_box: packaging('cardboard-box'),
+  packed_glass_rack: packaging('glass-rack'),
+  packed_pallet: packaging('pallet'),
+  packed_paper: packaging('paper-roll'),
+  ready_for_dispatch: mdi('truck-fast-outline'),
+  delivered: mdi('truck-check-outline'),
+  completed: mdi('flag-checkered'),
+  rework_needed: mdi('restore-alert'),
+  cancelled: mdi('cancel'),
+  // legacy statuses
+  cutting: mdi('saw-blade'),
+  polishing: processGlyph('polish'),
+  on_cabin: mdi('format-paint'),
+  laminating: mdi('layers-triple-outline'),
+  laminated: mdi('layers-triple-outline'),
+  on_oven: mdi('toaster-oven'),
+  tempered: mdi('thermometer-high'),
 };
 
 export const getStatusKind = (status: string): StatusKind => STATUS_KINDS.get(status) || 'waiting';
@@ -107,7 +157,7 @@ export const isWaitingStatus = (status: string): boolean => getStatusKind(status
 export const getStatusAppearance = (
   status: string,
   colors: KindColors
-): { icon: IconName; packaging?: PackagingIconName; color: string } => {
+): { icon: IconName; glyph?: PhaseGlyph; waiting: boolean; color: string } => {
   const kind = getStatusKind(status);
   const kindColors: Record<StatusKind, string> = {
     blocked: colors.error,
@@ -121,7 +171,8 @@ export const getStatusAppearance = (
   };
   return {
     icon: STATUS_KIND_ICONS[kind],
-    packaging: PACKAGING_ICONS[status as ProductionStatus],
+    glyph: PHASE_GLYPHS[status as ProductionStatus],
+    waiting: kind === 'waiting',
     color: kindColors[kind],
   };
 };
