@@ -465,12 +465,14 @@
       "awaiting_oil_drying": "En attente de séchage de l'huile",
       "awaiting_inspection": "En attente de contrôle",
       "inspected": "Contrôlé",
-      "pack_glass_box": "Emballer en Glass Box",
+      "pack_glass_box": "Emballer en carton",
       "pack_pallet": "Emballer sur palette",
       "pack_paper": "Emballer avec papier",
-      "packed_glass_box": "Emballé en Glass Box",
+      "packed_glass_box": "Emballé en carton",
       "packed_pallet": "Emballé sur palette",
-      "packed_paper": "Emballé avec papier"
+      "packed_paper": "Emballé avec papier",
+      "pack_glass_rack": "Emballer sur chevalet à verre",
+      "packed_glass_rack": "Emballé sur chevalet à verre"
     },
     "orderType": {
       "standard": "Standard",

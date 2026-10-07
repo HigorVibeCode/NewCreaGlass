@@ -1,6 +1,7 @@
 import { ComponentProps } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { ProductionStatus } from '../types';
+import type { PackagingIconName } from '../components/shared/PackagingIcon';
 
 // Visual meaning of a phase: the icon tells the kind, the label tells the phase
 export type StatusKind = 'blocked' | 'problem' | 'waiting' | 'working' | 'instruction' | 'done' | 'final' | 'cancelled';
@@ -33,11 +34,14 @@ const SELECTABLE_STATUS_KINDS: [ProductionStatus, StatusKind][] = [
   ['awaiting_inspection', 'waiting'],
   ['inspected', 'done'],
   ['waiting_for_packing', 'waiting'],
+  // pack_glass_box / packed_glass_box keep their stored value but mean "cardboard box"
   ['pack_glass_box', 'instruction'],
+  ['pack_glass_rack', 'instruction'],
   ['pack_pallet', 'instruction'],
   ['pack_paper', 'instruction'],
   ['packed', 'done'],
   ['packed_glass_box', 'done'],
+  ['packed_glass_rack', 'done'],
   ['packed_pallet', 'done'],
   ['packed_paper', 'done'],
   ['ready_for_dispatch', 'done'],
@@ -83,12 +87,27 @@ interface KindColors {
   textTertiary: string;
 }
 
+// Packing statuses show what they are packed in; the color still tells the kind
+const PACKAGING_ICONS: Partial<Record<ProductionStatus, PackagingIconName>> = {
+  pack_glass_box: 'cardboard-box',
+  packed_glass_box: 'cardboard-box',
+  pack_glass_rack: 'glass-rack',
+  packed_glass_rack: 'glass-rack',
+  pack_pallet: 'pallet',
+  packed_pallet: 'pallet',
+  pack_paper: 'paper-roll',
+  packed_paper: 'paper-roll',
+};
+
 export const getStatusKind = (status: string): StatusKind => STATUS_KINDS.get(status) || 'waiting';
 
 export const isWaitingStatus = (status: string): boolean => getStatusKind(status) === 'waiting';
 
 // Color only reinforces the kind; one color per kind
-export const getStatusAppearance = (status: string, colors: KindColors): { icon: IconName; color: string } => {
+export const getStatusAppearance = (
+  status: string,
+  colors: KindColors
+): { icon: IconName; packaging?: PackagingIconName; color: string } => {
   const kind = getStatusKind(status);
   const kindColors: Record<StatusKind, string> = {
     blocked: colors.error,
@@ -100,7 +119,11 @@ export const getStatusAppearance = (status: string, colors: KindColors): { icon:
     final: colors.textSecondary,
     cancelled: colors.textTertiary,
   };
-  return { icon: STATUS_KIND_ICONS[kind], color: kindColors[kind] };
+  return {
+    icon: STATUS_KIND_ICONS[kind],
+    packaging: PACKAGING_ICONS[status as ProductionStatus],
+    color: kindColors[kind],
+  };
 };
 
 // Old statuses fall back to the label of the phase that replaced them

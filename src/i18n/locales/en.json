@@ -522,12 +522,14 @@
       "awaiting_oil_drying": "Awaiting Oil Drying",
       "awaiting_inspection": "Awaiting Inspection",
       "inspected": "Inspected",
-      "pack_glass_box": "Pack in Glass Box",
+      "pack_glass_box": "Pack in Cardboard Box",
       "pack_pallet": "Pack on Pallet",
       "pack_paper": "Pack with Paper",
-      "packed_glass_box": "Packed in Glass Box",
+      "packed_glass_box": "Packed in Cardboard Box",
       "packed_pallet": "Packed on Pallet",
-      "packed_paper": "Packed with Paper"
+      "packed_paper": "Packed with Paper",
+      "pack_glass_rack": "Pack on Glass Rack",
+      "packed_glass_rack": "Packed on Glass Rack"
     },
     "orderType": {
       "standard": "Standard",

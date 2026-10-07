@@ -5,11 +5,13 @@ export { PRODUCTION_STATUSES } from './production-status';
 const FINISHED_STATUSES: ProductionStatus[] = ['delivered', 'completed', 'cancelled'];
 const SHIPPING_STATUSES: ProductionStatus[] = [
   'pack_glass_box',
+  'pack_glass_rack',
   'pack_pallet',
   'pack_paper',
   'waiting_for_packing',
   'packed',
   'packed_glass_box',
+  'packed_glass_rack',
   'packed_pallet',
   'packed_paper',
   'ready_for_dispatch',

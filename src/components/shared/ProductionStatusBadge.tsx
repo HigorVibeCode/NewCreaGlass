@@ -1,10 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../theme';
 import { useThemeColors } from '../../hooks/use-theme-colors';
 import { useI18n } from '../../hooks/use-i18n';
 import { getStatusAppearance, getStatusLabel } from '../../utils/production-status';
+import { StatusIcon } from './StatusIcon';
 
 interface ProductionStatusBadgeProps {
   status: string;
@@ -16,12 +16,12 @@ interface ProductionStatusBadgeProps {
 export const ProductionStatusBadge: React.FC<ProductionStatusBadgeProps> = ({ status, size = 'sm', trailing, style }) => {
   const { t } = useI18n();
   const colors = useThemeColors();
-  const { icon, color } = getStatusAppearance(status, colors);
+  const { color } = getStatusAppearance(status, colors);
   const isSmall = size === 'sm';
 
   return (
     <View style={[styles.badge, isSmall ? styles.badgeSm : styles.badgeMd, { backgroundColor: color + '1A' }, style]}>
-      <Ionicons name={icon} size={isSmall ? 13 : 16} color={color} />
+      <StatusIcon status={status} size={isSmall ? 13 : 16} color={color} />
       <Text
         style={[styles.text, { color, fontSize: isSmall ? theme.typography.fontSize.xs : theme.typography.fontSize.sm }]}
         numberOfLines={1}

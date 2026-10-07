@@ -465,12 +465,14 @@
       "awaiting_oil_drying": "Wartet auf Öl-Trocknung",
       "awaiting_inspection": "Wartet auf Kontrolle",
       "inspected": "Kontrolliert",
-      "pack_glass_box": "In Glass Box verpacken",
+      "pack_glass_box": "In Karton verpacken",
       "pack_pallet": "Auf Palette verpacken",
       "pack_paper": "Mit Papier verpacken",
-      "packed_glass_box": "In Glass Box verpackt",
+      "packed_glass_box": "In Karton verpackt",
       "packed_pallet": "Auf Palette verpackt",
-      "packed_paper": "Mit Papier verpackt"
+      "packed_paper": "Mit Papier verpackt",
+      "pack_glass_rack": "Auf Glasbock verpacken",
+      "packed_glass_rack": "Auf Glasbock verpackt"
     },
     "orderType": {
       "standard": "Standard",
