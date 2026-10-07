@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef, ComponentProps } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -22,6 +22,7 @@ import { DatePicker } from '../../src/components/shared/DatePicker';
 import { Dropdown, DropdownOption } from '../../src/components/shared/Dropdown';
 import { PermissionGuard } from '../../src/components/shared/PermissionGuard';
 import { ProductionStatusBadge } from '../../src/components/shared/ProductionStatusBadge';
+import { StatusIcon } from '../../src/components/shared/StatusIcon';
 import { getStatusAppearance, getStatusLabel as getStatusLabelFor, isWaitingStatus } from '../../src/utils/production-status';
 import { repos } from '../../src/services/container';
 import { supabase } from '../../src/services/supabase';
@@ -385,7 +386,7 @@ export default function ProductionScreen() {
     onPress: () => void,
     key: string,
     accent?: string,
-    icon?: ComponentProps<typeof Ionicons>['name']
+    icon?: React.ReactNode
   ) => (
     <TouchableOpacity
       key={key}
@@ -397,7 +398,7 @@ export default function ProductionScreen() {
       onPress={onPress}
       activeOpacity={0.7}
     >
-      {icon && <Ionicons name={icon} size={14} color={accent || colors.textSecondary} />}
+      {icon}
       <Text
         style={[
           styles.chipText,
@@ -809,7 +810,7 @@ export default function ProductionScreen() {
                       () => toggleDraftStatus(status),
                       status,
                       getStatusColor(status),
-                      getStatusAppearance(status, colors).icon
+                      <StatusIcon status={status} size={14} />
                     )
                   )}
                 </View>

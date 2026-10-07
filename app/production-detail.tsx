@@ -53,6 +53,7 @@ import {
   getViewerKind,
 } from '../src/components/shared/AttachmentViewer';
 import { ProductionStatusBadge } from '../src/components/shared/ProductionStatusBadge';
+import { StatusIcon } from '../src/components/shared/StatusIcon';
 import { PRODUCTION_STATUSES, getStatusAppearance, getStatusLabel as getStatusLabelFor } from '../src/utils/production-status';
 
 /** Resolve signed URL for a thumbnail — uses same robust logic as downloadAndOpenAttachment */
@@ -831,12 +832,7 @@ export default function ProductionDetailScreen() {
               onPress={() => setStatusModalVisible(true)}
               activeOpacity={0.7}
             >
-              <Ionicons
-                name={getStatusAppearance(production.status, colors).icon}
-                size={14}
-                color={getStatusColor(production.status)}
-                style={{ marginRight: 4 }}
-              />
+              <StatusIcon status={production.status} size={14} style={{ marginRight: 4 }} />
               <Text
                 style={[
                   styles.statusText,
@@ -1145,11 +1141,7 @@ export default function ProductionDetailScreen() {
                   activeOpacity={0.7}
                 >
                   <View style={styles.optionLeft}>
-                    <Ionicons
-                      name={getStatusAppearance(option.value, colors).icon}
-                      size={20}
-                      color={getStatusColor(option.value as ProductionStatus)}
-                    />
+                    <StatusIcon status={option.value} size={20} />
                     <Text
                       style={[
                         styles.optionText,

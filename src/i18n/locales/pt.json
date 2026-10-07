@@ -520,12 +520,14 @@
       "awaiting_oil_drying": "Aguardando Secagem do Azeite",
       "awaiting_inspection": "Aguardando Conferência",
       "inspected": "Conferido",
-      "pack_glass_box": "Embalar para Glass Box",
+      "pack_glass_box": "Embalar com Cardboard Box",
       "pack_pallet": "Embalar para Palete",
       "pack_paper": "Embalar com Papel",
-      "packed_glass_box": "Embalado com Glass Box",
+      "packed_glass_box": "Embalado com Cardboard Box",
       "packed_pallet": "Embalado em Palete",
-      "packed_paper": "Embalado com Papel"
+      "packed_paper": "Embalado com Papel",
+      "pack_glass_rack": "Embalar em Cavalete de Vidro",
+      "packed_glass_rack": "Embalado em Cavalete de Vidro"
     },
     "orderType": {
       "standard": "Padrão",

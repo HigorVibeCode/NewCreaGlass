@@ -278,9 +278,11 @@ export type ProductionStatus =
   | 'inspected'
   // Packing instructions
   | 'pack_glass_box'
+  | 'pack_glass_rack'
   | 'pack_pallet'
   | 'pack_paper'
   | 'packed_glass_box'
+  | 'packed_glass_rack'
   | 'packed_pallet'
   | 'packed_paper'
   // Blue group
