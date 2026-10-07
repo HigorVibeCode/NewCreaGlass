@@ -1109,5 +1109,11 @@
     "itemsBelowThreshold": "Artikel unter Schwellenwert",
     "allStockOk": "Alle Bestände OK",
     "noLowStock": "Keine Artikel mit niedrigem Bestand"
+  },
+  "attachmentViewer": {
+    "download": "Herunterladen",
+    "loadError": "Datei konnte nicht geöffnet werden",
+    "dxfPreview": "Zeichnungsvorschau",
+    "dxfEmpty": "Keine Zeichnung in der Datei gefunden"
   }
 }

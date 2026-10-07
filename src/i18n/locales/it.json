@@ -1112,5 +1112,11 @@
     "itemsBelowThreshold": "articoli sotto soglia",
     "allStockOk": "Tutti i livelli di scorta OK",
     "noLowStock": "Nessun articolo con scorte basse"
+  },
+  "attachmentViewer": {
+    "download": "Scarica",
+    "loadError": "Impossibile aprire il file",
+    "dxfPreview": "Anteprima del disegno",
+    "dxfEmpty": "Nessun disegno trovato nel file"
   }
 }

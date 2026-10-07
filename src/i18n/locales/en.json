@@ -1247,5 +1247,11 @@
       "lastActivity": "Last activity",
       "never": "Never"
     }
+  },
+  "attachmentViewer": {
+    "download": "Download",
+    "loadError": "Could not open the file",
+    "dxfPreview": "Drawing preview",
+    "dxfEmpty": "No drawing found in the file"
   }
 }
