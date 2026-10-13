@@ -3,10 +3,27 @@
     {
       "src": "package.json",
       "use": "@vercel/static-build",
-      "config": { "distDir": "dist" }
+      "config": {
+        "distDir": "dist"
+      }
     }
   ],
   "routes": [
+    {
+      "src": "/service-worker.js",
+      "headers": {
+        "cache-control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "/manifest.webmanifest",
+      "headers": {
+        "content-type": "application/manifest+json",
+        "cache-control": "no-cache"
+      },
+      "continue": true
+    },
     {
       "handle": "filesystem"
     },

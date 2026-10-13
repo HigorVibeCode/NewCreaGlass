@@ -1,7 +1,8 @@
-// Service Worker para Web Push Notifications
+// Service Worker: Web Push Notifications + app instalável (PWA)
 // Este arquivo é servido estaticamente e registrado pelo app
 
-const CACHE_NAME = 'crea-glass-push-v1';
+const CACHE_NAME = 'crea-glass-v2';
+const APP_SHELL_URL = '/';
 
 // Instalar Service Worker
 self.addEventListener('install', (event) => {
@@ -25,6 +26,50 @@ self.addEventListener('activate', (event) => {
     })
   );
   return self.clients.claim(); // Assume controle imediato
+});
+
+// PWA: cache só do que é seguro guardar
+// - Páginas (navegação): sempre da rede primeiro, para cada deploy novo aparecer na hora;
+//   sem internet, abre a última versão salva do app.
+// - /_expo/static e /assets: nomes com hash, nunca mudam -> cache primeiro.
+// - Supabase e outros domínios: não passam pelo cache (dados sempre atuais).
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(APP_SHELL_URL, copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match(APP_SHELL_URL).then((cached) => cached || Response.error()))
+    );
+    return;
+  }
+
+  if (url.pathname.startsWith('/_expo/static/') || url.pathname.startsWith('/assets/')) {
+    event.respondWith(
+      caches.match(request).then(
+        (cached) =>
+          cached ||
+          fetch(request).then((response) => {
+            if (response.ok) {
+              const copy = response.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+            }
+            return response;
+          })
+      )
+    );
+  }
 });
 
 // Receber push notifications
