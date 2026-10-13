@@ -1,0 +1,17 @@
+{
+  "id": "/",
+  "name": "Crea Glass",
+  "short_name": "Crea Glass",
+  "description": "Produção, estoque, ponto e ordens de serviço da Crea Glass",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#d51c10",
+  "theme_color": "#d51c10",
+  "icons": [
+    { "src": "/pwa/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/pwa/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/pwa/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/pwa/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

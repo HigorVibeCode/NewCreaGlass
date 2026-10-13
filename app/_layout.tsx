@@ -39,6 +39,19 @@ function PushNotificationsInitializer() {
   return null;
 }
 
+// Web: register the service worker on load so the site is installable (PWA).
+// Same file and scope as web push, so both share one registration.
+if (Platform.OS === 'web' && typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  const registerServiceWorker = () => {
+    navigator.serviceWorker.register('/service-worker.js', { scope: '/' }).catch((error) => {
+      console.warn('Service worker registration failed:', error);
+    });
+  };
+  // The app bundle may run after the page "load" event already fired
+  if (document.readyState === 'complete') registerServiceWorker();
+  else window.addEventListener('load', registerServiceWorker);
+}
+
 export default function RootLayout() {
   'use no memo';
   return (
