@@ -1,7 +1,7 @@
 // Service Worker: Web Push Notifications + app instalável (PWA)
 // Este arquivo é servido estaticamente e registrado pelo app
 
-const CACHE_NAME = 'crea-glass-v2';
+const CACHE_NAME = 'crea-glass-v3';
 const APP_SHELL_URL = '/';
 
 // Instalar Service Worker
