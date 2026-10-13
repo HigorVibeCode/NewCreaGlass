@@ -1117,5 +1117,13 @@
     "loadError": "Datei konnte nicht geöffnet werden",
     "dxfPreview": "Zeichnungsvorschau",
     "dxfEmpty": "Keine Zeichnung in der Datei gefunden"
+  },
+  "pwa": {
+    "installApp": "App installieren",
+    "iosStep1": "Tippe in der Safari-Leiste auf „Teilen“ (Quadrat mit Pfeil).",
+    "iosStep2": "Scrolle und wähle „Zum Home-Bildschirm“.",
+    "iosStep3": "Tippe auf „Hinzufügen“. Crea Glass erscheint als App auf dem Home-Bildschirm.",
+    "browserStep1": "Öffne das Browsermenü (⋮ oder ⋯).",
+    "browserStep2": "Wähle „App installieren“ oder „Zum Startbildschirm hinzufügen“."
   }
 }
