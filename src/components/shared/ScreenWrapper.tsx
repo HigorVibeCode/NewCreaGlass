@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useThemeColors } from '../../hooks/use-theme-colors';
 
@@ -15,7 +15,10 @@ export const ScreenWrapper: React.FC<ScreenWrapperProps> = ({
   maxWidth = 1400,
 }) => {
   const colors = useThemeColors();
-  
+  const { width } = useWindowDimensions();
+  // Side padding only on wide (tablet/desktop) web screens; phones use the full width like the native app
+  const isWideWeb = Platform.OS === 'web' && width >= 768;
+
   return (
     <SafeAreaView 
       style={[styles.container, { backgroundColor: colors.background }]} 
@@ -27,6 +30,7 @@ export const ScreenWrapper: React.FC<ScreenWrapperProps> = ({
           maxWidth: maxWidth,
           width: '100%',
           alignSelf: 'center',
+          paddingHorizontal: isWideWeb ? 24 : 0,
         },
       ]}>
         {children}
@@ -44,8 +48,5 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    ...(Platform.OS === 'web' && {
-      paddingHorizontal: 24,
-    }),
   },
 });

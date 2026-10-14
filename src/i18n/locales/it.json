@@ -576,7 +576,8 @@
       "glass": "Vetro",
       "company": "Azienda",
       "allGlass": "Tutti i vetri"
-    }
+    },
+    "editOrder": "Modifica ordine"
   },
   "events": {
     "title": "Eventi",

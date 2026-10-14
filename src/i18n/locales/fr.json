@@ -573,7 +573,8 @@
       "glass": "Verre",
       "company": "Entreprise",
       "allGlass": "Tous les verres"
-    }
+    },
+    "editOrder": "Modifier la commande"
   },
   "events": {
     "title": "Événements",

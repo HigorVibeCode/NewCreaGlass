@@ -576,7 +576,8 @@
       "glass": "Vidrio",
       "company": "Empresa",
       "allGlass": "Todos los vidrios"
-    }
+    },
+    "editOrder": "Editar pedido"
   },
   "events": {
     "title": "Eventos",

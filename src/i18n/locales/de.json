@@ -573,7 +573,8 @@
       "glass": "Glas",
       "company": "Firma",
       "allGlass": "Alle Gläser"
-    }
+    },
+    "editOrder": "Auftrag bearbeiten"
   },
   "events": {
     "title": "Ereignisse",

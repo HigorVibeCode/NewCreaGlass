@@ -628,7 +628,8 @@
       "glass": "Vidro",
       "company": "Empresa",
       "allGlass": "Todos os vidros"
-    }
+    },
+    "editOrder": "Editar Ordem"
   },
   "events": {
     "title": "Eventos",
