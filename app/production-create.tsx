@@ -303,14 +303,14 @@ export default function ProductionCreateScreen() {
         baseAttachments = latestProduction.attachments || [];
       } catch (loadError) {
         console.error('Error loading latest attachments for quick camera flow:', loadError);
-        Alert.alert(t('common.error'), t('production.addAttachmentError'));
+        showAlert(t('common.error'), t('production.addAttachmentError'));
         safeBack(router);
         return;
       }
     }
 
     if (getMediaAttachments(baseAttachments).length >= MAX_PRODUCTION_MEDIA_ATTACHMENTS) {
-      Alert.alert(t('common.error'), t('production.maxMediaAttachments'));
+      showAlert(t('common.error'), t('production.maxMediaAttachments'));
       if (isQuickCameraFlow) {
         safeBack(router);
       }
@@ -334,7 +334,7 @@ export default function ProductionCreateScreen() {
       if (result.canceled || !result.assets[0]) return;
 
       const asset = result.assets[0];
-      const filename = asset.uri.split('/').pop() || `photo_${Date.now()}.jpg`;
+      const filename = asset.fileName || asset.uri.split('/').pop() || `photo_${Date.now()}.jpg`;
       const mimeType = asset.mimeType || 'image/jpeg';
 
       const newAttachment: ProductionAttachment = {
@@ -364,7 +364,7 @@ export default function ProductionCreateScreen() {
           return;
         } catch (saveError) {
           console.error('Error saving quick camera attachment:', saveError);
-          Alert.alert(t('common.error'), t('production.addAttachmentError'));
+          showAlert(t('common.error'), t('production.addAttachmentError'));
         } finally {
           setIsCreating(false);
         }
@@ -373,13 +373,13 @@ export default function ProductionCreateScreen() {
       setAttachments([...attachments, newAttachment]);
     } catch (error) {
       console.error('Error taking photo:', error);
-      Alert.alert(t('common.error'), t('production.addAttachmentError'));
+      showAlert(t('common.error'), t('production.addAttachmentError'));
     }
   };
 
   const handleChooseFromLibrary = async () => {
     if (!canAddMedia) {
-      Alert.alert(t('common.error'), t('production.maxMediaAttachments'));
+      showAlert(t('common.error'), t('production.maxMediaAttachments'));
       return;
     }
 
@@ -399,7 +399,8 @@ export default function ProductionCreateScreen() {
       if (result.canceled || !result.assets[0]) return;
 
       const asset = result.assets[0];
-      const filename = asset.uri.split('/').pop() || `image_${Date.now()}.jpg`;
+      // On web the uri is a blob: URL without the real name
+      const filename = asset.fileName || asset.uri.split('/').pop() || `image_${Date.now()}.jpg`;
       const mimeType = asset.mimeType || 'image/jpeg';
 
       const newAttachment: ProductionAttachment = {
@@ -414,13 +415,13 @@ export default function ProductionCreateScreen() {
       setAttachments([...attachments, newAttachment]);
     } catch (error) {
       console.error('Error choosing from library:', error);
-      Alert.alert(t('common.error'), t('production.addAttachmentError'));
+      showAlert(t('common.error'), t('production.addAttachmentError'));
     }
   };
 
   const handleChooseDocument = async () => {
     if (!canAddMedia) {
-      Alert.alert(t('common.error'), t('production.maxMediaAttachments'));
+      showAlert(t('common.error'), t('production.maxMediaAttachments'));
       return;
     }
 
@@ -474,7 +475,7 @@ export default function ProductionCreateScreen() {
       setAttachments([...attachments, newAttachment]);
     } catch (error) {
       console.error('Error picking document:', error);
-      Alert.alert(t('common.error'), t('production.addAttachmentError'));
+      showAlert(t('common.error'), t('production.addAttachmentError'));
     }
   };
 
@@ -485,7 +486,7 @@ export default function ProductionCreateScreen() {
   const handleChooseDxf = async () => {
     const slotsLeft = MAX_PRODUCTION_DXF_ATTACHMENTS - dxfAttachmentsList.length;
     if (slotsLeft <= 0) {
-      Alert.alert(t('common.error'), t('production.maxDxfAttachments'));
+      showAlert(t('common.error'), t('production.maxDxfAttachments'));
       return;
     }
 
@@ -513,13 +514,13 @@ export default function ProductionCreateScreen() {
       }
 
       if (picked.length === 0) {
-        Alert.alert(t('common.error'), t('production.dxfInvalidFile'));
+        showAlert(t('common.error'), t('production.dxfInvalidFile'));
         return;
       }
 
       const limited = picked.slice(0, slotsLeft);
       if (picked.length > slotsLeft) {
-        Alert.alert(t('common.error'), t('production.dxfSlotsLimited', { count: slotsLeft }));
+        showAlert(t('common.error'), t('production.dxfSlotsLimited', { count: slotsLeft }));
       }
 
       setPendingDxfFiles(limited);
@@ -527,7 +528,7 @@ export default function ProductionCreateScreen() {
       setDxfModalVisible(true);
     } catch (error) {
       console.error('Error picking DXF files:', error);
-      Alert.alert(t('common.error'), t('production.addAttachmentError'));
+      showAlert(t('common.error'), t('production.addAttachmentError'));
     }
   };
 
@@ -714,7 +715,9 @@ export default function ProductionCreateScreen() {
       }
     } catch (error) {
       console.error(`Error ${isEditing ? 'updating' : 'creating'} production order:`, error);
-      showAlert(t('common.error'), isEditing ? 'Failed to update order' : t('production.createOrderError'));
+      // Show the real reason (e.g. which attachment failed and why) instead of a generic message
+      const reason = error instanceof Error && error.message ? `\n\n${error.message}` : '';
+      showAlert(t('common.error'), (isEditing ? 'Failed to update order' : t('production.createOrderError')) + reason);
     } finally {
       setIsCreating(false);
     }

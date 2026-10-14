@@ -3,6 +3,7 @@ import { MaintenanceRecord, MaintenanceInfo, MaintenanceInfoImage, MaintenanceHi
 import { supabase } from '../../services/supabase';
 import { Platform } from 'react-native';
 import { getCachedSignedUrl } from '../../utils/signed-url-cache';
+import { toStorageSafeName } from '../../utils/storage-key';
 
 const BUCKET_NAME = 'documents';
 
@@ -472,7 +473,7 @@ export class SupabaseMaintenanceRepository implements MaintenanceRepository {
 
     // Generate unique filename
     const timestamp = Date.now();
-    const uniqueFilename = `maintenance_${timestamp}_${filename}`;
+    const uniqueFilename = `maintenance_${timestamp}_${toStorageSafeName(filename)}`;
 
     try {
       let fileData: Blob | Uint8Array | string;

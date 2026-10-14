@@ -3,6 +3,7 @@ import { ManualsRepository } from '../../services/repositories/interfaces';
 import { Manual, ManualAttachment } from '../../types';
 import { supabase } from '../../services/supabase';
 import { getCachedSignedUrl } from '../../utils/signed-url-cache';
+import { toStorageSafeName } from '../../utils/storage-key';
 
 const BUCKET_NAME = 'documents';
 
@@ -126,7 +127,7 @@ export class SupabaseManualsRepository implements ManualsRepository {
     const filename = file.name || ('uri' in file ? file.uri.split('/').pop() : '') || 'unknown';
     const mimeType = file.type || 'application/pdf';
     const fileUri = 'uri' in file ? file.uri : '';
-    const uniqueFilename = `manuals_${manualId}_${Date.now()}_${filename}`;
+    const uniqueFilename = `manuals_${manualId}_${Date.now()}_${toStorageSafeName(filename)}`;
 
     let fileData: Blob | Uint8Array;
     if (Platform.OS === 'web' && typeof fetch !== 'undefined' && fileUri) {
@@ -229,7 +230,7 @@ export class SupabaseManualsRepository implements ManualsRepository {
     }
     const filename = file.name || file.uri.split('/').pop() || `thumb_${Date.now()}.jpg`;
     const mimeType = file.type || 'image/jpeg';
-    const uniqueFilename = `manuals_${manualId}_thumb_${Date.now()}_${filename}`;
+    const uniqueFilename = `manuals_${manualId}_thumb_${Date.now()}_${toStorageSafeName(filename)}`;
 
     let fileData: Blob | Uint8Array;
     if (Platform.OS === 'web' && typeof fetch !== 'undefined') {

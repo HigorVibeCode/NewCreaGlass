@@ -1,4 +1,5 @@
 import { ProductionAttachment } from '../types';
+import { toStorageSafeName } from './storage-key';
 
 const STORAGE_KEY_SEPARATOR = '__';
 
@@ -21,7 +22,7 @@ export function randomUuidV4(): string {
 
 /** Gera chave única no storage: {uuid}__{nome_original} */
 export function buildProductionStorageKey(originalName: string): string {
-  const safeName = (originalName || 'file').replace(/[/\\]/g, '_').trim() || 'file';
+  const safeName = toStorageSafeName(originalName);
   return `${randomUuidV4()}${STORAGE_KEY_SEPARATOR}${safeName}`;
 }
 
