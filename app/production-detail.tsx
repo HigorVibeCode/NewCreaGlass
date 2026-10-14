@@ -1252,7 +1252,7 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
   },
   content: {
-    padding: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
   },
   loadingContainer: {
     flex: 1,
@@ -1420,15 +1420,16 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: theme.typography.fontSize.md,
   },
+  // Buttons share the row width, so 6 buttons fit any phone without overflowing
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: theme.spacing.xs,
+    gap: theme.spacing.sm,
     marginTop: theme.spacing.xl,
-    paddingHorizontal: theme.spacing.xs,
   },
   iconButton: {
-    width: 48,
+    flex: 1,
+    maxWidth: 64,
     height: 48,
     borderRadius: theme.borderRadius.md,
     justifyContent: 'center',

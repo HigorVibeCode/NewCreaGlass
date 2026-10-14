@@ -146,7 +146,9 @@ export default function EventCreateScreen() {
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        // Web: photos only + rear camera, so the browser opens the camera instead of the gallery
+        mediaTypes: Platform.OS === 'web' ? ImagePicker.MediaTypeOptions.Images : ImagePicker.MediaTypeOptions.All,
+        cameraType: ImagePicker.CameraType.back,
         allowsEditing: false,
         quality: 0.8,
       });

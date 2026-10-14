@@ -153,6 +153,22 @@ export const getStatusKind = (status: string): StatusKind => STATUS_KINDS.get(st
 
 export const isWaitingStatus = (status: string): boolean => getStatusKind(status) === 'waiting';
 
+// Already packed or ready to ship: the order is finished on the shop floor
+export const isReadyToShipStatus = (status: string): boolean =>
+  status === 'packed' || status.startsWith('packed_') || status === 'ready_for_dispatch';
+
+// Opaque blend of two hex colors (#rrggbb); amount 0 = base, 1 = tint
+export const mixHexColors = (base: string, tint: string, amount: number): string => {
+  const parse = (hex: string) => {
+    const value = hex.replace('#', '');
+    return [0, 2, 4].map((i) => parseInt(value.slice(i, i + 2), 16));
+  };
+  const from = parse(base);
+  const to = parse(tint);
+  if ([...from, ...to].some(Number.isNaN)) return base;
+  return '#' + from.map((c, i) => Math.round(c + (to[i] - c) * amount).toString(16).padStart(2, '0')).join('');
+};
+
 // Color only reinforces the kind; one color per kind
 export const getStatusAppearance = (
   status: string,

@@ -630,7 +630,8 @@
       "glass": "Glass",
       "company": "Company",
       "allGlass": "All glass"
-    }
+    },
+    "editOrder": "Edit Order"
   },
   "events": {
     "title": "Events",

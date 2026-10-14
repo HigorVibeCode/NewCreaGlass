@@ -489,6 +489,8 @@ export default function InventoryGroupScreen() {
       }
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        // Web: rear camera, so the browser opens the camera instead of the gallery
+        cameraType: ImagePicker.CameraType.back,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,

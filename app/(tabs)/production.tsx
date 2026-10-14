@@ -23,7 +23,13 @@ import { Dropdown, DropdownOption } from '../../src/components/shared/Dropdown';
 import { PermissionGuard } from '../../src/components/shared/PermissionGuard';
 import { ProductionStatusBadge } from '../../src/components/shared/ProductionStatusBadge';
 import { StatusIcon } from '../../src/components/shared/StatusIcon';
-import { getStatusAppearance, getStatusLabel as getStatusLabelFor, isWaitingStatus } from '../../src/utils/production-status';
+import {
+  getStatusAppearance,
+  getStatusLabel as getStatusLabelFor,
+  isReadyToShipStatus,
+  isWaitingStatus,
+  mixHexColors,
+} from '../../src/utils/production-status';
 import { repos } from '../../src/services/container';
 import { supabase } from '../../src/services/supabase';
 import { Production, ProductionCompany, ProductionStatus, InventoryItem } from '../../src/types';
@@ -578,10 +584,20 @@ export default function ProductionScreen() {
               const glassLines = getGlassLines(production);
               const waitingHours = isWaitingStatus(production.status) ? waitingHoursMap.get(production.id) || 0 : 0;
               const alertLevel: WaitingAlertLevel = waitingHours > 0 ? getAlertLevel(waitingHours) : 0;
+              // Packed / ready for dispatch: green-tinted card so finished orders stand out
+              const readyToShip = isReadyToShipStatus(production.status);
               return (
                 <WaitingPulseCard key={production.id} alertLevel={alertLevel}>
                 <TouchableOpacity
-                  style={[styles.orderCard, { backgroundColor: colors.cardBackground }]}
+                  style={[
+                    styles.orderCard,
+                    { backgroundColor: colors.cardBackground },
+                    readyToShip && {
+                      backgroundColor: mixHexColors(colors.cardBackground, colors.success, 0.14),
+                      borderWidth: 1,
+                      borderColor: colors.success + '55',
+                    },
+                  ]}
                   activeOpacity={0.7}
                   onPress={() => pushWithParams(router, '/production-detail', { productionId: production.id })}
                 >

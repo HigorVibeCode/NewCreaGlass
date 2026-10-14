@@ -160,6 +160,8 @@ export default function WorkOrderCreateScreen() {
       }
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        // Web: rear camera, so the browser opens the camera instead of the gallery
+        cameraType: ImagePicker.CameraType.back,
         allowsEditing: false,
         quality: 0.8,
       });
