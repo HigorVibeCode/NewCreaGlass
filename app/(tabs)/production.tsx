@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
@@ -84,65 +85,75 @@ function getPulseColor(_level: WaitingAlertLevel): string {
   return '#eab308'; // yellow-500 vivid for all levels
 }
 
-/** Animated wrapper that adds a pulse glow effect for waiting cards */
+/**
+ * Pulse glow for waiting cards. Only the opacity of a static glow layer is animated:
+ * on web it runs as a CSS animation and on native with the native driver, so it costs
+ * no JavaScript per frame (animating border/shadow in JS froze the dashboard).
+ */
 function WaitingPulseCard({ children, alertLevel }: { children: React.ReactNode; alertLevel: WaitingAlertLevel }) {
   const pulseAnim = useRef(new Animated.Value(0)).current;
+  const duration = getPulseDuration(alertLevel);
 
   useEffect(() => {
-    if (alertLevel > 0) {
-      const duration = getPulseDuration(alertLevel);
-      const loop = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: false,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 0,
-            duration,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: false,
-          }),
-        ]),
-      );
-      loop.start();
-      return () => loop.stop();
-    }
-  }, [alertLevel]);
+    if (alertLevel === 0 || Platform.OS === 'web') return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0,
+          duration,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [alertLevel, duration, pulseAnim]);
 
   if (alertLevel === 0) {
     return <>{children}</>;
   }
 
   const color = getPulseColor(alertLevel);
-
-  const borderColor = pulseAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [`${color}00`, `${color}90`],
-  });
-
-  const shadowOpacity = pulseAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, alertLevel >= 2 ? 0.5 : 0.3],
-  });
+  const glowStyle = {
+    borderRadius: theme.borderRadius.md,
+    borderWidth: alertLevel >= 2 ? 2 : 1.5,
+    borderColor: `${color}90`,
+    shadowColor: color,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: alertLevel >= 2 ? 0.5 : 0.3,
+    shadowRadius: alertLevel >= 3 ? 12 : 8,
+  };
 
   return (
-    <Animated.View
-      style={{
-        borderRadius: theme.borderRadius.md,
-        borderWidth: alertLevel >= 2 ? 2 : 1.5,
-        borderColor,
-        shadowColor: color,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity,
-        shadowRadius: alertLevel >= 3 ? 12 : 8,
-        elevation: alertLevel >= 2 ? 6 : 4,
-      }}
-    >
+    <View style={{ borderRadius: theme.borderRadius.md }}>
       {children}
-    </Animated.View>
+      {Platform.OS === 'web' ? (
+        <View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            glowStyle,
+            // react-native-web CSS animation (runs on the compositor)
+            {
+              animationKeyframes: [{ '0%': { opacity: 0 }, '100%': { opacity: 1 } }],
+              animationDuration: `${duration}ms`,
+              animationDirection: 'alternate',
+              animationIterationCount: 'infinite',
+              animationTimingFunction: 'ease-in-out',
+            } as object,
+          ]}
+        />
+      ) : (
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, glowStyle, { opacity: pulseAnim }]} />
+      )}
+    </View>
   );
 }
 
@@ -234,6 +245,43 @@ export default function ProductionScreen() {
       setSearch('');
       loadProductions();
     }
+  }, [isFocused, loadProductions]);
+
+  // Live dashboard: reload when any order changes on another device (Supabase Realtime),
+  // plus a slow fallback refresh in case the realtime connection drops (e.g. a TV left on)
+  useEffect(() => {
+    if (!isFocused) return;
+    let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleReload = () => {
+      // Several rows change together when an order is saved: reload once
+      if (reloadTimer) clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => loadProductions(), 600);
+    };
+
+    const channel = supabase.channel(`production-dashboard-live-${Date.now()}`);
+    ['productions', 'production_items', 'production_attachments', 'production_status_history'].forEach((table) => {
+      channel.on('postgres_changes', { event: '*', schema: 'public', table }, scheduleReload);
+    });
+    channel.subscribe();
+
+    const fallback = setInterval(() => loadProductions(), 60 * 1000);
+
+    // Coming back to the tab/screen (or the TV waking up): refresh right away
+    const onVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') scheduleReload();
+    };
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisible);
+    }
+
+    return () => {
+      if (reloadTimer) clearTimeout(reloadTimer);
+      clearInterval(fallback);
+      supabase.removeChannel(channel);
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisible);
+      }
+    };
   }, [isFocused, loadProductions]);
 
   const handleRefresh = () => {
