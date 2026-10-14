@@ -8,6 +8,7 @@ import {
   getOriginalNameFromStorageKey,
   isDxfFile,
 } from '../../utils/production-attachment-storage';
+import { toStorageSafeName } from '../../utils/storage-key';
 
 const BUCKET_NAME = 'documents';
 
@@ -183,7 +184,8 @@ export class SupabaseProductionRepository implements ProductionRepository {
             });
           } catch (uploadError) {
             console.error('Error uploading attachment:', uploadError);
-            uploadFailures.push(attachment.originalName || attachment.filename);
+            const reason = uploadError instanceof Error ? uploadError.message : String(uploadError);
+            uploadFailures.push(`${attachment.originalName || attachment.filename} (${reason})`);
             continue;
           }
         }
@@ -309,7 +311,8 @@ export class SupabaseProductionRepository implements ProductionRepository {
             });
           } catch (uploadError) {
             console.error('Error uploading attachment:', uploadError);
-            uploadFailures.push(attachment.originalName || attachment.filename);
+            const reason = uploadError instanceof Error ? uploadError.message : String(uploadError);
+            uploadFailures.push(`${attachment.originalName || attachment.filename} (${reason})`);
             continue;
           }
         } else {
@@ -477,7 +480,7 @@ export class SupabaseProductionRepository implements ProductionRepository {
 
     const uniqueFilename = isDxfFile(filename, mimeType)
       ? buildProductionStorageKey(filename)
-      : `${Date.now()}_${filename}`;
+      : `${Date.now()}_${toStorageSafeName(filename)}`;
 
     try {
       let fileData: Blob | Uint8Array | string;

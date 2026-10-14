@@ -3,6 +3,7 @@ import { DocumentsRepository } from '../../services/repositories/interfaces';
 import { Document } from '../../types';
 import { supabase } from '../../services/supabase';
 import { getCachedSignedUrl } from '../../utils/signed-url-cache';
+import { toStorageSafeName } from '../../utils/storage-key';
 
 const BUCKET_NAME = 'documents';
 
@@ -46,7 +47,7 @@ export class SupabaseDocumentsRepository implements DocumentsRepository {
     
     // Generate unique filename
     const timestamp = Date.now();
-    const uniqueFilename = `${timestamp}_${filename}`;
+    const uniqueFilename = `${timestamp}_${toStorageSafeName(filename)}`;
     const storagePath = `${BUCKET_NAME}/${uniqueFilename}`;
 
     try {

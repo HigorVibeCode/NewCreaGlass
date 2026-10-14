@@ -3,6 +3,7 @@ import { EquipmentDocumentsRepository } from '../../services/repositories/interf
 import { EquipmentMachine, EquipmentDocument, EquipmentDocumentAttachment } from '../../types';
 import { supabase } from '../../services/supabase';
 import { getCachedSignedUrl } from '../../utils/signed-url-cache';
+import { toStorageSafeName } from '../../utils/storage-key';
 
 const BUCKET_NAME = 'documents';
 
@@ -376,7 +377,7 @@ export class SupabaseEquipmentDocumentsRepository implements EquipmentDocumentsR
 
     const filename = file.name || file.uri.split('/').pop() || `thumb_${Date.now()}.jpg`;
     const mimeType = file.type || 'image/jpeg';
-    const uniqueFilename = `equip_${documentId}_thumb_${Date.now()}_${filename}`;
+    const uniqueFilename = `equip_${documentId}_thumb_${Date.now()}_${toStorageSafeName(filename)}`;
 
     let fileData: Blob | Uint8Array;
     if (Platform.OS === 'web' && typeof fetch !== 'undefined') {

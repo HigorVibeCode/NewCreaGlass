@@ -3,6 +3,7 @@ import { Training, TrainingCategory, TrainingCompletion, TrainingSignature, Trai
 import { supabase } from '../../services/supabase';
 import { Platform } from 'react-native';
 import { getCachedSignedUrl } from '../../utils/signed-url-cache';
+import { toStorageSafeName } from '../../utils/storage-key';
 
 const SIGNATURES_BUCKET = 'signatures';
 
@@ -558,7 +559,7 @@ export class SupabaseTrainingRepository implements TrainingRepository {
 
     // Generate unique filename
     const timestamp = Date.now();
-    const uniqueFilename = `${timestamp}_${filename}`;
+    const uniqueFilename = `${timestamp}_${toStorageSafeName(filename)}`;
     const BUCKET_NAME = 'documents';
 
     try {
