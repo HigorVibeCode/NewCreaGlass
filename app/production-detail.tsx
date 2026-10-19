@@ -979,36 +979,34 @@ export default function ProductionDetailScreen() {
                 <Text style={[styles.attachmentFolderTitle, { color: colors.text }]}>
                   {t('production.attachmentsPdf')} ({attachmentFolders.documents.length})
                 </Text>
-                {attachmentFolders.documents.map((attachment) => {
-                  const isPdf = attachment.mimeType === 'application/pdf';
-                  if (isPdf) {
-                    return (
+                {/* PDFs as thumbnails, same size as the images; other documents (videos) as rows */}
+                <View style={styles.thumbnailGrid}>
+                  {attachmentFolders.documents
+                    .filter((attachment) => attachment.mimeType === 'application/pdf')
+                    .map((attachment) => (
                       <PdfPreviewCard
                         key={attachment.id}
                         storageKey={getAttachmentStorageKey(attachment)}
                         name={attachment.originalName || attachment.filename}
                         onPress={() => handleAttachmentPress(attachment)}
                       />
-                    );
-                  }
-                  return (
+                    ))}
+                </View>
+                {attachmentFolders.documents
+                  .filter((attachment) => attachment.mimeType !== 'application/pdf')
+                  .map((attachment) => (
                     <TouchableOpacity
                       key={attachment.id}
                       style={[styles.attachmentCard, { backgroundColor: colors.cardBackground }]}
                       onPress={() => handleAttachmentPress(attachment)}
                       activeOpacity={0.7}
                     >
-                      <Ionicons
-                        name={isPdf ? 'document-text' : 'videocam-outline'}
-                        size={20}
-                        color={colors.textSecondary}
-                      />
+                      <Ionicons name="videocam-outline" size={20} color={colors.textSecondary} />
                       <Text style={[styles.attachmentName, { color: colors.text }]}>
                         {attachment.originalName || attachment.filename}
                       </Text>
                     </TouchableOpacity>
-                  );
-                })}
+                  ))}
               </View>
             )}
 

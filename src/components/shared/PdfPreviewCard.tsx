@@ -14,10 +14,9 @@ interface PdfPreviewCardProps {
   onPress: () => void;
 }
 
-const PREVIEW_HEIGHT = 170;
 const PDF_RED = '#e5322d';
 
-// WhatsApp-style PDF card: first page preview on top, file name and page count below
+// PDF thumbnail tile: first page as preview (like WhatsApp), PDF badge, page count and name
 export const PdfPreviewCard: React.FC<PdfPreviewCardProps> = ({ storageKey, name, onPress }) => {
   const { t } = useI18n();
   const colors = useThemeColors();
@@ -32,7 +31,7 @@ export const PdfPreviewCard: React.FC<PdfPreviewCardProps> = ({ storageKey, name
     (async () => {
       try {
         const url = await getSignedUrlFromStorage(storageKey, name);
-        const result = await getPdfThumbnail(storageKey, url);
+        const result = await getPdfThumbnail(storageKey, url, 300);
         if (!cancelled) setThumbnail(result);
       } catch (error) {
         console.warn('PDF preview failed:', name, error);
@@ -44,86 +43,88 @@ export const PdfPreviewCard: React.FC<PdfPreviewCardProps> = ({ storageKey, name
     };
   }, [storageKey, name]);
 
-  const details = thumbnail
-    ? `${t('attachmentViewer.pdfPages', { count: thumbnail.numPages })} · PDF`
-    : 'PDF';
-
   return (
-    <TouchableOpacity
-      style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
-      onPress={onPress}
-      activeOpacity={0.8}
-    >
-      <View style={styles.preview}>
+    <TouchableOpacity style={styles.tile} onPress={onPress} activeOpacity={0.7} accessibilityLabel={name}>
+      <View style={[styles.preview, { backgroundColor: thumbnail ? '#ffffff' : colors.backgroundSecondary }]}>
         {thumbnail ? (
           <Image source={{ uri: thumbnail.uri }} style={styles.previewImage} contentFit="cover" contentPosition="top" />
         ) : failed ? (
-          <Ionicons name="document-text" size={48} color={PDF_RED} />
+          <Ionicons name="document-text" size={36} color={PDF_RED} />
         ) : (
           <ActivityIndicator color={colors.textSecondary} />
         )}
-      </View>
-      <View style={[styles.footer, { borderTopColor: colors.border }]}>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>PDF</Text>
+        <View style={styles.badgeRow}>
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>PDF</Text>
+          </View>
+          {thumbnail && thumbnail.numPages > 1 && (
+            <View style={styles.pages}>
+              <Text style={styles.pagesText}>{t('attachmentViewer.pdfPages', { count: thumbnail.numPages })}</Text>
+            </View>
+          )}
         </View>
-        <View style={styles.footerText}>
-          <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
-            {name}
-          </Text>
-          <Text style={[styles.details, { color: colors.textSecondary }]}>{details}</Text>
-        </View>
       </View>
+      <Text style={[styles.name, { color: colors.textSecondary }]} numberOfLines={2}>
+        {name}
+      </Text>
     </TouchableOpacity>
   );
 };
 
+// Same size as the image thumbnails, so PDFs and photos line up in the attachments grid
+const TILE_SIZE = 100;
+
 const styles = StyleSheet.create({
-  card: {
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 1,
-    overflow: 'hidden',
-    marginBottom: theme.spacing.sm,
+  tile: {
+    width: TILE_SIZE,
   },
   preview: {
-    height: PREVIEW_HEIGHT,
-    backgroundColor: '#f3f4f6',
+    width: TILE_SIZE,
+    height: TILE_SIZE,
+    borderRadius: theme.borderRadius.md,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
+    ...theme.shadows.sm,
   },
   previewImage: {
     width: '100%',
     height: '100%',
   },
-  footer: {
+  badgeRow: {
+    position: 'absolute',
+    left: 4,
+    right: 4,
+    bottom: 4,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderTopWidth: 1,
+    gap: 4,
   },
   badge: {
     backgroundColor: PDF_RED,
     borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
   },
   badgeText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
   },
-  footerText: {
-    flex: 1,
-    minWidth: 0,
+  pages: {
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  pagesText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
   },
   name: {
-    fontSize: theme.typography.fontSize.md,
-    fontWeight: theme.typography.fontWeight.medium,
-  },
-  details: {
-    fontSize: theme.typography.fontSize.xs,
-    marginTop: 2,
+    fontSize: 11,
+    marginTop: 4,
+    lineHeight: 14,
   },
 });
