@@ -1117,7 +1117,8 @@
     "download": "Télécharger",
     "loadError": "Impossible d'ouvrir le fichier",
     "dxfPreview": "Aperçu du dessin",
-    "dxfEmpty": "Aucun dessin trouvé dans le fichier"
+    "dxfEmpty": "Aucun dessin trouvé dans le fichier",
+    "pdfPages": "{{count}} pages"
   },
   "pwa": {
     "installApp": "Installer l'app",

@@ -24,6 +24,7 @@ import { formatDate as formatDateUtil, formatDateTime as formatDateTimeUtil } fr
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DropdownOption } from '../src/components/shared/Dropdown';
 import { ScreenWrapper } from '../src/components/shared/ScreenWrapper';
+import { PdfPreviewCard } from '../src/components/shared/PdfPreviewCard';
 import { PermissionGuard } from '../src/components/shared/PermissionGuard';
 import { useI18n } from '../src/hooks/use-i18n';
 import { useThemeColors } from '../src/hooks/use-theme-colors';
@@ -980,6 +981,16 @@ export default function ProductionDetailScreen() {
                 </Text>
                 {attachmentFolders.documents.map((attachment) => {
                   const isPdf = attachment.mimeType === 'application/pdf';
+                  if (isPdf) {
+                    return (
+                      <PdfPreviewCard
+                        key={attachment.id}
+                        storageKey={getAttachmentStorageKey(attachment)}
+                        name={attachment.originalName || attachment.filename}
+                        onPress={() => handleAttachmentPress(attachment)}
+                      />
+                    );
+                  }
                   return (
                     <TouchableOpacity
                       key={attachment.id}
