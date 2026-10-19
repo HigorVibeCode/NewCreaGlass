@@ -1,7 +1,7 @@
 // Service Worker: Web Push Notifications + app instalável (PWA)
 // Este arquivo é servido estaticamente e registrado pelo app
 
-const CACHE_NAME = 'crea-glass-v3';
+const CACHE_NAME = 'crea-glass-v4';
 const APP_SHELL_URL = '/';
 
 // Instalar Service Worker
@@ -31,7 +31,7 @@ self.addEventListener('activate', (event) => {
 // PWA: cache só do que é seguro guardar
 // - Páginas (navegação): sempre da rede primeiro, para cada deploy novo aparecer na hora;
 //   sem internet, abre a última versão salva do app.
-// - /_expo/static e /assets: nomes com hash, nunca mudam -> cache primeiro.
+// - /_expo/static, /assets e /pdfjs: nomes com hash ou versão fixa -> cache primeiro.
 // - Supabase e outros domínios: não passam pelo cache (dados sempre atuais).
 self.addEventListener('fetch', (event) => {
   const request = event.request;
@@ -55,7 +55,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (url.pathname.startsWith('/_expo/static/') || url.pathname.startsWith('/assets/')) {
+  if (
+    url.pathname.startsWith('/_expo/static/') ||
+    url.pathname.startsWith('/assets/') ||
+    url.pathname.startsWith('/pdfjs/')
+  ) {
     event.respondWith(
       caches.match(request).then(
         (cached) =>

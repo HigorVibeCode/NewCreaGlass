@@ -1120,7 +1120,8 @@
     "download": "Descargar",
     "loadError": "No se pudo abrir el archivo",
     "dxfPreview": "Vista previa del dibujo",
-    "dxfEmpty": "No se encontró ningún dibujo en el archivo"
+    "dxfEmpty": "No se encontró ningún dibujo en el archivo",
+    "pdfPages": "{{count}} págs."
   },
   "pwa": {
     "installApp": "Instalar app",

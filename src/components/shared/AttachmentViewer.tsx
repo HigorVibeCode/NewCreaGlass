@@ -20,6 +20,7 @@ import { useI18n } from '../../hooks/use-i18n';
 import { getSignedUrlFromStorage, downloadAndOpenAttachment } from '../../utils/attachments';
 import { isDxfFile } from '../../utils/production-attachment-storage';
 import { dxfToSvg } from '../../utils/dxf-to-svg';
+import { canRenderPdf, renderPdfPages, RenderedPdfPage } from '../../utils/pdf-preview';
 
 export interface ViewerAttachment {
   storageKey: string;
@@ -37,7 +38,8 @@ export const getViewerKind = (name: string, mimeType: string): ViewerKind => {
   return 'other';
 };
 
-// Android's WebView cannot render PDFs, so there the device's PDF viewer is used directly
+// Android's native WebView cannot render PDFs, so the native app uses the device's PDF viewer
+// there; on the web PDFs are drawn with pdf.js
 export const canViewInApp = (kind: ViewerKind): boolean =>
   kind === 'image' || kind === 'dxf' || (kind === 'pdf' && Platform.OS !== 'android');
 
@@ -54,16 +56,23 @@ export const AttachmentViewer: React.FC<AttachmentViewerProps> = ({ attachments,
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const [current, setCurrent] = useState(index ?? 0);
-  const [url, setUrl] = useState<string | null>(null);
+  // Signed URL together with the attachment it belongs to, so a stale URL (from the
+  // previously shown attachment) is never used while switching
+  const [loadedUrl, setLoadedUrl] = useState<{ key: string; url: string } | null>(null);
   const [dxfSvg, setDxfSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  // Web: PDF pages drawn with pdf.js (Chrome on Android can't show a PDF in an iframe)
+  const [pdfPages, setPdfPages] = useState<RenderedPdfPage[]>([]);
+  const [pdfTotal, setPdfTotal] = useState(0);
+  const [pdfFallback, setPdfFallback] = useState(false);
 
   useEffect(() => {
     if (index !== null) setCurrent(index);
   }, [index]);
 
   const attachment = index !== null ? attachments[current] : undefined;
+  const url = attachment && loadedUrl?.key === attachment.storageKey ? loadedUrl.url : null;
   const kind = attachment ? getViewerKind(attachment.name, attachment.mimeType) : 'other';
   const imageIndexes = attachments
     .map((att, i) => (getViewerKind(att.name, att.mimeType) === 'image' ? i : -1))
@@ -73,7 +82,7 @@ export const AttachmentViewer: React.FC<AttachmentViewerProps> = ({ attachments,
   useEffect(() => {
     if (!attachment) return;
     let cancelled = false;
-    setUrl(null);
+    setLoadedUrl(null);
     setDxfSvg(null);
     setError(null);
     setIsLoading(true);
@@ -89,7 +98,7 @@ export const AttachmentViewer: React.FC<AttachmentViewerProps> = ({ attachments,
           if (!preview) throw new Error(t('attachmentViewer.dxfEmpty'));
           setDxfSvg(preview.svg);
         } else {
-          setUrl(signed);
+          setLoadedUrl({ key: attachment.storageKey, url: signed });
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
@@ -101,6 +110,32 @@ export const AttachmentViewer: React.FC<AttachmentViewerProps> = ({ attachments,
       cancelled = true;
     };
   }, [attachment, kind, t]);
+
+  useEffect(() => {
+    setPdfPages([]);
+    setPdfTotal(0);
+    setPdfFallback(false);
+    if (kind !== 'pdf' || !url || !canRenderPdf) return;
+    let cancelled = false;
+    const pageWidth = Math.min(Math.round(width * 2), 1800); // sharp on phones, capped for memory
+    renderPdfPages(
+      url,
+      pageWidth,
+      (page, _index, total) => {
+        setPdfTotal(total);
+        setPdfPages((pages) => [...pages, page]);
+      },
+      () => cancelled
+    ).catch((err) => {
+      console.warn('pdf.js render failed, using the browser viewer:', err);
+      if (!cancelled) setPdfFallback(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Re-render only when the document changes, not on every resize
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, url]);
 
   const handleDownload = () => {
     if (!attachment) return;
@@ -156,6 +191,22 @@ export const AttachmentViewer: React.FC<AttachmentViewerProps> = ({ attachments,
       );
     }
     if (kind === 'pdf' && url) {
+      if (canRenderPdf && !pdfFallback) {
+        if (pdfPages.length === 0) return <ActivityIndicator size="large" color="#fff" />;
+        return (
+          <ScrollView style={styles.fill} contentContainerStyle={styles.pdfPages}>
+            {pdfPages.map((page, i) => (
+              <Image
+                key={i}
+                source={{ uri: page.uri }}
+                style={{ width: width - 16, height: ((width - 16) * page.height) / page.width, backgroundColor: '#fff' }}
+                contentFit="contain"
+              />
+            ))}
+            {pdfPages.length < Math.min(pdfTotal, 50) && <ActivityIndicator color="#fff" style={styles.pdfMore} />}
+          </ScrollView>
+        );
+      }
       if (Platform.OS === 'web') {
         return React.createElement('iframe', {
           src: url,
@@ -185,6 +236,9 @@ export const AttachmentViewer: React.FC<AttachmentViewerProps> = ({ attachments,
               </Text>
             )}
             {kind === 'dxf' && <Text style={styles.subtitle}>{t('attachmentViewer.dxfPreview')}</Text>}
+            {kind === 'pdf' && pdfTotal > 0 && (
+              <Text style={styles.subtitle}>{t('attachmentViewer.pdfPages', { count: pdfTotal })}</Text>
+            )}
           </View>
           <TouchableOpacity
             onPress={handleDownload}
@@ -214,6 +268,14 @@ export const AttachmentViewer: React.FC<AttachmentViewerProps> = ({ attachments,
 };
 
 const styles = StyleSheet.create({
+  pdfPages: {
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
+  pdfMore: {
+    marginVertical: 16,
+  },
   container: {
     flex: 1,
     backgroundColor: DARK_BG,

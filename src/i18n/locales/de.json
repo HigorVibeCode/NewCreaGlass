@@ -1117,7 +1117,8 @@
     "download": "Herunterladen",
     "loadError": "Datei konnte nicht geöffnet werden",
     "dxfPreview": "Zeichnungsvorschau",
-    "dxfEmpty": "Keine Zeichnung in der Datei gefunden"
+    "dxfEmpty": "Keine Zeichnung in der Datei gefunden",
+    "pdfPages": "{{count}} Seiten"
   },
   "pwa": {
     "installApp": "App installieren",

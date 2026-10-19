@@ -1255,7 +1255,8 @@
     "download": "Download",
     "loadError": "Could not open the file",
     "dxfPreview": "Drawing preview",
-    "dxfEmpty": "No drawing found in the file"
+    "dxfEmpty": "No drawing found in the file",
+    "pdfPages": "{{count}} pages"
   },
   "pwa": {
     "installApp": "Install app",
