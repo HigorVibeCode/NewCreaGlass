@@ -370,7 +370,7 @@ export default function InventoryItemDetailScreen() {
               <View style={styles.row}>
                 <Ionicons name="cube-outline" size={22} color={colors.textSecondary} />
                 <Text style={[styles.value, { color: colors.text }]}>
-                  {item.stock} {isGlass ? t('inventory.units') : item.unit}
+                  {item.stock} {isGlass ? t('inventory.report.sheetsUnit') : item.unit}
                 </Text>
               </View>
               {item.stock <= item.lowStockThreshold && (
