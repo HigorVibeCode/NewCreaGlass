@@ -22,6 +22,7 @@ import {
   clearPendingCount,
   sumPartialCounts,
 } from '../src/utils/pending-stock-count';
+import { getStockUnitLabel } from '../src/utils/inventory-units';
 
 export default function InventoryStockCountScreen() {
   const { t } = useI18n();
@@ -38,6 +39,8 @@ export default function InventoryStockCountScreen() {
   const [partialCounts, setPartialCounts] = useState<PartialCount[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [history, setHistory] = useState<InventoryHistory[]>([]);
+  // Glass counts sheets even though the item's unit is "m²" (the sheet size)
+  const unitLabel = item ? getStockUnitLabel(item, t) : '';
 
   useEffect(() => {
     if (itemId) {
@@ -163,7 +166,7 @@ export default function InventoryStockCountScreen() {
       t('inventory.stockCount.confirmMessage', {
         from: item.stock,
         to: countTotal,
-        unit: item.unit || '',
+        unit: unitLabel,
       }),
       saveCount,
       undefined,
@@ -194,7 +197,7 @@ export default function InventoryStockCountScreen() {
               {t('inventory.currentStock')}
             </Text>
             <Text style={[styles.currentStockValue, { color: colors.text }]}>
-              {item.stock} {item.unit}
+              {item.stock} {unitLabel}
             </Text>
           </View>
 
@@ -212,7 +215,7 @@ export default function InventoryStockCountScreen() {
                     {entry.location || t('inventory.stockCount.place', { number: index + 1 })}
                   </Text>
                   <Text style={[styles.partialQty, { color: colors.text }]}>
-                    {entry.quantity} {item.unit}
+                    {entry.quantity} {unitLabel}
                   </Text>
                   <TouchableOpacity
                     onPress={() => handleRemovePartial(entry.id)}
@@ -228,7 +231,7 @@ export default function InventoryStockCountScreen() {
                   {t('inventory.stockCount.reservedTotal')}
                 </Text>
                 <Text style={[styles.partialTotalValue, { color: colors.text }]}>
-                  {reservedTotal} {item.unit}
+                  {reservedTotal} {unitLabel}
                 </Text>
               </View>
             </View>
@@ -265,7 +268,7 @@ export default function InventoryStockCountScreen() {
                   {t('inventory.stockCount.newStock')}
                 </Text>
                 <Text style={[styles.summaryValue, { color: colors.text }]}>
-                  {countTotal} {item.unit}
+                  {countTotal} {unitLabel}
                 </Text>
               </View>
               <Text
@@ -333,10 +336,10 @@ export default function InventoryStockCountScreen() {
                   </View>
                   <View style={styles.historyItemDetails}>
                     <Text style={[styles.historyDetailText, { color: colors.textSecondary }]}>
-                      {t('inventory.previousValue')}: {entry.previousValue} {item.unit}
+                      {t('inventory.previousValue')}: {entry.previousValue} {unitLabel}
                     </Text>
                     <Text style={[styles.historyDetailText, { color: colors.textSecondary }]}>
-                      {t('inventory.newValue')}: {entry.newValue} {item.unit}
+                      {t('inventory.newValue')}: {entry.newValue} {unitLabel}
                     </Text>
                   </View>
                 </View>

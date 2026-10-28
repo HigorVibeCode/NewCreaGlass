@@ -7,6 +7,7 @@ import { useThemeColors } from '../src/hooks/use-theme-colors';
 import { useGoBack } from '../src/hooks/use-go-back';
 import { useAnalyticsData, getInventoryLowStock } from '../src/hooks/use-analytics-data';
 import { theme } from '../src/theme';
+import { getStockUnitLabel } from '../src/utils/inventory-units';
 
 export default function AnalyticsInvLowStockScreen() {
   const { t } = useI18n();
@@ -56,7 +57,7 @@ export default function AnalyticsInvLowStockScreen() {
                 <View style={styles.barTrack}>
                   <View style={[styles.barFill, { backgroundColor: barColor, width: `${Math.min(ratio * 100, 100)}%` }]} />
                 </View>
-                <Text style={[styles.itemUnit, { color: colors.textTertiary }]}>{item.unit}</Text>
+                <Text style={[styles.itemUnit, { color: colors.textTertiary }]}>{getStockUnitLabel(item, t)}</Text>
               </View>
             );
           })

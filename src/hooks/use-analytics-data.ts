@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { repos } from '../services/container';
 import { Production, ProductionStatus, ProductionStatusHistory, GlassType, Event, InventoryGroup, InventoryItem, Client } from '../types';
+import { getStockAreaM2 } from '../utils/inventory-units';
 
 export interface AnalyticsData {
   clients: Client[];
@@ -496,7 +497,8 @@ export function getInventoryByGroup(items: InventoryItem[], groups: InventoryGro
     const gName = groupMap.get(item.groupId) || 'Unknown';
     const existing = totals.get(item.groupId) || { name: gName, totalStock: 0, totalM2: 0, itemCount: 0 };
     existing.totalStock += item.stock || 0;
-    existing.totalM2 += item.totalM2 || 0;
+    // totalM2 is the area of one sheet: multiply by the sheets in stock
+    existing.totalM2 += getStockAreaM2(item) || 0;
     existing.itemCount++;
     totals.set(item.groupId, existing);
   }
@@ -509,7 +511,7 @@ export function getInventoryBySupplier(items: InventoryItem[]) {
     const s = item.supplier || 'Unknown';
     const existing = supplierMap.get(s) || { count: 0, m2: 0 };
     existing.count++;
-    existing.m2 += item.totalM2 || 0;
+    existing.m2 += getStockAreaM2(item) || 0;
     supplierMap.set(s, existing);
   }
   return Array.from(supplierMap.entries())

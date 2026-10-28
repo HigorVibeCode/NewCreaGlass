@@ -659,7 +659,7 @@ export default function InventoryGroupScreen() {
                         <View style={[styles.pillBadge, { backgroundColor: colors.backgroundSecondary }]}>
                           <Ionicons name="cube" size={16} color={colors.textSecondary} />
                           <Text style={[styles.pillBadgeText, { color: colors.textSecondary }]}>
-                            {item.stock} {t('inventory.units')}
+                            {item.stock} {t('inventory.report.sheetsUnit')}
                           </Text>
                         </View>
                         {item.totalM2 && (

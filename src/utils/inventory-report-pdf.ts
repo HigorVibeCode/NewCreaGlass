@@ -1,4 +1,5 @@
 import { InventoryItem } from '../types';
+import { getSheetArea, getStockAreaM2, isSheetStocked } from './inventory-units';
 
 // Inventory count report: A4 portrait, glass (sheets + m²) separated from other items
 interface ReportOptions {
@@ -25,15 +26,6 @@ const fmt = (value: number, decimals = 2): string =>
 const fmtInt = (value: number): string =>
   Number.isInteger(value) ? value.toLocaleString() : fmt(value, 2);
 
-const isAreaUnit = (unit: string | undefined) => /^m(2|²)$/i.test((unit || '').trim());
-
-// m² of a single sheet; derived from the dimensions when not stored
-const sheetArea = (item: InventoryItem): number | null => {
-  if (item.totalM2) return item.totalM2;
-  if (item.width && item.height) return (item.width * item.height) / 1_000_000;
-  return null;
-};
-
 const isLow = (item: InventoryItem) => item.lowStockThreshold > 0 && (item.stock || 0) <= item.lowStockThreshold;
 
 export function generateInventoryReportHTML({
@@ -57,10 +49,11 @@ export function generateInventoryReportHTML({
   const glassRows = glass
     .map((item, index) => {
       const stock = item.stock || 0;
-      const area = sheetArea(item);
-      // Some glass may be stocked directly in m²
-      const sheets = isAreaUnit(item.unit) ? null : stock;
-      const total = isAreaUnit(item.unit) ? stock : area !== null ? area * stock : null;
+      const area = getSheetArea(item);
+      // stock counts sheets whenever the sheet size is known (glass items carry unit "m²",
+      // which is the sheet size, not the stock unit)
+      const sheets = isSheetStocked(item) ? stock : null;
+      const total = getStockAreaM2(item);
       if (sheets !== null) totalSheets += sheets;
       if (total !== null) totalArea += total;
 
